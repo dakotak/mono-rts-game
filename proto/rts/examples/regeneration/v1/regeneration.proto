@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package rts.examples.regeneration.v1;
+
+option go_package = "github.com/dakotaknutson/unit-strategy-game/gen/rts/examples/regeneration/v1;regenerationv1";
+
+// Command messages of the example "regeneration" plugin
+// (examples/plugins/regeneration). The plugin is not part of the default
+// server build; see docs/developer-guide/plugins/getting-started.md for how
+// to register it.
+
+// SetRegenerationCommand turns passive energy regeneration on or off for
+// the listed units (it is on by default). Atomic over unit_ids; costs one
+// unit-command per unit. Usable as a rts.metadata.v1.BatchCommand template
+// (unit_ids is then ignored).
+message SetRegenerationCommand {
+  repeated uint64 unit_ids = 1;
+  bool enabled = 2;
+}

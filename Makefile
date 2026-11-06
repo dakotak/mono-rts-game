@@ -21,13 +21,13 @@ race:
 	go test -race ./...
 
 lint:
-	@test -z "$$(gofmt -l cmd internal web)" || (gofmt -l cmd internal web; echo "run 'make fmt'"; exit 1)
+	@test -z "$$(gofmt -l cmd internal web examples)" || (gofmt -l cmd internal web examples; echo "run 'make fmt'"; exit 1)
 	go vet ./...
 	$(TOOL) staticcheck ./...
 	$(TOOL) buf lint
 
 fmt:
-	gofmt -w cmd internal web
+	gofmt -w cmd internal web examples
 
 bench:
 	go test -run '^$$' -bench BenchmarkStep -benchmem ./internal/game

@@ -157,7 +157,6 @@ function autoDetail(e, box) {
     row("supply reserve", attrInt(e, "logistics.reserve"));
     for (const l of links) row(`supplies ${tag(l.to)}`, l.status.replaceAll("_", " "));
   }
-  row("transfer range", attrInt(e, "logistics.range"));
   box.append(el("h3", { textContent: "Automation & supply" }), t);
 }
 
