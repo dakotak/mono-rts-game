@@ -133,6 +133,7 @@ function startGame() {
   badge.textContent = session.playerName || "You";
   badge.style.background = ownerInfo(session.playerId).color;
   board.setWorld(session.world.width, session.world.height);
+  if (typeof loadRules === "function") loadRules();
   stopStream = stream({
     url: "/api/observe",
     token: session.token,
@@ -179,6 +180,7 @@ function handleMessage(msg) {
 function handleResult(r) {
   const desc = pendingCommands.get(r.commandId) || "command " + r.commandId.slice(0, 8);
   pendingCommands.delete(r.commandId);
+  if (typeof evolutionResult === "function" && evolutionResult(r, desc)) return;
   if (r.status === "COMMAND_STATUS_FAILED") say(`${desc} failed (${r.errorCode}): ${r.errorMessage}`, "error");
 }
 
@@ -199,6 +201,7 @@ const reasonText = {
 };
 
 function handleEvent(ev) {
+  if (typeof evolutionEvent === "function" && evolutionEvent(ev)) return;
   const f = ev.fields || {};
   const int = (k) => Number((f[k] && f[k].intValue) || 0);
   const str = (k) => (f[k] && f[k].stringValue) || "";
@@ -374,6 +377,7 @@ function render() {
   const fl = floaters.map((f) => ({ ...f, alpha: 1 - (now - f.born) / FLOAT_MS }));
   board.draw({ entities, selected, lines, floaters: fl, colorFor: (e) => ownerInfo(e.ownerId).color, mine: isMine });
   renderSelection();
+  if (typeof renderEvolution === "function") renderEvolution();
 }
 
 // Keep floating labels animating between ticks.

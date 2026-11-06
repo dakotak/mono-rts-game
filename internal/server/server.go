@@ -11,6 +11,7 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -64,11 +65,16 @@ func New(cfg *game.Config, g *game.Game) *Server {
 	engine.SetFrameSink(hub.Publish)
 
 	info := &rtsv1.WorldInfo{
-		Width:        cfg.World.Width,
-		Height:       cfg.World.Height,
-		TickRateHz:   cfg.World.TickRateHz,
-		CommandTypes: engine.Rules().CommandTypes(false),
-		Plugins:      engine.Rules().Plugins(),
+		Width:             cfg.World.Width,
+		Height:            cfg.World.Height,
+		TickRateHz:        cfg.World.TickRateHz,
+		CommandTypes:      engine.Rules().CommandTypes(false),
+		Plugins:           engine.Rules().Plugins(),
+		Schedule:          engine.Rules().Schedule(),
+		UnitCommandBudget: uint32(cfg.World.UnitCommandBudget),
+	}
+	if rules, err := json.Marshal(engine.Rules().Rules()); err == nil {
+		info.RulesJson = string(rules)
 	}
 	return &Server{
 		cfg:      cfg,

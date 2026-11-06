@@ -42,6 +42,19 @@ type CommandResult struct {
 	OK        bool
 	Code      string
 	Message   string
+	// Units holds per-unit outcomes for commands that report them (batch
+	// commands). Partial is set when the command succeeded overall but some
+	// units failed.
+	Units   []UnitResult
+	Partial bool
+}
+
+// UnitResult is the outcome of a command for one unit.
+type UnitResult struct {
+	Unit    EntityID
+	OK      bool
+	Code    string
+	Message string
 }
 
 // Standard failure codes. Plugins may define more.
@@ -51,6 +64,8 @@ const (
 	CodePermissionDenied   = "permission_denied"
 	CodeFailedPrecondition = "failed_precondition"
 	CodeInternal           = "internal"
+	// CodeResourceExhausted reports an exhausted per-tick command budget.
+	CodeResourceExhausted = "resource_exhausted"
 )
 
 // CommandError is a command failure with a machine-readable code.
@@ -66,14 +81,22 @@ func Fail(code, format string, args ...any) error {
 	return &CommandError{Code: code, Message: fmt.Sprintf(format, args...)}
 }
 
-func resultFor(cmd *Command, tick Tick, err error) CommandResult {
-	r := CommandResult{CommandID: cmd.ID, Issuer: cmd.Issuer, Tick: tick, OK: err == nil}
+func errorCode(err error) (code, msg string) {
+	var ce *CommandError
+	if errors.As(err, &ce) {
+		return ce.Code, ce.Message
+	}
+	return CodeInternal, err.Error()
+}
+
+func resultFor(cmd *Command, tick Tick, err error, units []UnitResult) CommandResult {
+	r := CommandResult{CommandID: cmd.ID, Issuer: cmd.Issuer, Tick: tick, OK: err == nil, Units: units}
 	if err != nil {
-		var ce *CommandError
-		if errors.As(err, &ce) {
-			r.Code, r.Message = ce.Code, ce.Message
-		} else {
-			r.Code, r.Message = CodeInternal, err.Error()
+		r.Code, r.Message = errorCode(err)
+	}
+	for _, u := range units {
+		if r.OK && !u.OK {
+			r.Partial = true
 		}
 	}
 	return r
@@ -88,6 +111,12 @@ type CommandDef struct {
 	Type      string
 	AdminOnly bool
 	Execute   func(ctx *TickContext, cmd Command) error
+	// ApplyToUnit, if set, applies the command to a single unit: the
+	// payload is a template whose own unit list is ignored. It makes the
+	// command usable in batch commands (TickContext.ApplyToUnit). Like
+	// Execute it must be atomic for that unit, and it must charge the
+	// issuer's budget for the unit (TickContext.Charge).
+	ApplyToUnit func(ctx *TickContext, cmd Command, unit EntityID) error
 }
 
 // Built-in kernel commands. All are admin only.

@@ -27,7 +27,13 @@
 | `internal/sim` | Kernel: world lifecycle, ticks, entity identity and storage, command scheduling, plugin registry, phase ordering, events, change tracking, snapshots, seeded RNG. **No game mechanics, no protobuf, no networking.** | stdlib only |
 | `internal/plugins/wells` | Energy wells: the well component, admin create/configure commands, initial placement from config. | `sim`, its own proto messages |
 | `internal/plugins/energy` | Unit energy stores, mining orders, transfer orders, admin energy setting. Exposes `Stored`/`Spend` to other plugins. | `sim`, `wells`, its own proto messages |
-| `internal/plugins/movement` | Movement orders, occupancy-respecting steps, conflict resolution, energy cost per step. | `sim`, `energy`, its own proto messages |
+| `internal/plugins/movement` | Movement orders, occupancy-respecting steps, conflict resolution, energy cost per step, optional pace from an attribute. | `sim`, `energy`, (`attributes`), its own proto messages |
+| `internal/expr` | Tiny deterministic integer formula language (parse → compile to slots → total evaluation). | stdlib only |
+| `internal/plugins/attributes` | Attribute registry: definitions, formula tables, derived properties, per-unit values, embodied investment, busy reservations, change notifications. | `sim`, `expr` |
+| `internal/plugins/upgrades` | Persistent, irreversible upgrade orders. | `sim`, `attributes`, `energy` |
+| `internal/plugins/cloning` | Reproduction with inheritance and embodied-cost accounting. | `sim`, `attributes`, `energy`, `expr` |
+| `internal/plugins/metadata` | Unit metadata, selectors and batch commands. | `sim` |
+| `internal/protoreg` | References every plugin proto package, so non-simulation programs (the gateway) can translate `Any` payloads. | `gen` |
 | `internal/game` | Reads config, picks the compiled-in plugins, builds ruleset and engine, places initial units. The only package that knows which plugins exist. | `sim`, plugins |
 | `internal/server` | gRPC `GameService` and `AdminService`, sessions, command dedupe, observation hub, per-viewer filtering. | `sim`, `game`, `gen` |
 | `internal/gateway` | Browser bridge. Translates HTTP+protojson to gRPC with two separate handlers, one for players (GameService only) and one for admins (AdminService only), meant for separate listeners. It's just another API client, with no game logic and no simulation access. | `gen` |
@@ -148,6 +154,8 @@ Through the `Registrar`, a plugin can declare:
 | Derived properties | `r.Derived(DerivedDef{Name, Compute})` | Read with `World.Derived(name, id)`. Movement pace and the energy extraction and transfer rates are derived, so future formulas or upgrades can vary them per unit. |
 | World initialization | `r.Init(func(w *World) error)` | Runs once (`Engine.Init`) after config units are created, in plugin order. Wells places its initial wells here. |
 | Creation hooks | `r.OnCreate(func(w *World, e Entity))` | Runs for every new entity, at setup, from commands or from systems. Energy attaches a store to every new unit here. |
+| Per-unit commands | `CommandDef.ApplyToUnit` | Applies a command template to one unit, so the command can be used in batch commands. It must validate, then `ctx.Charge(issuer, 1)`, then mutate. |
+| Rule descriptions | `r.Describe(v)` | A JSON-serializable description of the plugin's effective rules, published as `WorldInfo.rules_json[plugin]`. |
 
 `sim.NewRuleset` validates everything up front: unique plugin names,
 dependencies that exist and don't cycle (registration follows dependency
@@ -179,10 +187,36 @@ goroutine. Commands submitted while paused are scheduled for the next tick
 that executes. Pausing and stepping change when ticks happen, never what
 they compute, so replay is unaffected.
 
-**Adding a plugin:** create `internal/plugins/<name>`, put its command
-messages in `proto/rts/<name>/v1`, add it to `game.Plugins()`, and add a
-blank import of its generated package to the gateway (protojson needs the
-types to translate `Any`).
+**Command budget.** `sim.Config.UnitCommandBudget` (config
+`world.unit_command_budget`) limits how many unit-commands each player may
+execute per tick.
+
+- Handlers call `TickContext.Charge(issuer, n)` after validation and
+  before mutating. A command over budget fails with `resource_exhausted`
+  and changes nothing.
+- Every unit-affecting command charges one per unit: move, stop, mine,
+  stop-mining, transfer, upgrade, clone and metadata.
+- Invalid requests cost nothing, budgets reset every tick, and admin
+  commands are never charged.
+
+**Per-unit results.** A handler may call `TickContext.ReportUnit(unit, err)`.
+The result then carries those per-unit outcomes, and is `Partial` when the
+command succeeded overall but some units failed. On the wire this is
+`CommandResult.unit_results` with status `COMMAND_STATUS_PARTIAL`.
+
+**Plugin composition.** Plugins that build on attributes receive the one
+`*attributes.Plugin` instance in `game.Plugins()` (explicit composition,
+not a global lookup). `energy` and `movement` keep plain constructors for
+compositions without attributes.
+
+**Adding a plugin:**
+
+1. Create `internal/plugins/<name>`.
+2. Put its command messages in `proto/rts/<name>/v1`.
+3. Add it to `game.Plugins()`.
+4. List its proto file in `internal/protoreg`. A test in `game` fails if
+   any accepted command type is missing there, because the gateway needs
+   the types to translate `Any` payloads.
 
 ## Movement plugin (rules)
 
@@ -303,6 +337,172 @@ Energy is only ever moved, never created or destroyed.
 **Conservation (tested).** With free movement and finite wells, the energy
 in all units plus all finite wells is constant every tick, under random
 mining, transfer and move commands.
+
+## Unit evolution (Milestone 3)
+
+### Formula language (`internal/expr`)
+
+The language has integer literals, variables, `+ - * / %`, unary minus,
+parentheses, and `min`, `max`, `clamp`, `abs`, `pow` and `sqrt`.
+
+Evaluation is **total**:
+
+- `/` and `%` truncate toward zero, and dividing by zero yields 0.
+- Every operation saturates at the int64 range.
+- `pow` is bounded, and `sqrt` is an exact integer floor.
+
+So a formula can never error or panic at runtime, and there's no floating
+point in results.
+
+Formulas are parsed once (at most 512 characters, 128 nodes, 32 levels
+deep) and compiled against a caller-defined variable layout. Unknown
+variables are compile errors, which is how each formula's allowed inputs
+are enforced. There are no loops, no assignment, and no access to anything
+but the provided integers.
+
+### Attributes
+
+Operators define up to 16 attributes. Each has an integer default, min and
+max (at most 1,000 levels), and three formulas of `v`:
+
+| Formula | Meaning |
+|---|---|
+| `mass` | Contribution to the unit's mass. |
+| `cost` | **Cumulative** energy invested to reach `v`. Must be non-decreasing. |
+| `duration` | **Cumulative** ticks to reach `v`. Must be non-decreasing. |
+
+Upgrading from `a` to `b` costs `cost(b) − cost(a)` and takes
+`max(1, duration(b) − duration(a))` ticks. Because costs are cumulative,
+the price doesn't depend on whether you go up in one step or several, and
+a convex `cost` gives nonlinear upgrades. The tables are evaluated over
+`[min, max]` at load time. That validates monotonicity and makes lookups
+O(1), and the tables are published so clients show exact costs without an
+evaluator.
+
+**Derived properties:**
+
+- `mass` is built in: `base_mass` plus the sum of the contributions.
+- Further derived properties are formulas over attributes, `mass` and other
+  derived properties. They are sorted into dependency order, and cycles and
+  unknown references are rejected with a readable error.
+- They depend only on the unit's own values, so they're computed on demand
+  (never stored), are exactly reproducible, and are also exposed as kernel
+  derived properties `attributes.<name>`.
+
+**Embodied investment** is `Σ cost(value) − cost(default)`. **Invested** is
+the energy actually paid: completed upgrades, plus the embodied investment a
+clone inherits.
+
+Attributes are owner-only observations (`attributes.<name>`). Admins can
+override any value within its bounds (`SetAttributeCommand`); an override
+doesn't count as investment. There are no unit classes: every unit has
+every attribute, starting at its default.
+
+**Bindings.** Existing mechanics read attributes only when configured to,
+so Milestone 2 configurations behave as before:
+
+| Config setting | Effect |
+|---|---|
+| `energy.capacity_attribute` | Storage capacity follows the named property, kept in sync through `attributes.OnChange` |
+| `energy.extraction_attribute` | Mining rate |
+| `movement.pace_attribute` | Ticks per step (`max(1, value)`) |
+
+### Upgrades
+
+`UpgradeCommand{unit_ids, attribute, target | increase}`:
+
+| Rule | Behaviour |
+|---|---|
+| Authorization | Owner only (or admin). |
+| Validity | Target must be higher than the current value (upgrades are irreversible) and at most `max`. |
+| Exclusivity | One upgrade **or** cloning per unit at a time, via `attributes.Reserve`. |
+| Payment | Full cost from the unit's own store **when the upgrade starts**; otherwise `insufficient_energy` and nothing changes. |
+| Completion | The value is applied only after the duration. The start tick counts as tick 1. |
+| Interruption | No cancellation and no refunds. A destroyed unit loses its paid energy. If an admin has already raised the value to or past the target, it completes as `upgrades.failed` (`superseded`). |
+| Events (owner only) | `upgrades.started`, `upgrades.progress` (every N ticks), `upgrades.completed`, `upgrades.failed` (including validation failures, with the reason code). |
+
+The command is atomic over its unit list. In a batch, each unit stands
+alone.
+
+### Cloning
+
+`CloneCommand{unit_ids, direction}`.
+
+**Price:**
+
+| | Formula | Variables |
+|---|---|---|
+| Effective cost | `max(cost formula, embodied)` | `base`, `embodied`, `mass` |
+| Duration | `max(1, duration formula)` | `base`, `embodied`, `mass` |
+
+The default cost is `base + embodied`, so an offspring is never cheaper
+than the upgrades it carries.
+
+**Payment:**
+
+- The parent pays `cost + offspring_energy` up front.
+- `cost` is consumed. `offspring_energy` is held by the order and moved
+  into the child.
+- The child does **not** get the energy plugin's free `initial_energy`.
+  Total energy therefore drops by exactly `cost`; this is tested by summing
+  every store before and after.
+
+**Inheritance:**
+
+- The child copies the parent's attribute values as captured at start
+  (the parent can't upgrade while cloning).
+- Its `invested` equals the parent's embodied investment.
+- It gets a fresh unpredictable ID.
+- Metadata is not inherited.
+
+**Placement:**
+
+- The child goes to the requested direction, or else the first free tile in
+  the order N, NE, E, SE, S, SW, W, NW.
+- Parents completing in the same tick are processed in ascending ID order,
+  each claiming its tile before the next looks, so they never collide.
+- A parent with no free tile keeps its paid order, emits `cloning.blocked`
+  once, and completes on the first tick a tile frees up.
+- The command checks that a free tile exists at the start.
+
+**Quote.** Each unit carries an owner-visible `cloning.quote_*` with its
+current exact price, refreshed when it's created and whenever its
+attributes change.
+
+### Metadata, selectors and batches
+
+**Metadata:**
+
+- Each unit has up to 8 owner-only key/value pairs (`metadata.<key>`).
+- Keys use `[a-z0-9][a-z0-9_.-]*`; values are printable ASCII; lengths are
+  configurable.
+- `SetMetadataCommand` and `RemoveMetadataCommand` are atomic over their
+  unit list and owner-only.
+- No plugin reads metadata, so it cannot affect gameplay (tested with a
+  key that matches an attribute's name).
+
+**Selectors.** A `Selector{unit_ids?, conditions[], limit, owner_id(admin)}`:
+
+- only ever matches the issuer's own units,
+- supports `EQUALS`, `PRESENT` and `ABSENT` conditions, all of which must
+  hold,
+- yields units in ascending ID order, capped by `limit` and
+  `max_batch_units`.
+
+It's evaluated **when the batch command executes**: at its scheduled tick,
+in the deterministic command order, so it sees the effects of earlier
+commands in the same tick.
+
+**`BatchCommand{selector, Any command}`:**
+
+- Applies a unit-applicable template to each selected unit through the
+  kernel's `ApplyToUnit`. Supported templates: upgrade, clone, stop, mine,
+  stop-mining, set and remove metadata.
+- Each unit is validated and charged separately, and gets a `UnitResult`.
+- The batch is `PARTIAL` if some units fail, and `FAILED` (still listing
+  the units) if none succeed or nothing matches.
+- Admin-only templates, nested batches and commands without per-unit
+  support are rejected.
 
 ## Public API
 
@@ -435,6 +635,13 @@ protobuf one.
 | Sessions in memory, issued from config join tokens | Simplest auth that separates player and admin | Real accounts and persistence later |
 | Full entity replacement in updates | Simple client merge | Attribute-level deltas if bandwidth matters |
 | Admin mutations are ordinary scheduled commands | One code path for ordering, validation and replay | Admin can't act "between" ticks. Fine. |
+| Cumulative cost/duration functions | Path-independent prices; embodied investment falls out for free; tables make costs exact for clients | Operators write cumulative formulas rather than per-level ones |
+| Total integer formula semantics (x/0 = 0, saturation) | Formulas cannot fail mid-simulation, no float nondeterminism | A wrong formula yields odd values rather than an error; validation catches monotonicity, not intent |
+| Upfront payment for upgrades and clones | Simple, clear rejection rule; no stalled half-paid projects | Large upgrades need storage, so `energy_capacity` becomes a prerequisite (intended) |
+| Clone cost floor = embodied investment | Guarantees cloning can't launder upgrades or create energy | Cheap-clone strategies are impossible by construction |
+| Lowest ID wins clone placement | Deterministic, never wastes the paid energy | The fixed (but random-looking) order favours some units per world |
+| Kernel-level per-tick unit budget | Fairness and server protection apply to every plugin's commands | One budget for all command kinds; per-kind weights later if needed |
+| Derived properties computed on demand | No cache invalidation; trivially deterministic | Per-call cost; observation and pacing re-evaluate formulas |
 | Wells and energy are separate plugins | Wells (data and admin) shipped and tested before the economy existed | One more inter-plugin API (`wells.Get`/`Set`) |
 | Movement depends on energy | Simplest way to charge for steps | A movement-only game must also load energy (cost 0 keeps it free) |
 | Max-min fair split for contested wells | No first-come advantage, deterministic, conserves energy | Small integer remainders favour lower-ID claimants by at most 1 |
@@ -478,15 +685,15 @@ protobuf one.
 - Initial entities appear as "changed" in tick 1's update. That's harmless,
   because clients start from a snapshot.
 
-## Deferred (not in Milestones 1–2)
+## Deferred (not in Milestones 1–3)
 
 - Fog of war and sensors: per-entity visibility, sensor strength,
   approximate observations.
-- Reproduction, upgrades, combat, salvage.
-- Energy costs for actions other than movement.
+- Combat (armor exists as an attribute but has no effect yet), salvage.
+- Upgrade cancellation and refunds, concurrent upgrades per unit.
+- Energy costs for actions other than movement, upgrades and cloning.
 - Terrain entities, and layered occupancy (wells currently block their
   tile like units).
-- Configurable deterministic expression language for derived properties.
 - Pathfinding and smarter collision handling.
 - Persistent replay files, save and load of world state.
 - Admin: runtime world-configuration changes (rates, defaults), editing
@@ -495,18 +702,39 @@ protobuf one.
   boundary designed for it.
 - TLS, real authentication, rate limiting, per-session command quotas.
 
+## Known limitations (Milestone 3)
+
+- **Performance:** every unit now carries several components, and
+  observing or pacing a unit evaluates its derived formulas. Per-tick cost
+  roughly doubled since Milestone 2 (5,000 units: about 2.2 ms per tick in
+  the benchmark, 3.8 ms p50 in the harness). That's well within budget, but
+  derived values and views are obvious caching targets.
+- **No in-progress control:** upgrades can't be cancelled, and the energy
+  paid for an interrupted upgrade or clone is lost.
+- **Log noise:** batch failures produce one event per unit as well as the
+  summary result. The client shows both, which is noisy for large batches.
+- **Metadata scope:** offspring don't inherit metadata, and selectors match
+  only the issuer's own units (no shared or team selectors).
+- **Clone placement:** only adjacent tiles are considered, so a fully
+  surrounded parent waits indefinitely, holding its paid energy.
+- **Coarse budget:** the command budget counts units, not work. A 1-unit
+  move and a 1-unit clone cost the same.
+- **Typo protection:** attribute bindings are validated at startup, but an
+  attribute that nothing uses (armor) is accepted silently.
+
 ## Proposed next milestones
 
-1. **Visibility.** A per-player visibility system plugin plus a kernel hook
-   for per-entity observation filtering. Observation updates that add and
-   remove entities as they enter and leave sight.
-2. ~~Energy and resources~~ (done in Milestone 2).
-3. **Attributes and upgrades.** A generic numeric attribute component with
-   a restricted, deterministic, integer formula language for derived
-   properties (mass and propulsion → pace), plus nonlinear upgrade costs.
-4. **Reproduction.** Energy-conserving unit creation with inherited
-   upgrades.
-5. **Combat.** Weapons, cooldowns, armor, simultaneous damage resolution
-   in its own phase, salvage.
-6. **Operations.** Replay files and a replay CLI, save and load, a richer
-   AdminService, metrics.
+1. **Visibility and sensors.** A per-player visibility plugin, a kernel
+   hook for per-entity observation filtering, and sensor attributes (range
+   and strength as configurable attributes and derived properties).
+2. **Combat.** Weapons, cooldowns and damage driven by attributes (armor
+   finally matters), resolved simultaneously in their own phase, plus
+   salvage that returns a share of embodied energy as a resource.
+3. **Evolution polish.** Cancellable upgrades with a configurable refund
+   policy, metadata inheritance options, and per-command-type budget
+   weights.
+4. **Performance.** Cache derived values per unit (invalidated by
+   `OnChange`), reuse view slices, and profile observation fan-out at 10k+
+   units.
+5. **Operations.** Replay files and a replay CLI, save and load, runtime
+   rule changes through AdminService, metrics.

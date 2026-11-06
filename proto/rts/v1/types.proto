@@ -63,6 +63,9 @@ enum CommandStatus {
   COMMAND_STATUS_UNSPECIFIED = 0;
   COMMAND_STATUS_SUCCEEDED = 1;
   COMMAND_STATUS_FAILED = 2;
+  // Some units succeeded and some failed (batch commands); see
+  // CommandResult.unit_results.
+  COMMAND_STATUS_PARTIAL = 3;
 }
 
 // CommandResult reports the outcome of executing a previously accepted
@@ -76,6 +79,16 @@ message CommandResult {
   // "invalid_argument". Empty on success.
   string error_code = 4;
   string error_message = 5;
+  // Per-unit outcomes for commands that report them (batch commands), in
+  // ascending unit ID order.
+  repeated UnitResult unit_results = 6;
+}
+
+message UnitResult {
+  uint64 unit_id = 1;
+  bool ok = 2;
+  string error_code = 3;
+  string error_message = 4;
 }
 
 message WorldInfo {
@@ -91,6 +104,14 @@ message WorldInfo {
   repeated string command_types = 5;
   // Registered plugins, in initialization order.
   repeated string plugins = 6;
+  // JSON object keyed by plugin name with each plugin's published rules:
+  // effective configuration, formulas, and tables (e.g. attribute upgrade
+  // cost/duration tables). Rules are public game information.
+  string rules_json = 7;
+  // Per-tick execution order, one "phase: system, ..." entry per phase.
+  repeated string schedule = 8;
+  // Maximum unit-commands per player per tick (0 = unlimited).
+  uint32 unit_command_budget = 9;
 }
 
 message PlayerInfo {

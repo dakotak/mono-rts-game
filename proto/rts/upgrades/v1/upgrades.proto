@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package rts.upgrades.v1;
+
+option go_package = "github.com/dakotaknutson/unit-strategy-game/gen/rts/upgrades/v1;upgradesv1";
+
+// UpgradeCommand starts a permanent upgrade of one attribute on each listed
+// unit (attribute names and cost tables: WorldInfo.rules_json
+// "attributes"). Each unit pays its full cost from its own energy store
+// when the upgrade starts; the new value applies when the upgrade's
+// duration has elapsed. Upgrades only ever raise values, a unit runs at
+// most one upgrade (or cloning) at a time, and paid energy is never
+// refunded.
+//
+// The command is atomic over unit_ids. In a rts.metadata.v1.BatchCommand
+// template, unit_ids is ignored and each selected unit succeeds or fails on
+// its own.
+message UpgradeCommand {
+  repeated uint64 unit_ids = 1;
+  string attribute = 2;
+  oneof amount {
+    // Absolute value to reach.
+    int64 target = 3;
+    // Amount to add to each unit's current value.
+    int64 increase = 4;
+  }
+}

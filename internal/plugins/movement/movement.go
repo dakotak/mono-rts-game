@@ -37,6 +37,7 @@ import (
 	"fmt"
 
 	movementv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/movement/v1"
+	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/attributes"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/energy"
 	"github.com/dakotaknutson/unit-strategy-game/internal/sim"
 )
@@ -77,6 +78,10 @@ type Config struct {
 	// EnergyPerStep is the energy a unit spends for each tile it moves.
 	// 0 makes movement free.
 	EnergyPerStep int64 `json:"energy_per_step"`
+	// PaceAttribute, if set, names an attribute or derived property
+	// (attributes plugin) giving each unit's ticks per move (clamped to at
+	// least 1), replacing TicksPerMove.
+	PaceAttribute string `json:"pace_attribute,omitempty"`
 }
 
 // DefaultConfig returns the default configuration.
@@ -114,14 +119,25 @@ var (
 
 // Plugin implements sim.Plugin.
 type Plugin struct {
-	cfg Config
+	cfg   Config
+	attrs *attributes.Plugin
 }
 
-// New returns the movement plugin.
+// New returns the movement plugin without attribute bindings.
 func New() *Plugin { return &Plugin{} }
 
-func (*Plugin) Name() string        { return Name }
-func (*Plugin) DependsOn() []string { return []string{energy.Name} }
+// NewWithAttributes returns the movement plugin able to bind pace to an
+// attribute or derived property (see Config.PaceAttribute).
+func NewWithAttributes(a *attributes.Plugin) *Plugin { return &Plugin{attrs: a} }
+
+func (*Plugin) Name() string { return Name }
+
+func (p *Plugin) DependsOn() []string {
+	if p.attrs != nil {
+		return []string{energy.Name, attributes.Name}
+	}
+	return []string{energy.Name}
+}
 
 // Register implements sim.Plugin.
 func (p *Plugin) Register(r *sim.Registrar) error {
@@ -130,6 +146,12 @@ func (p *Plugin) Register(r *sim.Registrar) error {
 		return err
 	}
 	if err := p.cfg.validate(); err != nil {
+		return err
+	}
+	if p.cfg.PaceAttribute != "" && (p.attrs == nil || !p.attrs.Has(p.cfg.PaceAttribute)) {
+		return fmt.Errorf("pace_attribute: %q is not an attribute or derived property of the attributes plugin", p.cfg.PaceAttribute)
+	}
+	if err := r.Describe(p.cfg); err != nil {
 		return err
 	}
 	// The destination is private to the owner: opponents can see where a
@@ -148,6 +170,10 @@ func (p *Plugin) Register(r *sim.Registrar) error {
 		if _, ok := w.Entity(id); !ok {
 			return 0, false
 		}
+		if p.cfg.PaceAttribute != "" {
+			v, ok := p.attrs.Lookup(w, id, p.cfg.PaceAttribute)
+			return max(v, 1), ok
+		}
 		return int64(p.cfg.TicksPerMove), true
 	}}); err != nil {
 		return err
@@ -162,7 +188,7 @@ func (p *Plugin) Register(r *sim.Registrar) error {
 	if err := r.Command(sim.CommandDef{Type: CommandMove, Execute: p.execMove}); err != nil {
 		return err
 	}
-	return r.Command(sim.CommandDef{Type: CommandStop, Execute: p.execStop})
+	return r.Command(sim.CommandDef{Type: CommandStop, Execute: p.execStop, ApplyToUnit: p.applyStop})
 }
 
 // checkUnit validates that id is a unit the issuer may command.
@@ -205,6 +231,9 @@ func (p *Plugin) execMove(ctx *sim.TickContext, cmd sim.Command) error {
 			return sim.Fail(sim.CodeInvalidArgument, "unit %d: destination %v outside %dx%d world", o.GetUnitId(), d, w.Width(), w.Height())
 		}
 	}
+	if err := ctx.Charge(cmd.Issuer, n); err != nil {
+		return err
+	}
 	// All valid: apply. A new order replaces any previous one.
 	for _, o := range m.GetOrders() {
 		id := sim.EntityID(o.GetUnitId())
@@ -227,6 +256,9 @@ func (p *Plugin) execStop(ctx *sim.TickContext, cmd sim.Command) error {
 		if err := checkUnit(ctx.World, cmd.Issuer, id, seen); err != nil {
 			return err
 		}
+	}
+	if err := ctx.Charge(cmd.Issuer, n); err != nil {
+		return err
 	}
 	for _, id := range m.GetUnitIds() {
 		orders.Remove(ctx.World, sim.EntityID(id))
@@ -375,4 +407,16 @@ func (p *Plugin) complete(ctx *sim.TickContext, e sim.Entity) {
 	ctx.Emit(sim.Event{Type: EventArrived, Entity: e.ID, Audience: sim.ToPlayer(e.Owner), Fields: []sim.Field{
 		{Key: "position", Value: sim.PosValue(e.Pos)},
 	}})
+}
+
+// applyStop cancels one unit's movement order (batch commands).
+func (p *Plugin) applyStop(ctx *sim.TickContext, cmd sim.Command, unit sim.EntityID) error {
+	if err := checkUnit(ctx.World, cmd.Issuer, uint64(unit), map[sim.EntityID]bool{}); err != nil {
+		return err
+	}
+	if err := ctx.Charge(cmd.Issuer, 1); err != nil {
+		return err
+	}
+	orders.Remove(ctx.World, unit)
+	return nil
 }

@@ -3,39 +3,149 @@
     "width": 32,
     "height": 20,
     "seed": 42,
-    "tick_rate_hz": 10
+    "tick_rate_hz": 10,
+    "unit_command_budget": 500
   },
   "players": [
-    { "slot": 1, "name": "Red", "join_token": "red" },
-    { "slot": 2, "name": "Blue", "join_token": "blue" }
+    {
+      "slot": 1,
+      "name": "Red",
+      "join_token": "red"
+    },
+    {
+      "slot": 2,
+      "name": "Blue",
+      "join_token": "blue"
+    }
   ],
   "admin_token": "dev-admin",
   "units": [
-    { "owner": 1, "x": 2, "y": 3, "w": 4, "h": 3 },
-    { "owner": 1, "x": 3, "y": 12 },
-    { "owner": 2, "x": 26, "y": 14, "w": 4, "h": 3 },
-    { "owner": 2, "x": 28, "y": 5 }
+    {
+      "owner": 1,
+      "x": 2,
+      "y": 3,
+      "w": 4,
+      "h": 3
+    },
+    {
+      "owner": 1,
+      "x": 3,
+      "y": 12
+    },
+    {
+      "owner": 2,
+      "x": 26,
+      "y": 14,
+      "w": 4,
+      "h": 3
+    },
+    {
+      "owner": 2,
+      "x": 28,
+      "y": 5
+    }
   ],
   "plugins": {
     "wells": {
-      "defaults": { "energy": 500, "capacity": 500, "extraction_rate": 4, "unlimited": false },
+      "defaults": {
+        "energy": 500,
+        "capacity": 500,
+        "extraction_rate": 4,
+        "unlimited": false
+      },
       "wells": [
-        { "x": 15, "y": 4 },
-        { "x": 16, "y": 15, "energy": 200, "capacity": 200 },
-        { "x": 10, "y": 10, "unlimited": true, "extraction_rate": 6 }
+        {
+          "x": 15,
+          "y": 4
+        },
+        {
+          "x": 16,
+          "y": 15,
+          "energy": 200,
+          "capacity": 200
+        },
+        {
+          "x": 10,
+          "y": 10,
+          "unlimited": true,
+          "extraction_rate": 6
+        }
       ]
+    },
+    "attributes": {
+      "base_mass": 10,
+      "attributes": {
+        "armor": {
+          "default": 0,
+          "min": 0,
+          "max": 20,
+          "mass": "v * 3",
+          "cost": "v * v * 5 + v * 10",
+          "duration": "v * 8",
+          "description": "Protection (no combat yet). Heavy: +3 mass per level."
+        },
+        "propulsion": {
+          "default": 1,
+          "min": 1,
+          "max": 10,
+          "mass": "v",
+          "cost": "(v - 1) * (v - 1) * 20 + (v - 1) * 10",
+          "duration": "(v - 1) * 10",
+          "description": "Drive power: divides mass to give pace."
+        },
+        "energy_capacity": {
+          "default": 100,
+          "min": 100,
+          "max": 400,
+          "mass": "v / 50",
+          "cost": "(v - 100) * (v - 100) / 40 + (v - 100)",
+          "duration": "(v - 100) / 5",
+          "description": "Energy storage."
+        },
+        "mining_efficiency": {
+          "default": 2,
+          "min": 1,
+          "max": 10,
+          "mass": "v",
+          "cost": "pow(v, 3) * 2",
+          "duration": "v * 10",
+          "description": "Energy extracted per tick from an adjacent well."
+        }
+      },
+      "derived": {
+        "ticks_per_move": "clamp(mass / (propulsion * 6), 1, 20)"
+      }
     },
     "energy": {
       "unit_capacity": 100,
       "initial_energy": 30,
       "extraction_rate": 2,
-      "transfer_rate": 5
+      "transfer_rate": 5,
+      "capacity_attribute": "energy_capacity",
+      "extraction_attribute": "mining_efficiency"
+    },
+    "upgrades": {
+      "progress_event_interval": 10
+    },
+    "cloning": {
+      "base_cost": 60,
+      "cost": "base + embodied + mass",
+      "duration": "30 + embodied / 10",
+      "offspring_energy": 20,
+      "progress_event_interval": 10
+    },
+    "metadata": {
+      "max_entries": 8,
+      "max_key_length": 32,
+      "max_value_length": 64,
+      "max_batch_units": 4096
     },
     "movement": {
       "ticks_per_move": 2,
       "max_blocked_ticks": 30,
       "contention_backoff_ticks": 2,
-      "energy_per_step": 1
+      "energy_per_step": 1,
+      "pace_attribute": "ticks_per_move"
     }
   }
 }

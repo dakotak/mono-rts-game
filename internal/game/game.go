@@ -14,8 +14,12 @@ import (
 	"os"
 	"time"
 
+	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/attributes"
+	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/cloning"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/energy"
+	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/metadata"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/movement"
+	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/upgrades"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/wells"
 	"github.com/dakotaknutson/unit-strategy-game/internal/sim"
 )
@@ -40,6 +44,9 @@ type WorldConfig struct {
 	// differ between runs). Set it explicitly only when runs must be
 	// reproducible, and keep it private: it makes IDs predictable.
 	IDKey string `json:"id_key"`
+	// UnitCommandBudget is how many unit-commands (one per unit a command
+	// affects) each player may execute per tick. 0 means unlimited.
+	UnitCommandBudget int `json:"unit_command_budget"`
 }
 
 // PlayerConfig declares a player slot. Whoever presents JoinToken plays as
@@ -71,6 +78,9 @@ func (c *Config) TickInterval() time.Duration {
 func (c *Config) Validate() error {
 	if c.World.Width <= 0 || c.World.Height <= 0 {
 		return fmt.Errorf("world size must be positive, got %dx%d", c.World.Width, c.World.Height)
+	}
+	if c.World.UnitCommandBudget < 0 {
+		return fmt.Errorf("unit_command_budget must be >= 0, got %d", c.World.UnitCommandBudget)
 	}
 	if c.World.TickRateHz == 0 || c.World.TickRateHz > 1000 {
 		return fmt.Errorf("tick_rate_hz must be in 1..1000, got %d", c.World.TickRateHz)
@@ -125,10 +135,20 @@ func LoadConfig(path string) (*Config, error) {
 	return &c, nil
 }
 
-// Plugins returns the compiled-in plugins. Adding a mechanic means adding
-// it here.
+// Plugins returns the compiled-in plugins, wired together. Adding a
+// mechanic means adding it here. Plugins that build on attributes share one
+// registry instance (explicit composition rather than global lookup).
 func Plugins() []sim.Plugin {
-	return []sim.Plugin{wells.New(), energy.New(), movement.New()}
+	attrs := attributes.New()
+	return []sim.Plugin{
+		wells.New(),
+		attrs,
+		energy.NewWithAttributes(attrs),
+		upgrades.New(attrs),
+		cloning.New(attrs),
+		movement.NewWithAttributes(attrs),
+		metadata.New(),
+	}
 }
 
 // Player is a resolved player slot.
@@ -143,7 +163,11 @@ type Player struct {
 type Game struct {
 	Engine  *sim.Engine
 	Players []Player // in configuration order
+	plugins []sim.Plugin
 }
+
+// PluginsOf returns the plugin instances a game was built with.
+func PluginsOf(g *Game) []sim.Plugin { return g.plugins }
 
 // PlayerBySlot returns the player declared with the given slot.
 func (g *Game) PlayerBySlot(slot int) (Player, bool) {
@@ -165,15 +189,16 @@ func New(c *Config) (*Game, error) {
 	if err != nil {
 		return nil, err
 	}
-	rules, err := sim.NewRuleset(Plugins(), c.Plugins)
+	plugins := Plugins()
+	rules, err := sim.NewRuleset(plugins, c.Plugins)
 	if err != nil {
 		return nil, err
 	}
-	e, err := sim.NewEngine(sim.Config{Width: c.World.Width, Height: c.World.Height, Seed: c.World.Seed, IDKey: key}, rules)
+	e, err := sim.NewEngine(sim.Config{Width: c.World.Width, Height: c.World.Height, Seed: c.World.Seed, IDKey: key, UnitCommandBudget: c.World.UnitCommandBudget}, rules)
 	if err != nil {
 		return nil, err
 	}
-	g := &Game{Engine: e, Players: derivePlayers(key, c.Players)}
+	g := &Game{Engine: e, Players: derivePlayers(key, c.Players), plugins: plugins}
 
 	w := e.World()
 	for i, b := range c.Units {

@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package rts.metadata.v1;
+
+import "google/protobuf/any.proto";
+
+option go_package = "github.com/dakotaknutson/unit-strategy-game/gen/rts/metadata/v1;metadatav1";
+
+// Player-owned unit metadata: a small key/value collection per unit for the
+// owner's own bookkeeping (squads, roles, notes). Metadata never affects
+// gameplay. It is visible to the owner (and admins) as entity attributes
+// "metadata.<key>". Limits are published in WorldInfo.rules_json
+// "metadata". Keys: [a-z0-9][a-z0-9_.-]*; values: printable ASCII.
+
+// SetMetadataCommand sets key=value on each listed unit (atomic).
+message SetMetadataCommand {
+  repeated uint64 unit_ids = 1;
+  string key = 2;
+  string value = 3;
+}
+
+// RemoveMetadataCommand removes key from each listed unit (atomic).
+// Removing an absent key is not an error.
+message RemoveMetadataCommand {
+  repeated uint64 unit_ids = 1;
+  string key = 2;
+}
+
+enum MatchKind {
+  MATCH_KIND_UNSPECIFIED = 0;
+  // The key is present with exactly this value.
+  MATCH_KIND_EQUALS = 1;
+  // The key is present (any value).
+  MATCH_KIND_PRESENT = 2;
+  // The key is absent.
+  MATCH_KIND_ABSENT = 3;
+}
+
+message MetadataCondition {
+  string key = 1;
+  MatchKind match = 2;
+  string value = 3;
+}
+
+// Selector chooses units at the tick the batch executes. It only ever
+// matches the issuer's own units (admins: owner_id, or every unit when
+// owner_id is 0). Matching units are taken in ascending entity-ID order.
+message Selector {
+  // If non-empty, only these units are considered.
+  repeated uint64 unit_ids = 1;
+  // All conditions must hold.
+  repeated MetadataCondition conditions = 2;
+  // Maximum number of units (0 = the server maximum).
+  uint32 limit = 3;
+  // Admin only: restrict to this owner.
+  uint32 owner_id = 4;
+}
+
+// BatchCommand applies a unit-applicable command to every selected unit.
+// `command` is a template (e.g. rts.upgrades.v1.UpgradeCommand,
+// rts.cloning.v1.CloneCommand, rts.movement.v1.StopCommand,
+// rts.energy.v1.MineCommand, SetMetadataCommand); its own unit_ids are
+// ignored. Each unit succeeds or fails on its own and costs one unit of the
+// issuer's per-tick command budget when it succeeds validation. The result
+// lists per-unit outcomes (CommandResult.unit_results) and is PARTIAL when
+// only some units succeeded.
+message BatchCommand {
+  Selector selector = 1;
+  google.protobuf.Any command = 2;
+}

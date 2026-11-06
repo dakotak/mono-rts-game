@@ -306,6 +306,21 @@ window.RTS = (() => {
       ctx.stroke();
       const energy = attrInt(e, "energy.stored"), cap = attrInt(e, "energy.capacity");
       if (energy !== undefined && cap) this._bar(cx, cy + r + 2, energy / cap, "#f2d24b");
+      // Progress rings: upgrades (cyan) and cloning (magenta, dashed when
+      // waiting for a free tile).
+      const ring = (done, total, color, dashed) => {
+        if (!total) return;
+        ctx.save();
+        ctx.lineWidth = Math.max(2, this.tile * 0.1);
+        ctx.strokeStyle = color;
+        if (dashed) ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.arc(cx, cy, r + 5, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * Math.min(1, done / total));
+        ctx.stroke();
+        ctx.restore();
+      };
+      ring(attrInt(e, "upgrades.done"), attrInt(e, "upgrades.duration"), "#4fd1e8");
+      ring(attrInt(e, "cloning.done"), attrInt(e, "cloning.duration"), "#e06bd8", attrBool(e, "cloning.blocked"));
     }
 
     // Wells: a diamond whose fill shows remaining energy; unlimited wells

@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package rts.cloning.v1;
+
+option go_package = "github.com/dakotaknutson/unit-strategy-game/gen/rts/cloning/v1;cloningv1";
+
+// Where the offspring appears relative to its parent. Y grows downwards, so
+// NORTH is (0,-1).
+enum Direction {
+  // Any free adjacent tile, tried in the order N, NE, E, SE, S, SW, W, NW.
+  DIRECTION_UNSPECIFIED = 0;
+  DIRECTION_NORTH = 1;
+  DIRECTION_NORTH_EAST = 2;
+  DIRECTION_EAST = 3;
+  DIRECTION_SOUTH_EAST = 4;
+  DIRECTION_SOUTH = 5;
+  DIRECTION_SOUTH_WEST = 6;
+  DIRECTION_WEST = 7;
+  DIRECTION_NORTH_WEST = 8;
+}
+
+// CloneCommand makes each listed unit produce one offspring with a copy of
+// its upgradeable attributes. The parent pays the cloning cost plus the
+// offspring's starting energy from its own store when cloning starts; the
+// offspring appears on a free adjacent tile when cloning completes (see
+// WorldInfo.rules_json "cloning" for costs and durations).
+//
+// The command is atomic over unit_ids. In a rts.metadata.v1.BatchCommand
+// template, unit_ids is ignored.
+message CloneCommand {
+  repeated uint64 unit_ids = 1;
+  Direction direction = 2;
+}

@@ -150,6 +150,19 @@ func (r *Registrar) OnCreate(fn func(w *World, e Entity)) {
 	r.b.onCreate = append(r.b.onCreate, fn)
 }
 
+// Describe publishes a JSON-serializable description of the plugin's
+// effective rules (configuration after defaults, formulas, tables). The
+// description is public: servers expose it to players and admins so they
+// can display costs and inspect how mechanics are configured.
+func (r *Registrar) Describe(v any) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Errorf("plugin %q: describe: %w", r.plugin, err)
+	}
+	r.b.rules[r.plugin] = b
+	return nil
+}
+
 // Derived declares a derived property.
 func (r *Registrar) Derived(d DerivedDef) error {
 	if err := r.requirePrefix("derived property", d.Name); err != nil {
@@ -176,7 +189,12 @@ type Ruleset struct {
 	derived        map[string]DerivedDef
 	inits          []namedInit
 	onCreate       []func(w *World, e Entity)
+	rules          map[string]json.RawMessage
 }
+
+// Rules returns each plugin's published rule description (see
+// Registrar.Describe), keyed by plugin name.
+func (rs *Ruleset) Rules() map[string]json.RawMessage { return rs.rules }
 
 type namedInit struct {
 	plugin string
@@ -225,6 +243,7 @@ type rulesetBuilder struct {
 	derived    map[string]DerivedDef
 	inits      []namedInit
 	onCreate   []func(w *World, e Entity)
+	rules      map[string]json.RawMessage
 }
 
 // NewRuleset validates and registers plugins. config maps plugin names to
@@ -271,6 +290,7 @@ func NewRuleset(plugins []Plugin, config map[string]json.RawMessage) (*Ruleset, 
 		commands:   map[string]CommandDef{},
 		components: map[string]ComponentDef{},
 		derived:    map[string]DerivedDef{},
+		rules:      map[string]json.RawMessage{},
 	}
 	for _, c := range builtinCommands() {
 		b.commands[c.Type] = c
@@ -289,6 +309,7 @@ func NewRuleset(plugins []Plugin, config map[string]json.RawMessage) (*Ruleset, 
 		derived:    b.derived,
 		inits:      b.inits,
 		onCreate:   b.onCreate,
+		rules:      b.rules,
 	}
 	for id := range b.components {
 		rs.componentOrder = append(rs.componentOrder, id)

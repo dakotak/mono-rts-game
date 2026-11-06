@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand/v2"
+	"strings"
 	"testing"
 
 	energyv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/energy/v1"
@@ -14,6 +15,7 @@ import (
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/energy"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/movement"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/wells"
+	"github.com/dakotaknutson/unit-strategy-game/internal/protoreg"
 	"github.com/dakotaknutson/unit-strategy-game/internal/sim"
 )
 
@@ -339,6 +341,24 @@ func TestDeterministicEnergyEconomy(t *testing.T) {
 	for i := range h1 {
 		if h1[i] != h2[i] || h1[i] != h3[i] {
 			t.Fatalf("diverged at tick %d (run %v, replay %v)", i+1, h1[i] == h2[i], h1[i] == h3[i])
+		}
+	}
+}
+
+// TestEveryCommandTypeIsRegisteredForGateways guards the browser gateway:
+// it can only translate command payloads whose proto packages protoreg
+// lists.
+func TestEveryCommandTypeIsRegisteredForGateways(t *testing.T) {
+	g, err := game.New(testConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, typ := range g.Engine.Rules().CommandTypes(true) {
+		if strings.HasPrefix(typ, "sim.") {
+			continue // kernel commands have Go payloads, not protobuf
+		}
+		if !protoreg.Has(typ) {
+			t.Errorf("command type %s is not listed in internal/protoreg", typ)
 		}
 	}
 }

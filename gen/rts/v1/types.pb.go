@@ -79,6 +79,9 @@ const (
 	CommandStatus_COMMAND_STATUS_UNSPECIFIED CommandStatus = 0
 	CommandStatus_COMMAND_STATUS_SUCCEEDED   CommandStatus = 1
 	CommandStatus_COMMAND_STATUS_FAILED      CommandStatus = 2
+	// Some units succeeded and some failed (batch commands); see
+	// CommandResult.unit_results.
+	CommandStatus_COMMAND_STATUS_PARTIAL CommandStatus = 3
 )
 
 // Enum value maps for CommandStatus.
@@ -87,11 +90,13 @@ var (
 		0: "COMMAND_STATUS_UNSPECIFIED",
 		1: "COMMAND_STATUS_SUCCEEDED",
 		2: "COMMAND_STATUS_FAILED",
+		3: "COMMAND_STATUS_PARTIAL",
 	}
 	CommandStatus_value = map[string]int32{
 		"COMMAND_STATUS_UNSPECIFIED": 0,
 		"COMMAND_STATUS_SUCCEEDED":   1,
 		"COMMAND_STATUS_FAILED":      2,
+		"COMMAND_STATUS_PARTIAL":     3,
 	}
 )
 
@@ -446,8 +451,11 @@ type CommandResult struct {
 	Status CommandStatus `protobuf:"varint,3,opt,name=status,proto3,enum=rts.v1.CommandStatus" json:"status,omitempty"`
 	// Machine-readable failure code, e.g. "permission_denied", "not_found",
 	// "invalid_argument". Empty on success.
-	ErrorCode     string `protobuf:"bytes,4,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
-	ErrorMessage  string `protobuf:"bytes,5,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	ErrorCode    string `protobuf:"bytes,4,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
+	ErrorMessage string `protobuf:"bytes,5,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	// Per-unit outcomes for commands that report them (batch commands), in
+	// ascending unit ID order.
+	UnitResults   []*UnitResult `protobuf:"bytes,6,rep,name=unit_results,json=unitResults,proto3" json:"unit_results,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -517,6 +525,81 @@ func (x *CommandResult) GetErrorMessage() string {
 	return ""
 }
 
+func (x *CommandResult) GetUnitResults() []*UnitResult {
+	if x != nil {
+		return x.UnitResults
+	}
+	return nil
+}
+
+type UnitResult struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UnitId        uint64                 `protobuf:"varint,1,opt,name=unit_id,json=unitId,proto3" json:"unit_id,omitempty"`
+	Ok            bool                   `protobuf:"varint,2,opt,name=ok,proto3" json:"ok,omitempty"`
+	ErrorCode     string                 `protobuf:"bytes,3,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
+	ErrorMessage  string                 `protobuf:"bytes,4,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UnitResult) Reset() {
+	*x = UnitResult{}
+	mi := &file_rts_v1_types_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnitResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnitResult) ProtoMessage() {}
+
+func (x *UnitResult) ProtoReflect() protoreflect.Message {
+	mi := &file_rts_v1_types_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnitResult.ProtoReflect.Descriptor instead.
+func (*UnitResult) Descriptor() ([]byte, []int) {
+	return file_rts_v1_types_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *UnitResult) GetUnitId() uint64 {
+	if x != nil {
+		return x.UnitId
+	}
+	return 0
+}
+
+func (x *UnitResult) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *UnitResult) GetErrorCode() string {
+	if x != nil {
+		return x.ErrorCode
+	}
+	return ""
+}
+
+func (x *UnitResult) GetErrorMessage() string {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return ""
+}
+
 type WorldInfo struct {
 	state      protoimpl.MessageState `protogen:"open.v1"`
 	Width      int32                  `protobuf:"varint,1,opt,name=width,proto3" json:"width,omitempty"`
@@ -525,14 +608,22 @@ type WorldInfo struct {
 	// Fully-qualified protobuf message names accepted as command payloads.
 	CommandTypes []string `protobuf:"bytes,5,rep,name=command_types,json=commandTypes,proto3" json:"command_types,omitempty"`
 	// Registered plugins, in initialization order.
-	Plugins       []string `protobuf:"bytes,6,rep,name=plugins,proto3" json:"plugins,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Plugins []string `protobuf:"bytes,6,rep,name=plugins,proto3" json:"plugins,omitempty"`
+	// JSON object keyed by plugin name with each plugin's published rules:
+	// effective configuration, formulas, and tables (e.g. attribute upgrade
+	// cost/duration tables). Rules are public game information.
+	RulesJson string `protobuf:"bytes,7,opt,name=rules_json,json=rulesJson,proto3" json:"rules_json,omitempty"`
+	// Per-tick execution order, one "phase: system, ..." entry per phase.
+	Schedule []string `protobuf:"bytes,8,rep,name=schedule,proto3" json:"schedule,omitempty"`
+	// Maximum unit-commands per player per tick (0 = unlimited).
+	UnitCommandBudget uint32 `protobuf:"varint,9,opt,name=unit_command_budget,json=unitCommandBudget,proto3" json:"unit_command_budget,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *WorldInfo) Reset() {
 	*x = WorldInfo{}
-	mi := &file_rts_v1_types_proto_msgTypes[5]
+	mi := &file_rts_v1_types_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -544,7 +635,7 @@ func (x *WorldInfo) String() string {
 func (*WorldInfo) ProtoMessage() {}
 
 func (x *WorldInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_types_proto_msgTypes[5]
+	mi := &file_rts_v1_types_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -557,7 +648,7 @@ func (x *WorldInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorldInfo.ProtoReflect.Descriptor instead.
 func (*WorldInfo) Descriptor() ([]byte, []int) {
-	return file_rts_v1_types_proto_rawDescGZIP(), []int{5}
+	return file_rts_v1_types_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *WorldInfo) GetWidth() int32 {
@@ -595,6 +686,27 @@ func (x *WorldInfo) GetPlugins() []string {
 	return nil
 }
 
+func (x *WorldInfo) GetRulesJson() string {
+	if x != nil {
+		return x.RulesJson
+	}
+	return ""
+}
+
+func (x *WorldInfo) GetSchedule() []string {
+	if x != nil {
+		return x.Schedule
+	}
+	return nil
+}
+
+func (x *WorldInfo) GetUnitCommandBudget() uint32 {
+	if x != nil {
+		return x.UnitCommandBudget
+	}
+	return 0
+}
+
 type PlayerInfo struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -605,7 +717,7 @@ type PlayerInfo struct {
 
 func (x *PlayerInfo) Reset() {
 	*x = PlayerInfo{}
-	mi := &file_rts_v1_types_proto_msgTypes[6]
+	mi := &file_rts_v1_types_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -617,7 +729,7 @@ func (x *PlayerInfo) String() string {
 func (*PlayerInfo) ProtoMessage() {}
 
 func (x *PlayerInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_types_proto_msgTypes[6]
+	mi := &file_rts_v1_types_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -630,7 +742,7 @@ func (x *PlayerInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerInfo.ProtoReflect.Descriptor instead.
 func (*PlayerInfo) Descriptor() ([]byte, []int) {
-	return file_rts_v1_types_proto_rawDescGZIP(), []int{6}
+	return file_rts_v1_types_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *PlayerInfo) GetId() uint32 {
@@ -660,7 +772,7 @@ type WorldSnapshot struct {
 
 func (x *WorldSnapshot) Reset() {
 	*x = WorldSnapshot{}
-	mi := &file_rts_v1_types_proto_msgTypes[7]
+	mi := &file_rts_v1_types_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -672,7 +784,7 @@ func (x *WorldSnapshot) String() string {
 func (*WorldSnapshot) ProtoMessage() {}
 
 func (x *WorldSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_types_proto_msgTypes[7]
+	mi := &file_rts_v1_types_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -685,7 +797,7 @@ func (x *WorldSnapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorldSnapshot.ProtoReflect.Descriptor instead.
 func (*WorldSnapshot) Descriptor() ([]byte, []int) {
-	return file_rts_v1_types_proto_rawDescGZIP(), []int{7}
+	return file_rts_v1_types_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *WorldSnapshot) GetTick() uint64 {
@@ -720,7 +832,7 @@ type TickUpdate struct {
 
 func (x *TickUpdate) Reset() {
 	*x = TickUpdate{}
-	mi := &file_rts_v1_types_proto_msgTypes[8]
+	mi := &file_rts_v1_types_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -732,7 +844,7 @@ func (x *TickUpdate) String() string {
 func (*TickUpdate) ProtoMessage() {}
 
 func (x *TickUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_types_proto_msgTypes[8]
+	mi := &file_rts_v1_types_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -745,7 +857,7 @@ func (x *TickUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TickUpdate.ProtoReflect.Descriptor instead.
 func (*TickUpdate) Descriptor() ([]byte, []int) {
-	return file_rts_v1_types_proto_rawDescGZIP(), []int{8}
+	return file_rts_v1_types_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *TickUpdate) GetTick() uint64 {
@@ -815,7 +927,7 @@ const file_rts_v1_types_proto_rawDesc = "" +
 	"\x06fields\x18\x03 \x03(\v2\x19.rts.v1.Event.FieldsEntryR\x06fields\x1aH\n" +
 	"\vFieldsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12#\n" +
-	"\x05value\x18\x02 \x01(\v2\r.rts.v1.ValueR\x05value:\x028\x01\"\xb5\x01\n" +
+	"\x05value\x18\x02 \x01(\v2\r.rts.v1.ValueR\x05value:\x028\x01\"\xec\x01\n" +
 	"\rCommandResult\x12\x1d\n" +
 	"\n" +
 	"command_id\x18\x01 \x01(\tR\tcommandId\x12\x12\n" +
@@ -823,14 +935,26 @@ const file_rts_v1_types_proto_rawDesc = "" +
 	"\x06status\x18\x03 \x01(\x0e2\x15.rts.v1.CommandStatusR\x06status\x12\x1d\n" +
 	"\n" +
 	"error_code\x18\x04 \x01(\tR\terrorCode\x12#\n" +
-	"\rerror_message\x18\x05 \x01(\tR\ferrorMessage\"\xa9\x01\n" +
+	"\rerror_message\x18\x05 \x01(\tR\ferrorMessage\x125\n" +
+	"\funit_results\x18\x06 \x03(\v2\x12.rts.v1.UnitResultR\vunitResults\"y\n" +
+	"\n" +
+	"UnitResult\x12\x17\n" +
+	"\aunit_id\x18\x01 \x01(\x04R\x06unitId\x12\x0e\n" +
+	"\x02ok\x18\x02 \x01(\bR\x02ok\x12\x1d\n" +
+	"\n" +
+	"error_code\x18\x03 \x01(\tR\terrorCode\x12#\n" +
+	"\rerror_message\x18\x04 \x01(\tR\ferrorMessage\"\x94\x02\n" +
 	"\tWorldInfo\x12\x14\n" +
 	"\x05width\x18\x01 \x01(\x05R\x05width\x12\x16\n" +
 	"\x06height\x18\x02 \x01(\x05R\x06height\x12 \n" +
 	"\ftick_rate_hz\x18\x03 \x01(\rR\n" +
 	"tickRateHz\x12#\n" +
 	"\rcommand_types\x18\x05 \x03(\tR\fcommandTypes\x12\x18\n" +
-	"\aplugins\x18\x06 \x03(\tR\apluginsJ\x04\b\x04\x10\x05R\aplayers\"0\n" +
+	"\aplugins\x18\x06 \x03(\tR\aplugins\x12\x1d\n" +
+	"\n" +
+	"rules_json\x18\a \x01(\tR\trulesJson\x12\x1a\n" +
+	"\bschedule\x18\b \x03(\tR\bschedule\x12.\n" +
+	"\x13unit_command_budget\x18\t \x01(\rR\x11unitCommandBudgetJ\x04\b\x04\x10\x05R\aplayers\"0\n" +
 	"\n" +
 	"PlayerInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x12\n" +
@@ -850,11 +974,12 @@ const file_rts_v1_types_proto_rawDesc = "" +
 	"\x17ENTITY_KIND_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10ENTITY_KIND_UNIT\x10\x01\x12\x18\n" +
 	"\x14ENTITY_KIND_RESOURCE\x10\x02\x12\x17\n" +
-	"\x13ENTITY_KIND_TERRAIN\x10\x03*h\n" +
+	"\x13ENTITY_KIND_TERRAIN\x10\x03*\x84\x01\n" +
 	"\rCommandStatus\x12\x1e\n" +
 	"\x1aCOMMAND_STATUS_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18COMMAND_STATUS_SUCCEEDED\x10\x01\x12\x19\n" +
-	"\x15COMMAND_STATUS_FAILED\x10\x02B>Z<github.com/dakotaknutson/unit-strategy-game/gen/rts/v1;rtsv1b\x06proto3"
+	"\x15COMMAND_STATUS_FAILED\x10\x02\x12\x1a\n" +
+	"\x16COMMAND_STATUS_PARTIAL\x10\x03B>Z<github.com/dakotaknutson/unit-strategy-game/gen/rts/v1;rtsv1b\x06proto3"
 
 var (
 	file_rts_v1_types_proto_rawDescOnce sync.Once
@@ -869,7 +994,7 @@ func file_rts_v1_types_proto_rawDescGZIP() []byte {
 }
 
 var file_rts_v1_types_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_rts_v1_types_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_rts_v1_types_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_rts_v1_types_proto_goTypes = []any{
 	(EntityKind)(0),       // 0: rts.v1.EntityKind
 	(CommandStatus)(0),    // 1: rts.v1.CommandStatus
@@ -878,31 +1003,33 @@ var file_rts_v1_types_proto_goTypes = []any{
 	(*Entity)(nil),        // 4: rts.v1.Entity
 	(*Event)(nil),         // 5: rts.v1.Event
 	(*CommandResult)(nil), // 6: rts.v1.CommandResult
-	(*WorldInfo)(nil),     // 7: rts.v1.WorldInfo
-	(*PlayerInfo)(nil),    // 8: rts.v1.PlayerInfo
-	(*WorldSnapshot)(nil), // 9: rts.v1.WorldSnapshot
-	(*TickUpdate)(nil),    // 10: rts.v1.TickUpdate
-	nil,                   // 11: rts.v1.Entity.AttributesEntry
-	nil,                   // 12: rts.v1.Event.FieldsEntry
+	(*UnitResult)(nil),    // 7: rts.v1.UnitResult
+	(*WorldInfo)(nil),     // 8: rts.v1.WorldInfo
+	(*PlayerInfo)(nil),    // 9: rts.v1.PlayerInfo
+	(*WorldSnapshot)(nil), // 10: rts.v1.WorldSnapshot
+	(*TickUpdate)(nil),    // 11: rts.v1.TickUpdate
+	nil,                   // 12: rts.v1.Entity.AttributesEntry
+	nil,                   // 13: rts.v1.Event.FieldsEntry
 }
 var file_rts_v1_types_proto_depIdxs = []int32{
 	2,  // 0: rts.v1.Value.position_value:type_name -> rts.v1.Position
 	0,  // 1: rts.v1.Entity.kind:type_name -> rts.v1.EntityKind
 	2,  // 2: rts.v1.Entity.position:type_name -> rts.v1.Position
-	11, // 3: rts.v1.Entity.attributes:type_name -> rts.v1.Entity.AttributesEntry
-	12, // 4: rts.v1.Event.fields:type_name -> rts.v1.Event.FieldsEntry
+	12, // 3: rts.v1.Entity.attributes:type_name -> rts.v1.Entity.AttributesEntry
+	13, // 4: rts.v1.Event.fields:type_name -> rts.v1.Event.FieldsEntry
 	1,  // 5: rts.v1.CommandResult.status:type_name -> rts.v1.CommandStatus
-	4,  // 6: rts.v1.WorldSnapshot.entities:type_name -> rts.v1.Entity
-	4,  // 7: rts.v1.TickUpdate.changed:type_name -> rts.v1.Entity
-	5,  // 8: rts.v1.TickUpdate.events:type_name -> rts.v1.Event
-	6,  // 9: rts.v1.TickUpdate.command_results:type_name -> rts.v1.CommandResult
-	3,  // 10: rts.v1.Entity.AttributesEntry.value:type_name -> rts.v1.Value
-	3,  // 11: rts.v1.Event.FieldsEntry.value:type_name -> rts.v1.Value
-	12, // [12:12] is the sub-list for method output_type
-	12, // [12:12] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	7,  // 6: rts.v1.CommandResult.unit_results:type_name -> rts.v1.UnitResult
+	4,  // 7: rts.v1.WorldSnapshot.entities:type_name -> rts.v1.Entity
+	4,  // 8: rts.v1.TickUpdate.changed:type_name -> rts.v1.Entity
+	5,  // 9: rts.v1.TickUpdate.events:type_name -> rts.v1.Event
+	6,  // 10: rts.v1.TickUpdate.command_results:type_name -> rts.v1.CommandResult
+	3,  // 11: rts.v1.Entity.AttributesEntry.value:type_name -> rts.v1.Value
+	3,  // 12: rts.v1.Event.FieldsEntry.value:type_name -> rts.v1.Value
+	13, // [13:13] is the sub-list for method output_type
+	13, // [13:13] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_rts_v1_types_proto_init() }
@@ -922,7 +1049,7 @@ func file_rts_v1_types_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rts_v1_types_proto_rawDesc), len(file_rts_v1_types_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   11,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

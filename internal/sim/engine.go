@@ -13,6 +13,10 @@ import (
 // Config describes a world.
 type Config struct {
 	Width, Height int32
+	// UnitCommandBudget is how many unit-commands each player may execute
+	// per tick (one per unit a command affects). 0 means unlimited. Admin
+	// commands are never charged.
+	UnitCommandBudget int
 	// Seed drives World.Rand (gameplay randomness).
 	Seed uint64
 	// IDKey is the secret key from which entity IDs are derived (at least
@@ -26,10 +30,61 @@ type TickContext struct {
 	World  *World
 	Tick   Tick
 	events []Event
+
+	rules  *Ruleset
+	budget int
+	used   map[PlayerID]int
+	units  []UnitResult // per-unit results of the command being executed
 }
 
 // Emit records an event for this tick.
 func (c *TickContext) Emit(e Event) { c.events = append(c.events, e) }
+
+// Charge consumes n unit-commands from the issuer's budget for this tick.
+// It fails, consuming nothing, if the budget does not cover n.
+func (c *TickContext) Charge(issuer Principal, n int) error {
+	if issuer.Admin || c.budget <= 0 || n <= 0 {
+		return nil
+	}
+	left := c.budget - c.used[issuer.Player]
+	if n > left {
+		return Fail(CodeResourceExhausted, "unit command budget exhausted: %d needed, %d of %d left this tick", n, left, c.budget)
+	}
+	c.used[issuer.Player] += n
+	return nil
+}
+
+// BudgetLeft returns how many unit-commands the issuer may still execute
+// this tick (-1 for unlimited).
+func (c *TickContext) BudgetLeft(issuer Principal) int {
+	if issuer.Admin || c.budget <= 0 {
+		return -1
+	}
+	return c.budget - c.used[issuer.Player]
+}
+
+// ReportUnit records a per-unit outcome for the command being executed.
+func (c *TickContext) ReportUnit(unit EntityID, err error) {
+	r := UnitResult{Unit: unit, OK: err == nil}
+	if err != nil {
+		r.Code, r.Message = errorCode(err)
+	}
+	c.units = append(c.units, r)
+}
+
+// ApplyToUnit applies a unit-applicable command (see
+// CommandDef.ApplyToUnit) to one unit, with the issuer of cmd. It enforces
+// the command's admin restriction.
+func (c *TickContext) ApplyToUnit(cmd Command, unit EntityID) error {
+	def, ok := c.rules.commands[cmd.Type]
+	if !ok || def.ApplyToUnit == nil {
+		return Fail(CodeInvalidArgument, "command %q cannot be applied per unit", cmd.Type)
+	}
+	if def.AdminOnly && !cmd.Issuer.Admin {
+		return Fail(CodePermissionDenied, "command %q requires admin privileges", cmd.Type)
+	}
+	return def.ApplyToUnit(c, cmd, unit)
+}
 
 // EntityView is the observable state of an entity, including all attributes
 // tagged with their visibility. Filtering per observer happens outside the
@@ -73,9 +128,10 @@ const MaxStepRequest = 1000
 // simulation goroutine (the one calling Run or Step), or to setup code before
 // the engine starts.
 type Engine struct {
-	rules *Ruleset
-	world *World
-	sink  func(*Frame)
+	rules  *Ruleset
+	world  *World
+	sink   func(*Frame)
+	budget int
 
 	mu       sync.Mutex
 	nextTick Tick
@@ -97,6 +153,7 @@ func NewEngine(cfg Config, rules *Ruleset) (*Engine, error) {
 	}
 	return &Engine{
 		rules:    rules,
+		budget:   cfg.UnitCommandBudget,
 		world:    newWorld(cfg.Width, cfg.Height, cfg.Seed, cfg.IDKey, rules),
 		nextTick: 1,
 		seq:      make(map[Principal]uint64),
@@ -209,7 +266,7 @@ func (e *Engine) StepWith(cmds []Command) *Frame {
 func (e *Engine) execute(tick Tick, cmds []Command) *Frame {
 	w := e.world
 	w.tick = tick
-	ctx := &TickContext{World: w, Tick: tick}
+	ctx := &TickContext{World: w, Tick: tick, rules: e.rules, budget: e.budget, used: map[PlayerID]int{}}
 
 	slices.SortStableFunc(cmds, func(a, b Command) int {
 		switch {
@@ -225,12 +282,13 @@ func (e *Engine) execute(tick Tick, cmds []Command) *Frame {
 		cmds[i].Tick = tick
 		def, ok := e.rules.commands[cmds[i].Type]
 		var err error
+		ctx.units = nil
 		if !ok {
 			err = Fail(CodeInvalidArgument, "unknown command type %q", cmds[i].Type)
 		} else {
 			err = def.Execute(ctx, cmds[i])
 		}
-		results = append(results, resultFor(&cmds[i], tick, err))
+		results = append(results, resultFor(&cmds[i], tick, err, ctx.units))
 	}
 
 	for _, p := range e.rules.phases {

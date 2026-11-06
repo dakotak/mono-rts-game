@@ -37,6 +37,7 @@ import (
 	"strconv"
 
 	energyv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/energy/v1"
+	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/attributes"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/wells"
 	"github.com/dakotaknutson/unit-strategy-game/internal/sim"
 )
@@ -72,6 +73,10 @@ var (
 	CommandSetEnergy  = string((&energyv1.SetUnitEnergyCommand{}).ProtoReflect().Descriptor().FullName())
 )
 
+// CodeInsufficientEnergy is the failure code for actions a unit cannot pay
+// for from its own store.
+const CodeInsufficientEnergy = "insufficient_energy"
+
 // MaxUnitsPerCommand bounds the work a single command can request.
 const MaxUnitsPerCommand = 4096
 
@@ -85,6 +90,14 @@ type Config struct {
 	ExtractionRate int64 `json:"extraction_rate"`
 	// TransferRate is how much one unit can send per tick.
 	TransferRate int64 `json:"transfer_rate"`
+	// CapacityAttribute, if set, names an attribute or derived property
+	// (attributes plugin) that determines each unit's storage capacity,
+	// replacing UnitCapacity. Capacity follows the property as it changes.
+	CapacityAttribute string `json:"capacity_attribute,omitempty"`
+	// ExtractionAttribute, if set, names an attribute or derived property
+	// that determines each unit's extraction rate, replacing
+	// ExtractionRate.
+	ExtractionAttribute string `json:"extraction_attribute,omitempty"`
 }
 
 // DefaultConfig returns the default configuration.
@@ -148,19 +161,64 @@ func Spend(w *sim.World, id sim.EntityID, amount int64) bool {
 	return true
 }
 
+// SetStored sets a unit's stored energy, clamped to [0, capacity]. It is
+// for plugins that move energy into a new unit they created (cloning), so
+// that the unit does not keep the free initial_energy it got on creation.
+func SetStored(w *sim.World, id sim.EntityID, energy int64) {
+	s, ok := stores.Get(w, id)
+	if !ok {
+		return
+	}
+	s.Energy = max(0, min(energy, s.Capacity))
+	stores.Set(w, id, s)
+}
+
 // GetStore returns a unit's energy store.
 func GetStore(w *sim.World, id sim.EntityID) (Store, bool) { return stores.Get(w, id) }
 
 // Plugin implements sim.Plugin.
 type Plugin struct {
-	cfg Config
+	cfg   Config
+	attrs *attributes.Plugin
 }
 
-// New returns the energy plugin.
+// New returns the energy plugin without attribute bindings.
 func New() *Plugin { return &Plugin{} }
 
-func (*Plugin) Name() string        { return Name }
-func (*Plugin) DependsOn() []string { return []string{wells.Name} }
+// NewWithAttributes returns the energy plugin able to bind capacity and
+// extraction rate to attributes (see Config).
+func NewWithAttributes(a *attributes.Plugin) *Plugin { return &Plugin{attrs: a} }
+
+func (*Plugin) Name() string { return Name }
+
+func (p *Plugin) DependsOn() []string {
+	if p.attrs != nil {
+		return []string{wells.Name, attributes.Name}
+	}
+	return []string{wells.Name}
+}
+
+// capacity returns a unit's capacity under the current configuration.
+func (p *Plugin) capacity(w *sim.World, id sim.EntityID) int64 {
+	if p.cfg.CapacityAttribute != "" {
+		v, _ := p.attrs.Lookup(w, id, p.cfg.CapacityAttribute)
+		return max(v, 0)
+	}
+	return p.cfg.UnitCapacity
+}
+
+func (p *Plugin) checkBinding(field, name string) error {
+	if name == "" {
+		return nil
+	}
+	if p.attrs == nil {
+		return fmt.Errorf("%s requires the attributes plugin", field)
+	}
+	if !p.attrs.Has(name) {
+		return fmt.Errorf("%s: %q is not an attribute or derived property", field, name)
+	}
+	return nil
+}
 
 func idString(id sim.EntityID) sim.Value { return sim.StringValue(strconv.FormatUint(uint64(id), 10)) }
 
@@ -171,6 +229,28 @@ func (p *Plugin) Register(r *sim.Registrar) error {
 		return err
 	}
 	if err := p.cfg.validate(); err != nil {
+		return err
+	}
+	if err := p.checkBinding("capacity_attribute", p.cfg.CapacityAttribute); err != nil {
+		return err
+	}
+	if err := p.checkBinding("extraction_attribute", p.cfg.ExtractionAttribute); err != nil {
+		return err
+	}
+	if p.cfg.CapacityAttribute != "" {
+		// Keep stored capacity in sync with the attribute. Capacity only
+		// shrinks through admin edits; excess energy is then lost.
+		p.attrs.OnChange(func(w *sim.World, id sim.EntityID) {
+			s, ok := stores.Get(w, id)
+			if !ok {
+				return
+			}
+			s.Capacity = p.capacity(w, id)
+			s.Energy = min(s.Energy, s.Capacity)
+			stores.Set(w, id, s)
+		})
+	}
+	if err := r.Describe(p.cfg); err != nil {
 		return err
 	}
 	// Energy levels and orders are private to the owner.
@@ -198,6 +278,10 @@ func (p *Plugin) Register(r *sim.Registrar) error {
 	// Rates are derived properties so future upgrades/formulas can vary
 	// them per unit without touching the systems.
 	if err := r.Derived(sim.DerivedDef{Name: DerivedExtractionRate, Compute: func(w *sim.World, id sim.EntityID) (int64, bool) {
+		if p.cfg.ExtractionAttribute != "" {
+			v, ok := p.attrs.Lookup(w, id, p.cfg.ExtractionAttribute)
+			return max(v, 0), ok && stores.Has(w, id)
+		}
 		return p.cfg.ExtractionRate, stores.Has(w, id)
 	}}); err != nil {
 		return err
@@ -209,7 +293,8 @@ func (p *Plugin) Register(r *sim.Registrar) error {
 	}
 	r.OnCreate(func(w *sim.World, e sim.Entity) {
 		if e.Kind == sim.KindUnit {
-			stores.Set(w, e.ID, Store{Energy: p.cfg.InitialEnergy, Capacity: p.cfg.UnitCapacity})
+			c := p.capacity(w, e.ID)
+			stores.Set(w, e.ID, Store{Energy: min(p.cfg.InitialEnergy, c), Capacity: c})
 		}
 	})
 	if err := r.Phase(sim.PhaseDef{Name: Phase}); err != nil {
@@ -222,8 +307,8 @@ func (p *Plugin) Register(r *sim.Registrar) error {
 		return err
 	}
 	for _, c := range []sim.CommandDef{
-		{Type: CommandMine, Execute: p.execMine},
-		{Type: CommandStopMining, Execute: p.execStopMining},
+		{Type: CommandMine, Execute: p.execMine, ApplyToUnit: p.applyMine},
+		{Type: CommandStopMining, Execute: p.execStopMining, ApplyToUnit: p.applyStopMining},
 		{Type: CommandTransfer, Execute: p.execTransfer},
 		{Type: CommandSetEnergy, AdminOnly: true, Execute: p.execSetEnergy},
 	} {
@@ -279,9 +364,45 @@ func (p *Plugin) execMine(ctx *sim.TickContext, cmd sim.Command) error {
 	if _, ok := wells.Get(w, well); !ok {
 		return sim.Fail(sim.CodeNotFound, "well %d not found", m.GetWellId())
 	}
+	if err := ctx.Charge(cmd.Issuer, len(m.GetUnitIds())); err != nil {
+		return err
+	}
 	for _, id := range m.GetUnitIds() {
 		mining.Set(w, sim.EntityID(id), miningOrder{Well: well})
 	}
+	return nil
+}
+
+// applyMine gives one unit a mining order (batch commands; the template's
+// well_id applies).
+func (p *Plugin) applyMine(ctx *sim.TickContext, cmd sim.Command, unit sim.EntityID) error {
+	m, ok := cmd.Payload.(*energyv1.MineCommand)
+	if !ok {
+		return sim.Fail(sim.CodeInvalidArgument, "payload is %T, want MineCommand", cmd.Payload)
+	}
+	if _, err := ownedUnit(ctx.World, cmd.Issuer, uint64(unit)); err != nil {
+		return err
+	}
+	well := sim.EntityID(m.GetWellId())
+	if _, ok := wells.Get(ctx.World, well); !ok {
+		return sim.Fail(sim.CodeNotFound, "well %d not found", m.GetWellId())
+	}
+	if err := ctx.Charge(cmd.Issuer, 1); err != nil {
+		return err
+	}
+	mining.Set(ctx.World, unit, miningOrder{Well: well})
+	return nil
+}
+
+// applyStopMining cancels one unit's mining order (batch commands).
+func (p *Plugin) applyStopMining(ctx *sim.TickContext, cmd sim.Command, unit sim.EntityID) error {
+	if _, err := ownedUnit(ctx.World, cmd.Issuer, uint64(unit)); err != nil {
+		return err
+	}
+	if err := ctx.Charge(cmd.Issuer, 1); err != nil {
+		return err
+	}
+	mining.Remove(ctx.World, unit)
 	return nil
 }
 
@@ -291,6 +412,9 @@ func (p *Plugin) execStopMining(ctx *sim.TickContext, cmd sim.Command) error {
 		return sim.Fail(sim.CodeInvalidArgument, "payload is %T, want StopMiningCommand", cmd.Payload)
 	}
 	if err := checkUnits(ctx.World, cmd.Issuer, m.GetUnitIds()); err != nil {
+		return err
+	}
+	if err := ctx.Charge(cmd.Issuer, len(m.GetUnitIds())); err != nil {
 		return err
 	}
 	for _, id := range m.GetUnitIds() {
@@ -331,6 +455,9 @@ func (p *Plugin) execTransfer(ctx *sim.TickContext, cmd sim.Command) error {
 	}
 	if !adjacent(from.Pos, to.Pos) {
 		return sim.Fail(sim.CodeFailedPrecondition, "units %d and %d are not adjacent", from.ID, to.ID)
+	}
+	if err := ctx.Charge(cmd.Issuer, 1); err != nil {
+		return err
 	}
 	transfers.Set(w, from.ID, transferOrder{To: to.ID, Remaining: m.GetAmount()})
 	return nil

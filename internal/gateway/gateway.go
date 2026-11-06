@@ -49,13 +49,10 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
-	// Command payloads are carried in google.protobuf.Any; protojson needs
-	// their types registered to translate them. Each plugin's command
-	// package must be imported here.
-	_ "github.com/dakotaknutson/unit-strategy-game/gen/rts/energy/v1"
-	_ "github.com/dakotaknutson/unit-strategy-game/gen/rts/movement/v1"
 	rtsv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/v1"
-	_ "github.com/dakotaknutson/unit-strategy-game/gen/rts/wells/v1"
+	// Registers every plugin's command messages so protojson can translate
+	// google.protobuf.Any payloads.
+	_ "github.com/dakotaknutson/unit-strategy-game/internal/protoreg"
 )
 
 const maxBody = 1 << 20

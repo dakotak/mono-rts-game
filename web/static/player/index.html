@@ -44,6 +44,35 @@
         <h2>Selection</h2>
         <div id="selection" class="selection"><p class="hint">Nothing selected.</p></div>
         <label class="amount">Transfer amount <input id="transfer-amount" type="number" min="1" value="20"></label>
+        <div id="unit-detail" class="unit-detail"></div>
+        <h2>Batch actions</h2>
+        <div class="form batch">
+          <label>Attribute <select id="batch-attr"></select></label>
+          <label>Increase by <input id="batch-amount" type="number" min="1" value="1"></label>
+          <p id="batch-estimate" class="hint">–</p>
+          <div class="actions">
+            <button id="batch-upgrade" type="button">Upgrade selected</button>
+            <button id="batch-clone" type="button">Clone selected</button>
+          </div>
+        </div>
+        <h2>Metadata</h2>
+        <div class="form">
+          <label>Key <input id="meta-key" placeholder="squad" maxlength="32"></label>
+          <label>Value <input id="meta-value" placeholder="alpha" maxlength="64"></label>
+          <div class="actions">
+            <button id="meta-set" type="button">Set on selected</button>
+            <button id="meta-remove" type="button">Remove</button>
+          </div>
+        </div>
+        <h2>Filter</h2>
+        <div class="form">
+          <label>Match <input id="filter" placeholder="squad=alpha, role, !tired"></label>
+          <p id="filter-count" class="hint">Comma-separated: key=value, key (present), !key (absent).</p>
+          <div class="actions">
+            <button id="filter-select" type="button">Select matching</button>
+            <button id="filter-upgrade" type="button" title="Server-side selector, evaluated when the command executes">Upgrade matching</button>
+          </div>
+        </div>
         <h2>Under cursor</h2>
         <p id="hover-info" class="hint">–</p>
         <h2>Players seen</h2>
@@ -55,5 +84,6 @@
   </section>
   <script src="/shared/board.js"></script>
   <script src="app.js"></script>
+  <script src="evolution.js"></script>
 </body>
 </html>

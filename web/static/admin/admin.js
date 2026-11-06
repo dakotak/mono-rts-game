@@ -13,7 +13,8 @@ const PALETTE = ["#e05252", "#4a7fe0", "#43b36b", "#e0a43a", "#a46be0", "#3abfc4
 const $ = (id) => document.getElementById(id);
 
 let token = null;
-let world = null; // {width, height}
+let world = null; // WorldInfo
+let rules = {}; // plugin name -> published rules
 let players = []; // [{id, name}]
 let tick = 0;
 let paused = false;
@@ -113,6 +114,7 @@ function start(snap) {
   players = snap.players;
   renderPlayers();
   world = snap.world;
+  try { rules = JSON.parse(world.rulesJson || "{}"); } catch (_) { rules = {}; }
   board.setWorld(world.width, world.height);
   setStatus(snap.status);
   stopStream = stream({
@@ -264,18 +266,50 @@ function renderInspector() {
     return;
   }
   const e = entities.get(ids[0]);
-  const rows = [
-    ["id", e.id],
-    ["kind", e.kind.replace("ENTITY_KIND_", "").toLowerCase()],
-    ["owner", e.ownerId ? `${playerName(e.ownerId)} (${e.ownerId})` : "none"],
-    ["position", fmtPos(e.position)],
-  ];
-  for (const k of Object.keys(e.attributes || {}).sort()) rows.push([k, fmtValue(e.attributes[k])]);
   const table = document.createElement("table");
-  for (const [k, v] of rows) {
+  const row = (k, v, title) => {
     const tr = table.insertRow();
     tr.insertCell().textContent = k;
     tr.insertCell().textContent = v;
+    if (title) tr.title = title;
+  };
+  const group = (name) => {
+    const tr = table.insertRow();
+    tr.className = "group";
+    const td = tr.insertCell();
+    td.colSpan = 2;
+    td.textContent = name;
+  };
+  group("entity");
+  row("id", e.id);
+  row("kind", e.kind.replace("ENTITY_KIND_", "").toLowerCase());
+  row("owner", e.ownerId ? `${playerName(e.ownerId)} (${e.ownerId})` : "none");
+  row("position", fmtPos(e.position));
+  // Group attributes by owning plugin ("attributes.armor" -> attributes).
+  const groups = {};
+  for (const k of Object.keys(e.attributes || {}).sort()) {
+    const g = k.split(".")[0];
+    (groups[g] = groups[g] || []).push(k);
+  }
+  const defs = (rules.attributes && rules.attributes.attributes) || [];
+  const derived = (rules.attributes && rules.attributes.derived) || {};
+  for (const g of Object.keys(groups).sort()) {
+    group(g);
+    for (const k of groups[g]) {
+      const name = k.slice(g.length + 1);
+      let v = fmtValue(e.attributes[k]);
+      let title = "";
+      const d = g === "attributes" && defs.find((x) => x.name === name);
+      if (d) {
+        const cur = Number(e.attributes[k].intValue);
+        const next = cur < d.max ? d.cost_table[cur + 1 - d.min] - d.cost_table[cur - d.min] : null;
+        v += `  (${d.min}–${d.max}${next !== null ? `, +1 costs ${next}` : ", max"})`;
+        title = `mass: ${d.mass}\ncost(v): ${d.cost}\nduration(v): ${d.duration}`;
+      } else if (g === "attributes" && derived[name]) {
+        title = `derived: ${derived[name]}`;
+      }
+      row(name, v, title);
+    }
   }
   box.append(table);
 
@@ -360,6 +394,43 @@ $("step-btn").addEventListener("click", async () => {
   } catch (e) { say(`Step: ${e.message}`, "error"); }
 });
 $("logout-btn").addEventListener("click", () => logout(""));
+$("rules-btn").addEventListener("click", showRules);
+$("rules-close").addEventListener("click", () => { $("rules-panel").hidden = true; });
+
+// showRules renders every plugin's published rules: attribute definitions
+// and formulas as a table, everything else as formatted JSON.
+function showRules() {
+  const box = $("rules-content");
+  box.replaceChildren();
+  const h = (text) => { const e = document.createElement("h3"); e.textContent = text; box.append(e); };
+  const pre = (obj) => { const e = document.createElement("pre"); e.textContent = typeof obj === "string" ? obj : JSON.stringify(obj, null, 2); box.append(e); };
+  h("Tick schedule");
+  pre((world.schedule || []).join("\n") + `\n\nunit command budget per player per tick: ${world.unitCommandBudget || "unlimited"}`);
+  const a = rules.attributes;
+  if (a) {
+    h(`Attributes (base mass ${a.base_mass})`);
+    const t = document.createElement("table");
+    t.innerHTML = "<tr><th>name</th><th>default</th><th>range</th><th>mass</th><th>cost(v) (cumulative)</th><th>duration(v) (cumulative)</th></tr>";
+    for (const d of a.attributes || []) {
+      const tr = t.insertRow();
+      for (const v of [d.name, d.default, `${d.min}–${d.max}`, d.mass, d.cost, d.duration]) {
+        const td = tr.insertCell();
+        const c = document.createElement("code");
+        c.textContent = v;
+        td.append(c);
+      }
+    }
+    box.append(t);
+    h("Derived properties (evaluation order)");
+    pre(["mass", ...(a.derived_order || [])].map((n) => `${n} = ${a.derived[n]}`).join("\n") + "\n\n" + (a.notes || ""));
+  }
+  for (const name of Object.keys(rules).sort()) {
+    if (name === "attributes") continue;
+    h(name);
+    pre(rules[name]);
+  }
+  $("rules-panel").hidden = false;
+}
 $("login-form").addEventListener("submit", (ev) => { ev.preventDefault(); login($("admin-token").value); });
 window.addEventListener("keydown", (ev) => {
   if (!token || ["INPUT", "SELECT"].includes(ev.target.tagName)) return;

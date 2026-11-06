@@ -77,9 +77,15 @@ func (v viewer) update(f *sim.Frame) *rtsv1.TickUpdate {
 			continue
 		}
 		pr := &rtsv1.CommandResult{CommandId: r.CommandID, Tick: uint64(r.Tick), Status: rtsv1.CommandStatus_COMMAND_STATUS_SUCCEEDED}
-		if !r.OK {
+		switch {
+		case !r.OK:
 			pr.Status = rtsv1.CommandStatus_COMMAND_STATUS_FAILED
 			pr.ErrorCode, pr.ErrorMessage = r.Code, r.Message
+		case r.Partial:
+			pr.Status = rtsv1.CommandStatus_COMMAND_STATUS_PARTIAL
+		}
+		for _, u := range r.Units {
+			pr.UnitResults = append(pr.UnitResults, &rtsv1.UnitResult{UnitId: uint64(u.Unit), Ok: u.OK, ErrorCode: u.Code, ErrorMessage: u.Message})
 		}
 		u.CommandResults = append(u.CommandResults, pr)
 	}

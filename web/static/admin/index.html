@@ -31,6 +31,7 @@
         <input id="step-count" type="number" min="1" max="1000" value="1" aria-label="Ticks per step">
       </span>
       <span class="spacer"></span>
+      <button id="rules-btn" type="button">Rules</button>
       <button id="logout-btn" type="button">Sign out</button>
     </header>
     <main>
@@ -61,6 +62,12 @@
         <ol id="log" class="log" aria-live="polite"></ol>
       </aside>
     </main>
+  </section>
+  <section id="rules-panel" class="overlay" hidden>
+    <div class="overlay-body">
+      <header><strong>Rules &amp; formulas</strong><span class="spacer"></span><button id="rules-close" type="button">Close</button></header>
+      <div id="rules-content"></div>
+    </div>
   </section>
   <script src="/shared/board.js"></script>
   <script src="admin.js"></script>

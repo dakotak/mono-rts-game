@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package rts.attributes.v1;
+
+option go_package = "github.com/dakotaknutson/unit-strategy-game/gen/rts/attributes/v1;attributesv1";
+
+// Commands owned by the attributes plugin. Attribute values, derived
+// properties (including mass), invested and embodied energy are observable
+// by the owner as "attributes.<name>" entity attributes. The full rule set
+// (definitions, formulas, cost and duration tables) is published in
+// WorldInfo.rules_json under "attributes".
+
+// SetAttributeCommand (admin only) sets an attribute to any value within
+// its bounds, including lowering it. It does not change invested energy.
+message SetAttributeCommand {
+  uint64 unit_id = 1;
+  string attribute = 2;
+  int64 value = 3;
+}

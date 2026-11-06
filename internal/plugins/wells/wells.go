@@ -140,6 +140,9 @@ func (p *Plugin) Register(r *sim.Registrar) error {
 		}
 	}
 
+	if err := r.Describe(p.cfg); err != nil {
+		return err
+	}
 	if err := r.Component(component.Def(sim.VisiblePublic, func(v Well) []sim.Field {
 		return []sim.Field{
 			{Key: AttrEnergy, Value: sim.IntValue(v.Energy)},
