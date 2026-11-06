@@ -30,11 +30,12 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	engine, err := game.NewEngine(cfg)
+	gm, err := game.New(cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
-	srv := server.New(cfg, engine)
+	engine := gm.Engine
+	srv := server.New(cfg, gm)
 
 	lis, err := net.Listen("tcp", *addr)
 	if err != nil {

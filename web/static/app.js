@@ -4,11 +4,36 @@
 
 const MOVE_TYPE = "type.googleapis.com/rts.movement.v1.MoveCommand";
 const STOP_TYPE = "type.googleapis.com/rts.movement.v1.StopCommand";
-const PALETTE = ["#9aa0a6", "#e05252", "#4a7fe0", "#43b36b", "#e0a43a", "#a46be0", "#3abfc4"];
+// Own units always use the first colour; other owners get the next free
+// colour in the order this client first sees them. Player IDs are opaque
+// random numbers, so they are never used to pick colours or labels.
+const PALETTE = ["#4a7fe0", "#e05252", "#43b36b", "#e0a43a", "#a46be0", "#3abfc4", "#d96fb0"];
+const UNOWNED_COLOR = "#9aa0a6";
 const DRAG_THRESHOLD = 4;
 
 const $ = (id) => document.getElementById(id);
-const colorFor = (owner) => PALETTE[owner % PALETTE.length] || PALETTE[0];
+
+// owner id -> {color, label}, assigned in order of first sighting.
+let owners = new Map();
+
+function ownerInfo(owner) {
+  if (!owner) return { color: UNOWNED_COLOR, label: "Unowned" };
+  let info = owners.get(owner);
+  if (!info) {
+    const mine = session && owner === session.playerId;
+    const n = [...owners.keys()].filter((o) => !session || o !== session.playerId).length;
+    info = mine
+      ? { color: PALETTE[0], label: `${session.playerName || "You"} — you` }
+      : { color: PALETTE[1 + (n % (PALETTE.length - 1))], label: `Opponent ${n + 1}` };
+    owners.set(owner, info);
+    renderLegend();
+  }
+  return info;
+}
+const colorFor = (owner) => ownerInfo(owner).color;
+
+// Entity IDs are large opaque numbers; show a short tag in messages.
+const unitTag = (id) => "#" + BigInt(id).toString(16).slice(-5);
 
 // ---- state --------------------------------------------------------------
 
@@ -72,7 +97,7 @@ async function join(token) {
   $("join-error").textContent = "";
   try {
     const resp = await api("/api/connect", { method: "POST", body: { joinToken: token } });
-    session = { token: resp.sessionToken, playerId: resp.playerId, world: resp.world };
+    session = { token: resp.sessionToken, playerId: resp.playerId, playerName: resp.playerName, world: resp.world };
     saveSession();
     startGame();
   } catch (e) {
@@ -86,6 +111,7 @@ function leave(reason) {
   session = null;
   try { sessionStorage.removeItem("rts.session"); } catch (_) {}
   entities = new Map();
+  owners = new Map();
   selected.clear();
   $("game").hidden = true;
   $("join").hidden = false;
@@ -95,28 +121,28 @@ function leave(reason) {
 function startGame() {
   $("join").hidden = true;
   $("game").hidden = false;
-  const me = playerName(session.playerId);
+  owners = new Map();
   const badge = $("player-badge");
-  badge.textContent = me;
+  badge.textContent = session.playerName || "You";
   badge.style.background = colorFor(session.playerId);
-  const legend = $("legend");
-  legend.replaceChildren();
-  for (const p of session.world.players) {
-    const li = document.createElement("li");
-    const sw = document.createElement("span");
-    sw.className = "swatch";
-    sw.style.background = colorFor(p.id);
-    if (p.id !== session.playerId) sw.style.borderRadius = "2px";
-    li.append(sw, `${p.name} (#${p.id})${p.id === session.playerId ? " — you" : ""}`);
-    legend.append(li);
-  }
   resize();
   observeLoop();
 }
 
-function playerName(id) {
-  const p = session.world.players.find((p) => p.id === id);
-  return p ? p.name : "Player " + id;
+// The legend lists only owners this client has actually observed; the
+// server does not disclose how many players exist.
+function renderLegend() {
+  const legend = $("legend");
+  legend.replaceChildren();
+  for (const [owner, info] of owners) {
+    const li = document.createElement("li");
+    const sw = document.createElement("span");
+    sw.className = "swatch";
+    sw.style.background = info.color;
+    if (!session || owner !== session.playerId) sw.style.borderRadius = "2px";
+    li.append(sw, info.label);
+    legend.append(li);
+  }
 }
 
 function setConn(text, cls) {
@@ -197,9 +223,9 @@ function handleResult(r) {
 function handleEvent(ev) {
   if (ev.type === "movement.cancelled") {
     const d = ev.fields.destination && ev.fields.destination.positionValue;
-    log(`Unit ${ev.entityId} gave up moving to ${fmtPos(d)}: ${ev.fields.reason.stringValue}`, "error");
+    log(`Unit ${unitTag(ev.entityId)} gave up moving to ${fmtPos(d)}: ${ev.fields.reason.stringValue}`, "error");
   } else if (ev.type === "movement.arrived") {
-    log(`Unit ${ev.entityId} arrived at ${fmtPos(ev.fields.position.positionValue)}`, "info");
+    log(`Unit ${unitTag(ev.entityId)} arrived at ${fmtPos(ev.fields.position.positionValue)}`, "info");
   }
 }
 

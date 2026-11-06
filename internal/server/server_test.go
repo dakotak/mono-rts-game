@@ -1,6 +1,7 @@
 package server_test
 
 import (
+	"cmp"
 	"context"
 	"net"
 	"slices"
@@ -26,29 +27,35 @@ import (
 // env runs a real gRPC server over an in-memory listener. The test goroutine
 // plays the simulation goroutine by calling step.
 type env struct {
-	t      *testing.T
-	ctx    context.Context
-	engine *sim.Engine
-	game   rtsv1.GameServiceClient
-	admin  rtsv1.AdminServiceClient
+	// Entity IDs are opaque, so tests look up the one unit each player
+	// starts with instead of assuming IDs.
+	redUnit, blueUnit uint64
+	t                 *testing.T
+	ctx               context.Context
+	engine            *sim.Engine
+	game              rtsv1.GameServiceClient
+	admin             rtsv1.AdminServiceClient
 }
 
 func newEnv(t *testing.T) *env {
 	t.Helper()
 	cfg := &game.Config{
 		World:      game.WorldConfig{Width: 12, Height: 8, Seed: 1, TickRateHz: 10},
-		Players:    []game.PlayerConfig{{ID: 1, Name: "Red", JoinToken: "red"}, {ID: 2, Name: "Blue", JoinToken: "blue"}},
+		Players:    []game.PlayerConfig{{Slot: 1, Name: "Red", JoinToken: "red"}, {Slot: 2, Name: "Blue", JoinToken: "blue"}},
 		AdminToken: "admin",
 		Units: []game.UnitBlock{
-			{Owner: 1, X: 0, Y: 0},  // entity 1
-			{Owner: 2, X: 11, Y: 7}, // entity 2
+			{Owner: 1, X: 0, Y: 0},  // red unit
+			{Owner: 2, X: 11, Y: 7}, // blue unit
 		},
 	}
-	engine, err := game.NewEngine(cfg)
+	gm, err := game.New(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := server.New(cfg, engine)
+	engine := gm.Engine
+	srv := server.New(cfg, gm)
+	redID, _ := engine.World().EntityAt(sim.Pos{X: 0, Y: 0})
+	blueID, _ := engine.World().EntityAt(sim.Pos{X: 11, Y: 7})
 
 	lis := bufconn.Listen(1 << 20)
 	g := grpc.NewServer()
@@ -66,7 +73,7 @@ func newEnv(t *testing.T) *env {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(cancel)
-	return &env{t: t, ctx: ctx, engine: engine, game: rtsv1.NewGameServiceClient(conn), admin: rtsv1.NewAdminServiceClient(conn)}
+	return &env{redUnit: uint64(redID), blueUnit: uint64(blueID), t: t, ctx: ctx, engine: engine, game: rtsv1.NewGameServiceClient(conn), admin: rtsv1.NewAdminServiceClient(conn)}
 }
 
 func authed(ctx context.Context, token string) context.Context {
@@ -139,6 +146,16 @@ func (o *observer) next() *rtsv1.TickUpdate {
 	return m.GetUpdate()
 }
 
+// snapshotOf fetches the player's current snapshot entities.
+func snapshotOf(p *player) []*rtsv1.Entity {
+	p.e.t.Helper()
+	resp, err := p.e.game.GetSnapshot(p.ctx, &rtsv1.GetSnapshotRequest{})
+	if err != nil {
+		p.e.t.Fatal(err)
+	}
+	return resp.GetSnapshot().GetEntities()
+}
+
 func move(unit uint64, x, y int32) *movementv1.MoveCommand {
 	return &movementv1.MoveCommand{Orders: []*movementv1.UnitDestination{{UnitId: unit, Destination: &rtsv1.Position{X: x, Y: y}}}}
 }
@@ -155,18 +172,21 @@ func find(es []*rtsv1.Entity, id uint64) *rtsv1.Entity {
 func TestTwoPlayersMoveConcurrently(t *testing.T) {
 	e := newEnv(t)
 	red, blue := e.connect("red"), e.connect("blue")
-	if red.id != 1 || blue.id != 2 {
+	if red.id == 0 || blue.id == 0 || red.id == blue.id {
 		t.Fatalf("player ids %d %d", red.id, blue.id)
+	}
+	if u := find(snapshotOf(red), e.redUnit); u.GetOwnerId() != red.id {
+		t.Fatalf("red unit owner = %d, want %d", u.GetOwnerId(), red.id)
 	}
 	ro, bo := red.observe(), blue.observe()
 	if len(ro.snap.GetEntities()) != 2 {
 		t.Fatalf("snapshot = %v", ro.snap)
 	}
 
-	if ack := red.submit("r1", move(1, 3, 0)); !ack.GetAccepted() || ack.GetScheduledTick() != 1 {
+	if ack := red.submit("r1", move(e.redUnit, 3, 0)); !ack.GetAccepted() || ack.GetScheduledTick() != 1 {
 		t.Fatalf("red ack = %v", ack)
 	}
-	if ack := blue.submit("b1", move(2, 8, 7)); !ack.GetAccepted() {
+	if ack := blue.submit("b1", move(e.blueUnit, 8, 7)); !ack.GetAccepted() {
 		t.Fatalf("blue ack = %v", ack)
 	}
 	e.engine.Step()
@@ -185,18 +205,18 @@ func TestTwoPlayersMoveConcurrently(t *testing.T) {
 	}
 	// Both see both units move; only the owner sees the destination.
 	for _, u := range []*rtsv1.TickUpdate{ru, bu} {
-		r, b := find(u.GetChanged(), 1), find(u.GetChanged(), 2)
+		r, b := find(u.GetChanged(), e.redUnit), find(u.GetChanged(), e.blueUnit)
 		if r.GetPosition().GetX() != 1 || b.GetPosition().GetX() != 10 {
 			t.Fatalf("positions: %v %v", r, b)
 		}
 	}
-	if find(ru.GetChanged(), 1).GetAttributes()["movement.destination"] == nil {
+	if find(ru.GetChanged(), e.redUnit).GetAttributes()["movement.destination"] == nil {
 		t.Error("red cannot see own destination")
 	}
-	if find(ru.GetChanged(), 2).GetAttributes()["movement.destination"] != nil {
+	if find(ru.GetChanged(), e.blueUnit).GetAttributes()["movement.destination"] != nil {
 		t.Error("red can see blue's destination")
 	}
-	if find(bu.GetChanged(), 1).GetAttributes()["movement.destination"] != nil {
+	if find(bu.GetChanged(), e.redUnit).GetAttributes()["movement.destination"] != nil {
 		t.Error("blue can see red's destination")
 	}
 
@@ -217,7 +237,7 @@ func TestOwnershipEnforcedAtExecution(t *testing.T) {
 	red, blue := e.connect("red"), e.connect("blue")
 	ro, bo := red.observe(), blue.observe()
 	// The envelope is valid, so it is accepted; execution fails.
-	if ack := blue.submit("steal", move(1, 5, 5)); !ack.GetAccepted() {
+	if ack := blue.submit("steal", move(e.redUnit, 5, 5)); !ack.GetAccepted() {
 		t.Fatalf("ack = %v", ack)
 	}
 	e.engine.Step()
@@ -230,7 +250,7 @@ func TestOwnershipEnforcedAtExecution(t *testing.T) {
 		// tick 1 carries the initial entities as changed; nothing else.
 		t.Fatalf("red update = %v", ru)
 	}
-	if find(ru.GetChanged(), 1).GetPosition().GetX() != 0 {
+	if find(ru.GetChanged(), e.redUnit).GetPosition().GetX() != 0 {
 		t.Fatal("red unit moved")
 	}
 }
@@ -261,9 +281,9 @@ func TestDuplicateCommandIDIsIdempotent(t *testing.T) {
 	e := newEnv(t)
 	red := e.connect("red")
 	ro := red.observe()
-	a1 := red.submit("same", move(1, 5, 0))
+	a1 := red.submit("same", move(e.redUnit, 5, 0))
 	e.engine.Step()
-	a2 := red.submit("same", move(1, 0, 5))
+	a2 := red.submit("same", move(e.redUnit, 0, 5))
 	if !proto.Equal(a1, a2) {
 		t.Fatalf("acks differ: %v vs %v", a1, a2)
 	}
@@ -272,7 +292,7 @@ func TestDuplicateCommandIDIsIdempotent(t *testing.T) {
 		t.Fatalf("executed %d times", n)
 	}
 	// Another player may reuse the id.
-	if ack := e.connect("blue").submit("same", move(2, 0, 0)); !ack.GetAccepted() || ack.GetScheduledTick() != 3 {
+	if ack := e.connect("blue").submit("same", move(e.blueUnit, 0, 0)); !ack.GetAccepted() || ack.GetScheduledTick() != 3 {
 		t.Fatalf("blue ack = %v", ack)
 	}
 }
@@ -300,10 +320,10 @@ func TestAuthorization(t *testing.T) {
 func TestAdminSnapshotAndSpawn(t *testing.T) {
 	e := newEnv(t)
 	red, blue := e.connect("red"), e.connect("blue")
-	red.submit("r", move(1, 5, 0))
-	blue.submit("b", move(2, 5, 7))
+	red.submit("r", move(e.redUnit, 5, 0))
+	blue.submit("b", move(e.blueUnit, 5, 7))
 	adm := authed(e.ctx, "admin")
-	resp, err := e.admin.SpawnUnit(adm, &rtsv1.SpawnUnitRequest{OwnerId: 2, Position: &rtsv1.Position{X: 6, Y: 4}})
+	resp, err := e.admin.SpawnUnit(adm, &rtsv1.SpawnUnitRequest{OwnerId: blue.id, Position: &rtsv1.Position{X: 6, Y: 4}})
 	if err != nil || resp.GetScheduledTick() != 1 {
 		t.Fatalf("spawn: %v %v", resp, err)
 	}
@@ -318,10 +338,19 @@ func TestAdminSnapshotAndSpawn(t *testing.T) {
 		t.Fatal(err)
 	}
 	es := snap.GetSnapshot().GetEntities()
-	if len(es) != 3 || es[2].GetOwnerId() != 2 || es[2].GetPosition().GetX() != 6 {
+	var spawned *rtsv1.Entity
+	for _, en := range es {
+		if en.GetPosition().GetX() == 6 && en.GetPosition().GetY() == 4 {
+			spawned = en
+		}
+	}
+	if len(es) != 3 || spawned.GetOwnerId() != blue.id {
 		t.Fatalf("admin snapshot = %v", es)
 	}
-	if es[0].GetAttributes()["movement.destination"] == nil || es[1].GetAttributes()["movement.destination"] == nil {
+	if len(snap.GetPlayers()) != 2 {
+		t.Fatalf("admin players = %v", snap.GetPlayers())
+	}
+	if find(es, e.redUnit).GetAttributes()["movement.destination"] == nil || find(es, e.blueUnit).GetAttributes()["movement.destination"] == nil {
 		t.Fatal("admin missing private attributes")
 	}
 	// Players see the spawned unit too.
@@ -350,7 +379,7 @@ func applyUpdate(es []*rtsv1.Entity, u *rtsv1.TickUpdate) []*rtsv1.Entity {
 	for _, e := range byID {
 		out = append(out, e)
 	}
-	slices.SortFunc(out, func(a, b *rtsv1.Entity) int { return int(a.GetId()) - int(b.GetId()) })
+	slices.SortFunc(out, func(a, b *rtsv1.Entity) int { return cmp.Compare(a.GetId(), b.GetId()) })
 	return out
 }
 
@@ -359,8 +388,8 @@ func TestSnapshotPlusUpdatesEqualsLaterSnapshot(t *testing.T) {
 	red := e.connect("red")
 	ro := red.observe()
 	state := ro.snap.GetEntities()
-	red.submit("a", move(1, 9, 6))
-	e.connect("blue").submit("b", move(2, 2, 1))
+	red.submit("a", move(e.redUnit, 9, 6))
+	e.connect("blue").submit("b", move(e.blueUnit, 2, 1))
 	for range 6 {
 		e.engine.Step()
 		state = applyUpdate(state, ro.next())
@@ -382,7 +411,7 @@ func TestReconnectRecoversState(t *testing.T) {
 	e := newEnv(t)
 	red := e.connect("red")
 	ro := red.observe()
-	red.submit("a", move(1, 4, 0))
+	red.submit("a", move(e.redUnit, 4, 0))
 	e.engine.Step()
 	ro.next()
 	ro.cancel() // client drops
@@ -394,7 +423,7 @@ func TestReconnectRecoversState(t *testing.T) {
 
 	// Same session can resubscribe...
 	again := red.observe()
-	if again.snap.GetTick() != 4 || find(again.snap.GetEntities(), 1).GetPosition().GetX() != 4 {
+	if again.snap.GetTick() != 4 || find(again.snap.GetEntities(), e.redUnit).GetPosition().GetX() != 4 {
 		t.Fatalf("resubscribe snapshot = %v", again.snap)
 	}
 	// ...and a fresh Connect with the join token yields the same player.

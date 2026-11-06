@@ -24,14 +24,15 @@ import (
 func TestGatewayEndToEnd(t *testing.T) {
 	cfg := &game.Config{
 		World:   game.WorldConfig{Width: 8, Height: 8, Seed: 1, TickRateHz: 50},
-		Players: []game.PlayerConfig{{ID: 1, Name: "Red", JoinToken: "red"}, {ID: 2, Name: "Blue", JoinToken: "blue"}},
+		Players: []game.PlayerConfig{{Slot: 1, Name: "Red", JoinToken: "red"}, {Slot: 2, Name: "Blue", JoinToken: "blue"}},
 		Units:   []game.UnitBlock{{Owner: 1, X: 0, Y: 0}, {Owner: 2, X: 7, Y: 7}},
 	}
-	engine, err := game.NewEngine(cfg)
+	gm, err := game.New(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := server.New(cfg, engine)
+	engine := gm.Engine
+	srv := server.New(cfg, gm)
 	lis := bufconn.Listen(1 << 20)
 	g := grpc.NewServer()
 	srv.Register(g)
@@ -72,7 +73,8 @@ func TestGatewayEndToEnd(t *testing.T) {
 	}
 	_, conn1 := post("/api/connect", "", `{"joinToken":"red"}`)
 	token, _ := conn1["sessionToken"].(string)
-	if token == "" || conn1["playerId"].(float64) != 1 {
+	playerID, _ := conn1["playerId"].(float64)
+	if token == "" || playerID == 0 || conn1["playerName"] != "Red" {
 		t.Fatalf("connect = %v", conn1)
 	}
 
@@ -89,8 +91,29 @@ func TestGatewayEndToEnd(t *testing.T) {
 	if !lines.Scan() || !strings.Contains(lines.Text(), `"snapshot"`) {
 		t.Fatalf("first line = %q", lines.Text())
 	}
+	// Find our unit; IDs are opaque, so look it up by owner.
+	var first struct {
+		Snapshot struct {
+			Entities []struct {
+				ID      string  `json:"id"`
+				OwnerID float64 `json:"ownerId"`
+			} `json:"entities"`
+		} `json:"snapshot"`
+	}
+	if err := json.Unmarshal(lines.Bytes(), &first); err != nil {
+		t.Fatal(err)
+	}
+	var unitID string
+	for _, en := range first.Snapshot.Entities {
+		if en.OwnerID == playerID {
+			unitID = en.ID
+		}
+	}
+	if unitID == "" {
+		t.Fatalf("no unit owned by %v in %s", playerID, lines.Text())
+	}
 
-	_, ack := post("/api/command", token, `{"commandId":"m1","payload":{"@type":"type.googleapis.com/rts.movement.v1.MoveCommand","orders":[{"unitId":"1","destination":{"x":2,"y":0}}]}}`)
+	_, ack := post("/api/command", token, `{"commandId":"m1","payload":{"@type":"type.googleapis.com/rts.movement.v1.MoveCommand","orders":[{"unitId":"`+unitID+`","destination":{"x":2,"y":0}}]}}`)
 	if ack["accepted"] != true {
 		t.Fatalf("ack = %v", ack)
 	}
@@ -117,7 +140,7 @@ func TestGatewayEndToEnd(t *testing.T) {
 			}
 		}
 		for _, c := range msg.Update.Changed {
-			if c.ID == "1" && c.Position.X == 2 {
+			if c.ID == unitID && c.Position.X == 2 {
 				// Static files are served too.
 				resp, err := http.Get(web.URL + "/index.html")
 				if err != nil || resp.StatusCode != 200 {
@@ -133,8 +156,8 @@ func TestGatewayEndToEnd(t *testing.T) {
 
 func TestGatewayRejectsUnauthenticatedObserve(t *testing.T) {
 	cfg := &game.Config{World: game.WorldConfig{Width: 4, Height: 4, TickRateHz: 10}}
-	engine, _ := game.NewEngine(cfg)
-	srv := server.New(cfg, engine)
+	gm, _ := game.New(cfg)
+	srv := server.New(cfg, gm)
 	lis := bufconn.Listen(1 << 16)
 	g := grpc.NewServer()
 	srv.Register(g)

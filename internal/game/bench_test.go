@@ -18,22 +18,23 @@ func BenchmarkStep(b *testing.B) {
 		b.Run(fmt.Sprintf("units=%d", units), func(b *testing.B) {
 			const size = 200
 			cfg := &game.Config{
-				World:   game.WorldConfig{Width: size, Height: size, Seed: 1, TickRateHz: 10},
-				Players: []game.PlayerConfig{{ID: 1, JoinToken: "a"}},
+				World:   game.WorldConfig{Width: size, Height: size, Seed: 1, TickRateHz: 10, IDKey: "00112233445566778899aabbccddeeff"},
+				Players: []game.PlayerConfig{{Slot: 1, JoinToken: "a"}},
 			}
 			for i := range units {
 				cfg.Units = append(cfg.Units, game.UnitBlock{Owner: 1, X: int32(i % size), Y: int32(i / size * 2)})
 			}
-			e, err := game.NewEngine(cfg)
+			g, err := game.New(cfg)
 			if err != nil {
 				b.Fatal(err)
 			}
+			e, owner := g.Engine, g.Players[0].ID
 			r := rand.New(rand.NewPCG(1, 1))
 			reorder := func() {
 				m := &movementv1.MoveCommand{}
 				flush := func() {
 					if len(m.Orders) > 0 {
-						_, _ = e.Submit(sim.Command{Issuer: sim.Principal{Player: 1}, Type: movement.CommandMove, Payload: m})
+						_, _ = e.Submit(sim.Command{Issuer: sim.Principal{Player: owner}, Type: movement.CommandMove, Payload: m})
 						m = &movementv1.MoveCommand{}
 					}
 				}

@@ -79,7 +79,9 @@ bit-identical. The rules for kernel and plugin code:
   the kernel so its sequence never changes with Go releases.
 - Integer arithmetic only. There is no wall-clock access inside a tick.
 - `World.StateHash()` covers entities, every component value, the RNG
-  state and ID allocation.
+  state and the ID counter.
+- Entity IDs come from a keyed function of a counter (next section), so
+  they're deterministic for anyone holding the key.
 
 Each `Frame.Commands` lists the commands executed that tick, in execution
 order. Replaying them with `Engine.StepWith` from the same initial config
@@ -91,7 +93,20 @@ the within-tick submission order is reversed.
 
 - Core entity data is `{ID, Kind, Owner, Pos}`. Kinds are `unit`,
   `resource` and `terrain`; only units are used in Milestone 1.
-- IDs are allocated sequentially and never reused.
+- **IDs are opaque.** Sequential IDs would tell any player roughly how many
+  units exist and in what order they were made. Instead, the n-th entity
+  ID is `HMAC-SHA256(id_key, "entity" || n)` truncated to 64 bits
+  (`sim.DeriveID`). Zero and IDs of live entities are skipped.
+  - Without the secret `id_key`, IDs look random. Seeing any number of them
+    reveals nothing about the counter or other IDs.
+  - With the key, the sequence is fully deterministic, so replays are exact.
+    The key is part of the initial state (`sim.Config.IDKey`, at least 16
+    bytes).
+  - A plain PRNG would not be enough: SplitMix64 is invertible, so one
+    observed ID would expose the counter.
+  - A consequence: iterating in ID order is a fixed but scrambled order,
+    unrelated to creation order. Determinism doesn't depend on which order
+    it is, only that it's stable.
 - **Occupancy invariant (Milestone 1):** every entity occupies exactly one
   tile, and a tile holds at most one entity. `World.MoveEntities` applies
   a batch of moves atomically and simultaneously, so a unit may enter a
@@ -180,8 +195,12 @@ checked for breaking changes with the FILE rules.
 
 **`rts.v1.GameService`** (players, humans and AI alike):
 
-- `Connect(join_token)` returns a player ID, a session token and
-  `WorldInfo` (size, tick rate, players, accepted command types, plugins).
+- `Connect(join_token)` returns the player's own opaque ID and name, a
+  session token and `WorldInfo` (size, tick rate, accepted command types,
+  plugins).
+  - There is deliberately no player roster, since it would disclose the
+    player count. Clients learn about other players only from what they
+    observe (unit `owner_id`s). The admin snapshot lists all players.
   Calling it again with the same join token returns another session for
   the same player.
 - `SubmitCommand(command_id, Any payload)` returns an **acknowledgment**:
@@ -266,7 +285,14 @@ protobuf one.
 - Tick 0 is the initial state, and the first executed tick is 1. A command
   accepted while tick *N* is being computed runs in tick *N+1*.
 - Admin commands run before player commands in a tick. Players run in
-  ascending ID order.
+  ascending ID order. Because player IDs are derived from the key, that
+  order is fixed per world but doesn't favour any particular config slot.
+- Player IDs are `DeriveID(id_key, "player", n)` truncated to 32 bits,
+  skipping zero and duplicates. Config files refer to players by a `slot`
+  number that is never exposed.
+- If `id_key` is not configured, a random one is generated at startup. IDs
+  then differ between server runs, which is fine because sessions don't
+  survive restarts anyway.
 - 8-directional movement, with diagonal steps costing the same as straight
   ones.
 - Moving to the current tile completes immediately with `movement.arrived`.

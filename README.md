@@ -96,16 +96,23 @@ docs/ARCHITECTURE.md       design, extension points, roadmap
 
 ```jsonc
 {
-  "world":   { "width": 32, "height": 20, "seed": 42, "tick_rate_hz": 10 },
-  "players": [ { "id": 1, "name": "Red", "join_token": "red" }, ... ],
+  "world":   { "width": 32, "height": 20, "seed": 42, "tick_rate_hz": 10,
+               "id_key": "" },                 // hex secret for ID derivation; empty = random per start
+  "players": [ { "slot": 1, "name": "Red", "join_token": "red" }, ... ],  // slot: config-local handle
   "admin_token": "dev-admin",               // empty disables AdminService
-  "units":   [ { "owner": 1, "x": 2, "y": 3, "w": 4, "h": 3 }, ... ],  // w/h: block of units
+  "units":   [ { "owner": 1, "x": 2, "y": 3, "w": 4, "h": 3 }, ... ],  // owner: player slot; w/h: block of units
   "plugins": { "movement": { "ticks_per_move": 2, "max_blocked_ticks": 30, "contention_backoff_ticks": 2 } }
 }
 ```
 
 Unknown fields are rejected, both at the top level and inside each
 plugin's section.
+
+Entity and player IDs are opaque random-looking 64-bit/32-bit values
+derived from `id_key`, so they don't reveal how many players or units
+exist. A slot number is only used inside the config file and never leaves
+the server. Set `id_key` (at least 32 hex characters) only when runs must
+be reproducible, and keep it secret.
 
 ## Performance (Apple M-series laptop, `make sim` / `make bench`)
 

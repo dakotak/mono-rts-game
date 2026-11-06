@@ -6,8 +6,8 @@
     "tick_rate_hz": 10
   },
   "players": [
-    { "id": 1, "name": "Red", "join_token": "red" },
-    { "id": 2, "name": "Blue", "join_token": "blue" }
+    { "slot": 1, "name": "Red", "join_token": "red" },
+    { "slot": 2, "name": "Blue", "join_token": "blue" }
   ],
   "admin_token": "dev-admin",
   "units": [

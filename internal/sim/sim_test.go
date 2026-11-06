@@ -25,6 +25,8 @@ func (p testPlugin) Register(r *Registrar) error {
 	return p.register(r)
 }
 
+var testKey = []byte("0123456789abcdef")
+
 func mustRules(t *testing.T, plugins ...Plugin) *Ruleset {
 	t.Helper()
 	rs, err := NewRuleset(plugins, nil)
@@ -36,7 +38,7 @@ func mustRules(t *testing.T, plugins ...Plugin) *Ruleset {
 
 func mustEngine(t *testing.T, rs *Ruleset) *Engine {
 	t.Helper()
-	e, err := NewEngine(Config{Width: 10, Height: 8, Seed: 1}, rs)
+	e, err := NewEngine(Config{Width: 10, Height: 8, Seed: 1, IDKey: testKey}, rs)
 	if err != nil {
 		t.Fatalf("NewEngine: %v", err)
 	}
@@ -313,12 +315,18 @@ func TestComponentsAndChangeTracking(t *testing.T) {
 	b, _ := w.CreateEntity(KindUnit, 1, Pos{1, 0})
 	counter.Set(w, b, 5)
 	counter.Set(w, a, 3)
-	if got := counter.Entities(w); len(got) != 2 || got[0] != a {
-		t.Errorf("Entities = %v", got)
+	if got := counter.Entities(w); len(got) != 2 || got[0] != min(a, b) || got[1] != max(a, b) {
+		t.Errorf("Entities = %v, want sorted [%d %d]", got, min(a, b), max(a, b))
 	}
 	changed, _ := w.takeChanges()
-	if len(changed) != 2 || len(changed[1].Attrs) != 1 || changed[1].Attrs[0].Value.Int != 5 || changed[1].Attrs[0].Visibility != VisibleOwner {
+	if len(changed) != 2 {
 		t.Fatalf("changed = %+v", changed)
+	}
+	for _, v := range changed {
+		want := map[EntityID]int64{a: 3, b: 5}[v.ID]
+		if len(v.Attrs) != 1 || v.Attrs[0].Value.Int != want || v.Attrs[0].Visibility != VisibleOwner {
+			t.Fatalf("view of %d = %+v", v.ID, v)
+		}
 	}
 	counter.Set(w, a, 3) // unchanged value: not dirty
 	if changed, _ := w.takeChanges(); len(changed) != 0 {
@@ -336,5 +344,69 @@ func TestRandDeterministic(t *testing.T) {
 	// Pin the sequence so accidental algorithm changes are caught.
 	if got := NewRand(0).Uint64(); got != 0xe220a8397b1dcdaf {
 		t.Errorf("first value = %#x", got)
+	}
+}
+
+func TestEntityIDsAreUnpredictable(t *testing.T) {
+	newWorld := func(key []byte) *World {
+		e, err := NewEngine(Config{Width: 100, Height: 100, IDKey: key}, mustRules(t))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return e.World()
+	}
+	w := newWorld(testKey)
+	var created []EntityID
+	for i := range 1000 {
+		id, err := w.CreateEntity(KindUnit, 1, Pos{int32(i % 100), int32(i / 100)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		created = append(created, id)
+	}
+	ascending, small := 0, 0
+	seen := map[EntityID]bool{}
+	for i, id := range created {
+		if id == 0 || seen[id] {
+			t.Fatalf("id %d is zero or duplicated", id)
+		}
+		seen[id] = true
+		if id < 1<<32 {
+			small++
+		}
+		if i > 0 && id > created[i-1] {
+			ascending++
+		}
+	}
+	// Random 64-bit values: essentially none below 2^32, and consecutive
+	// IDs increase about half the time (sequential IDs: always).
+	if small > 2 || ascending < 400 || ascending > 600 {
+		t.Errorf("IDs look structured: %d small, %d/999 ascending", small, ascending)
+	}
+	// The ID index stays sorted regardless of creation order.
+	ids := w.EntityIDs()
+	for i := 1; i < len(ids); i++ {
+		if ids[i-1] >= ids[i] {
+			t.Fatal("EntityIDs not sorted")
+		}
+	}
+
+	// Same key: identical sequence (replays work). Different key: unrelated.
+	same, other := newWorld(testKey), newWorld([]byte("another-secret-key"))
+	for i := range 10 {
+		a, _ := same.CreateEntity(KindUnit, 1, Pos{int32(i), 0})
+		b, _ := other.CreateEntity(KindUnit, 1, Pos{int32(i), 0})
+		if a != created[i] {
+			t.Fatalf("same key produced different id at %d", i)
+		}
+		if b == created[i] {
+			t.Fatalf("different key produced same id at %d", i)
+		}
+	}
+}
+
+func TestEngineRequiresIDKey(t *testing.T) {
+	if _, err := NewEngine(Config{Width: 1, Height: 1, IDKey: []byte("short")}, mustRules(t)); err == nil {
+		t.Fatal("short key accepted")
 	}
 }

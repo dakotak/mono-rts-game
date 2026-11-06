@@ -37,7 +37,8 @@ var (
 type World struct {
 	width, height int32
 	tick          Tick
-	nextID        EntityID
+	idKey         []byte
+	idCounter     uint64 // number of entity IDs drawn so far
 	rng           *Rand
 	rules         *Ruleset
 
@@ -53,11 +54,11 @@ type World struct {
 	removed []EntityID
 }
 
-func newWorld(width, height int32, seed uint64, rules *Ruleset) *World {
+func newWorld(width, height int32, seed uint64, idKey []byte, rules *Ruleset) *World {
 	w := &World{
 		width:      width,
 		height:     height,
-		nextID:     1,
+		idKey:      append([]byte(nil), idKey...),
 		rng:        NewRand(seed),
 		rules:      rules,
 		entities:   make(map[EntityID]Entity),
@@ -116,13 +117,26 @@ func (w *World) CreateEntity(kind Kind, owner PlayerID, pos Pos) (EntityID, erro
 	if _, taken := w.occupied[pos]; taken {
 		return 0, fmt.Errorf("create %v at %v: %w", kind, pos, ErrOccupied)
 	}
-	id := w.nextID
-	w.nextID++
+	id := w.newEntityID()
 	w.entities[id] = Entity{ID: id, Kind: kind, Owner: owner, Pos: pos}
-	w.ids = append(w.ids, id) // IDs are monotonic, so this stays sorted
+	i, _ := slices.BinarySearch(w.ids, id)
+	w.ids = slices.Insert(w.ids, i, id)
 	w.occupied[pos] = id
 	w.dirty[id] = struct{}{}
 	return id, nil
+}
+
+// newEntityID draws the next unpredictable entity ID (see DeriveID). Zero
+// and IDs of live entities are skipped; a 64-bit collision is
+// astronomically unlikely but handled deterministically anyway.
+func (w *World) newEntityID() EntityID {
+	for {
+		w.idCounter++
+		id := EntityID(DeriveID(w.idKey, "entity", w.idCounter))
+		if _, live := w.entities[id]; id != 0 && !live {
+			return id
+		}
+	}
 }
 
 // RemoveEntity deletes an entity and all of its components.
@@ -253,7 +267,7 @@ func (w *World) takeChanges() ([]EntityView, []EntityID) {
 // plain comparable value types components are restricted to.
 func (w *World) StateHash() uint64 {
 	h := fnv.New64a()
-	fmt.Fprintf(h, "t%d n%d r%d w%dx%d|", w.tick, w.nextID, w.rng.State(), w.width, w.height)
+	fmt.Fprintf(h, "t%d n%d r%d w%dx%d|", w.tick, w.idCounter, w.rng.State(), w.width, w.height)
 	for _, id := range w.ids {
 		e := w.entities[id]
 		fmt.Fprintf(h, "e%d:%d:%d:%d,%d|", e.ID, e.Kind, e.Owner, e.Pos.X, e.Pos.Y)

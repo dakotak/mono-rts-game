@@ -33,9 +33,10 @@ func main() {
 	if *units > *size**size/2 {
 		log.Fatalf("too many units (%d) for a %dx%d world; keep density <= 50%%", *units, *size, *size)
 	}
-	cfg := &game.Config{World: game.WorldConfig{Width: int32(*size), Height: int32(*size), Seed: *seed, TickRateHz: 10}}
+	// A fixed ID key keeps runs comparable via the state hash.
+	cfg := &game.Config{World: game.WorldConfig{Width: int32(*size), Height: int32(*size), Seed: *seed, TickRateHz: 10, IDKey: fmt.Sprintf("%032x", *seed)}}
 	for p := 1; p <= *players; p++ {
-		cfg.Players = append(cfg.Players, game.PlayerConfig{ID: sim.PlayerID(p), JoinToken: fmt.Sprint(p)})
+		cfg.Players = append(cfg.Players, game.PlayerConfig{Slot: p, JoinToken: fmt.Sprint(p)})
 	}
 	// Scatter units deterministically.
 	r := rand.New(rand.NewPCG(*seed, 1))
@@ -45,15 +46,16 @@ func main() {
 			x, y := int32(r.IntN(*size)), int32(r.IntN(*size))
 			if !taken[[2]int32{x, y}] {
 				taken[[2]int32{x, y}] = true
-				cfg.Units = append(cfg.Units, game.UnitBlock{Owner: sim.PlayerID(1 + i%*players), X: x, Y: y})
+				cfg.Units = append(cfg.Units, game.UnitBlock{Owner: 1 + i%*players, X: x, Y: y})
 				break
 			}
 		}
 	}
-	engine, err := game.NewEngine(cfg)
+	gm, err := game.New(cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
+	engine := gm.Engine
 
 	byOwner := map[sim.PlayerID][]sim.EntityID{}
 	for _, id := range engine.World().EntityIDs() {
@@ -69,8 +71,8 @@ func main() {
 	for t := range *ticks {
 		if t%*orderEvery == 0 {
 			// Each player sends half its units toward a random rally point.
-			for p := 1; p <= *players; p++ {
-				ids := byOwner[sim.PlayerID(p)]
+			for _, pl := range gm.Players {
+				ids := byOwner[pl.ID]
 				tx, ty := int32(r.IntN(*size)), int32(r.IntN(*size))
 				m := &movementv1.MoveCommand{}
 				for i, id := range ids {
@@ -85,7 +87,7 @@ func main() {
 					n := min(len(m.Orders), movement.MaxOrdersPerCommand)
 					chunk := &movementv1.MoveCommand{Orders: m.Orders[:n]}
 					m.Orders = m.Orders[n:]
-					if _, err := engine.Submit(sim.Command{ID: fmt.Sprint(t), Issuer: sim.Principal{Player: sim.PlayerID(p)}, Type: movement.CommandMove, Payload: chunk}); err != nil {
+					if _, err := engine.Submit(sim.Command{ID: fmt.Sprint(t), Issuer: sim.Principal{Player: pl.ID}, Type: movement.CommandMove, Payload: chunk}); err != nil {
 						log.Fatal(err)
 					}
 				}

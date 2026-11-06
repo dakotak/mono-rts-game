@@ -27,7 +27,7 @@ func newHarness(t *testing.T, w, h int32, cfg string) *harness {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e, err := sim.NewEngine(sim.Config{Width: w, Height: h, Seed: 7}, rs)
+	e, err := sim.NewEngine(sim.Config{Width: w, Height: h, Seed: 7, IDKey: []byte("movement-test-key")}, rs)
 	if err != nil {
 		t.Fatal(err)
 	}

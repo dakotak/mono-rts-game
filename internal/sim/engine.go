@@ -13,7 +13,12 @@ import (
 // Config describes a world.
 type Config struct {
 	Width, Height int32
-	Seed          uint64
+	// Seed drives World.Rand (gameplay randomness).
+	Seed uint64
+	// IDKey is the secret key from which entity IDs are derived (at least
+	// MinIDKeyLen bytes). It must never be sent to clients: anyone holding
+	// it can predict IDs. It is part of the initial state for replays.
+	IDKey []byte
 }
 
 // TickContext is passed to systems and command handlers.
@@ -80,9 +85,12 @@ func NewEngine(cfg Config, rules *Ruleset) (*Engine, error) {
 	if cfg.Width <= 0 || cfg.Height <= 0 {
 		return nil, fmt.Errorf("invalid world size %dx%d", cfg.Width, cfg.Height)
 	}
+	if len(cfg.IDKey) < MinIDKeyLen {
+		return nil, fmt.Errorf("IDKey must be at least %d bytes, got %d", MinIDKeyLen, len(cfg.IDKey))
+	}
 	return &Engine{
 		rules:    rules,
-		world:    newWorld(cfg.Width, cfg.Height, cfg.Seed, rules),
+		world:    newWorld(cfg.Width, cfg.Height, cfg.Seed, cfg.IDKey, rules),
 		nextTick: 1,
 		seq:      make(map[Principal]uint64),
 	}, nil

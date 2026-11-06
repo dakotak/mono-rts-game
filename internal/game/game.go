@@ -1,10 +1,13 @@
 // Package game assembles a concrete game from configuration: it selects the
-// compiled-in plugins, builds the ruleset and engine, and places the initial
-// entities. It is the only place that knows which plugins exist.
+// compiled-in plugins, builds the ruleset and engine, assigns player
+// identities and places the initial entities. It is the only place that
+// knows which plugins exist.
 package game
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,23 +33,31 @@ type WorldConfig struct {
 	Height     int32  `json:"height"`
 	Seed       uint64 `json:"seed"`
 	TickRateHz uint32 `json:"tick_rate_hz"`
+	// IDKey is the hex-encoded secret from which entity and player IDs are
+	// derived. Leave it empty to generate a random key at startup (IDs then
+	// differ between runs). Set it explicitly only when runs must be
+	// reproducible, and keep it private: it makes IDs predictable.
+	IDKey string `json:"id_key"`
 }
 
 // PlayerConfig declares a player slot. Whoever presents JoinToken plays as
-// this player.
+// this player. Slot is a configuration-local handle used to reference the
+// player within this file (e.g. unit owners); it is never exposed. The
+// player's public ID is derived from the ID key.
 type PlayerConfig struct {
-	ID        sim.PlayerID `json:"id"`
-	Name      string       `json:"name"`
-	JoinToken string       `json:"join_token"`
+	Slot      int    `json:"slot"`
+	Name      string `json:"name"`
+	JoinToken string `json:"join_token"`
 }
 
-// UnitBlock places a W x H rectangle of units (W and H default to 1).
+// UnitBlock places a W x H rectangle of units (W and H default to 1). Owner
+// is a player slot, or 0 for unowned.
 type UnitBlock struct {
-	Owner sim.PlayerID `json:"owner"`
-	X     int32        `json:"x"`
-	Y     int32        `json:"y"`
-	W     int32        `json:"w"`
-	H     int32        `json:"h"`
+	Owner int   `json:"owner"`
+	X     int32 `json:"x"`
+	Y     int32 `json:"y"`
+	W     int32 `json:"w"`
+	H     int32 `json:"h"`
 }
 
 // TickInterval returns the wall-clock duration of one tick.
@@ -62,23 +73,32 @@ func (c *Config) Validate() error {
 	if c.World.TickRateHz == 0 || c.World.TickRateHz > 1000 {
 		return fmt.Errorf("tick_rate_hz must be in 1..1000, got %d", c.World.TickRateHz)
 	}
-	ids := map[sim.PlayerID]bool{}
+	if c.World.IDKey != "" {
+		key, err := hex.DecodeString(c.World.IDKey)
+		if err != nil {
+			return fmt.Errorf("id_key must be hex: %w", err)
+		}
+		if len(key) < sim.MinIDKeyLen {
+			return fmt.Errorf("id_key must be at least %d bytes (%d hex characters)", sim.MinIDKeyLen, 2*sim.MinIDKeyLen)
+		}
+	}
+	slots := map[int]bool{}
 	tokens := map[string]bool{}
 	for _, p := range c.Players {
-		if p.ID == 0 || ids[p.ID] {
-			return fmt.Errorf("player id %d is zero or duplicated", p.ID)
+		if p.Slot <= 0 || slots[p.Slot] {
+			return fmt.Errorf("player slot %d is not positive or is duplicated", p.Slot)
 		}
 		if p.JoinToken == "" || tokens[p.JoinToken] {
-			return fmt.Errorf("player %d: join_token is empty or duplicated", p.ID)
+			return fmt.Errorf("player slot %d: join_token is empty or duplicated", p.Slot)
 		}
-		ids[p.ID], tokens[p.JoinToken] = true, true
+		slots[p.Slot], tokens[p.JoinToken] = true, true
 	}
 	if c.AdminToken != "" && tokens[c.AdminToken] {
 		return errors.New("admin_token must differ from every join_token")
 	}
 	for i, u := range c.Units {
-		if u.Owner != 0 && !ids[u.Owner] {
-			return fmt.Errorf("units[%d]: unknown owner %d", i, u.Owner)
+		if u.Owner != 0 && !slots[u.Owner] {
+			return fmt.Errorf("units[%d]: unknown owner slot %d", i, u.Owner)
 		}
 	}
 	return nil
@@ -109,29 +129,93 @@ func Plugins() []sim.Plugin {
 	return []sim.Plugin{movement.New()}
 }
 
-// NewEngine builds the ruleset and engine and places the initial units.
-func NewEngine(c *Config) (*sim.Engine, error) {
+// Player is a resolved player slot.
+type Player struct {
+	ID        sim.PlayerID
+	Slot      int
+	Name      string
+	JoinToken string
+}
+
+// Game is an assembled, ready-to-run game.
+type Game struct {
+	Engine  *sim.Engine
+	Players []Player // in configuration order
+}
+
+// PlayerBySlot returns the player declared with the given slot.
+func (g *Game) PlayerBySlot(slot int) (Player, bool) {
+	for _, p := range g.Players {
+		if p.Slot == slot {
+			return p, true
+		}
+	}
+	return Player{}, false
+}
+
+// New builds the ruleset and engine, derives player IDs and places the
+// initial units.
+func New(c *Config) (*Game, error) {
 	if err := c.Validate(); err != nil {
+		return nil, err
+	}
+	key, err := idKey(c.World.IDKey)
+	if err != nil {
 		return nil, err
 	}
 	rules, err := sim.NewRuleset(Plugins(), c.Plugins)
 	if err != nil {
 		return nil, err
 	}
-	e, err := sim.NewEngine(sim.Config{Width: c.World.Width, Height: c.World.Height, Seed: c.World.Seed}, rules)
+	e, err := sim.NewEngine(sim.Config{Width: c.World.Width, Height: c.World.Height, Seed: c.World.Seed, IDKey: key}, rules)
 	if err != nil {
 		return nil, err
 	}
+	g := &Game{Engine: e, Players: derivePlayers(key, c.Players)}
+
 	w := e.World()
 	for i, b := range c.Units {
+		var owner sim.PlayerID
+		if b.Owner != 0 {
+			p, _ := g.PlayerBySlot(b.Owner)
+			owner = p.ID
+		}
 		bw, bh := max(b.W, 1), max(b.H, 1)
 		for dy := range bh {
 			for dx := range bw {
-				if _, err := w.CreateEntity(sim.KindUnit, b.Owner, sim.Pos{X: b.X + dx, Y: b.Y + dy}); err != nil {
+				if _, err := w.CreateEntity(sim.KindUnit, owner, sim.Pos{X: b.X + dx, Y: b.Y + dy}); err != nil {
 					return nil, fmt.Errorf("units[%d]: %w", i, err)
 				}
 			}
 		}
 	}
-	return e, nil
+	return g, nil
+}
+
+func idKey(hexKey string) ([]byte, error) {
+	if hexKey != "" {
+		return hex.DecodeString(hexKey)
+	}
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		return nil, fmt.Errorf("generate id key: %w", err)
+	}
+	return key, nil
+}
+
+// derivePlayers assigns each slot an unpredictable, unique, non-zero ID.
+func derivePlayers(key []byte, cfg []PlayerConfig) []Player {
+	used := map[sim.PlayerID]bool{0: true}
+	var n uint64
+	out := make([]Player, 0, len(cfg))
+	for _, pc := range cfg {
+		var id sim.PlayerID
+		for used[id] {
+			n++
+			id = sim.PlayerID(sim.DeriveID(key, "player", n))
+		}
+		used[id] = true
+		out = append(out, Player{ID: id, Slot: pc.Slot, Name: pc.Name, JoinToken: pc.JoinToken})
+	}
+	return out
 }

@@ -31,6 +31,8 @@ message GetWorldSnapshotRequest {}
 
 message GetWorldSnapshotResponse {
   WorldSnapshot snapshot = 1;
+  // All configured players, including those without units.
+  repeated PlayerInfo players = 2;
 }
 
 message SpawnUnitRequest {

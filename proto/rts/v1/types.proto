@@ -38,9 +38,12 @@ message Value {
 // Entity is an observation of a single entity. Which attributes are present
 // depends on what the observer is authorized to see.
 message Entity {
+  // Opaque, unpredictable identifier. IDs carry no information about how
+  // many entities exist or the order they were created in; do not assume
+  // they are small, dense or increasing.
   uint64 id = 1;
   EntityKind kind = 2;
-  // Owning player, or 0 for unowned entities.
+  // Owning player (an opaque ID like player_id), or 0 for unowned entities.
   uint32 owner_id = 3;
   Position position = 4;
   // Plugin-defined attributes keyed by "<plugin>.<name>", e.g.
@@ -76,10 +79,14 @@ message CommandResult {
 }
 
 message WorldInfo {
+  // Field 4 (a list of all players) was removed: it disclosed the number of
+  // players. Players learn about others only through what they observe.
+  reserved 4;
+  reserved "players";
+
   int32 width = 1;
   int32 height = 2;
   uint32 tick_rate_hz = 3;
-  repeated PlayerInfo players = 4;
   // Fully-qualified protobuf message names accepted as command payloads.
   repeated string command_types = 5;
   // Registered plugins, in initialization order.

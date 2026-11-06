@@ -37,10 +37,11 @@ const ackHistory = 4096
 
 // Server holds the state shared by both services.
 type Server struct {
-	cfg    *game.Config
-	engine *sim.Engine
-	hub    *Hub
-	info   *rtsv1.WorldInfo
+	cfg     *game.Config
+	players []game.Player
+	engine  *sim.Engine
+	hub     *Hub
+	info    *rtsv1.WorldInfo
 
 	mu       sync.Mutex
 	sessions map[string]sim.PlayerID // session token -> player
@@ -54,9 +55,10 @@ type ackLog struct {
 	order []string
 }
 
-// New wires a server to an engine. It installs the hub as the engine's frame
+// New wires a server to a game. It installs the hub as the engine's frame
 // sink, so call it before the engine starts.
-func New(cfg *game.Config, engine *sim.Engine) *Server {
+func New(cfg *game.Config, g *game.Game) *Server {
+	engine := g.Engine
 	hub := NewHub(engine.NextTick()-1, engine.World().FullView())
 	engine.SetFrameSink(hub.Publish)
 
@@ -67,11 +69,9 @@ func New(cfg *game.Config, engine *sim.Engine) *Server {
 		CommandTypes: engine.Rules().CommandTypes(false),
 		Plugins:      engine.Rules().Plugins(),
 	}
-	for _, p := range cfg.Players {
-		info.Players = append(info.Players, &rtsv1.PlayerInfo{Id: uint32(p.ID), Name: p.Name})
-	}
 	return &Server{
 		cfg:      cfg,
+		players:  g.Players,
 		engine:   engine,
 		hub:      hub,
 		info:     info,
@@ -138,13 +138,13 @@ type gameService struct {
 }
 
 func (g *gameService) Connect(_ context.Context, req *rtsv1.ConnectRequest) (*rtsv1.ConnectResponse, error) {
-	for _, p := range g.s.cfg.Players {
+	for _, p := range g.s.players {
 		if subtle.ConstantTimeCompare([]byte(req.GetJoinToken()), []byte(p.JoinToken)) == 1 {
 			tok := newToken()
 			g.s.mu.Lock()
 			g.s.sessions[tok] = p.ID
 			g.s.mu.Unlock()
-			return &rtsv1.ConnectResponse{PlayerId: uint32(p.ID), SessionToken: tok, World: g.s.info}, nil
+			return &rtsv1.ConnectResponse{PlayerId: uint32(p.ID), PlayerName: p.Name, SessionToken: tok, World: g.s.info}, nil
 		}
 	}
 	return nil, status.Error(codes.Unauthenticated, "unknown join token")
@@ -258,7 +258,11 @@ func (a *adminService) GetWorldSnapshot(ctx context.Context, _ *rtsv1.GetWorldSn
 		return nil, err
 	}
 	tick, es := a.s.hub.Snapshot()
-	return &rtsv1.GetWorldSnapshotResponse{Snapshot: viewer{admin: true}.snapshot(tick, es)}, nil
+	resp := &rtsv1.GetWorldSnapshotResponse{Snapshot: viewer{admin: true}.snapshot(tick, es)}
+	for _, p := range a.s.players {
+		resp.Players = append(resp.Players, &rtsv1.PlayerInfo{Id: uint32(p.ID), Name: p.Name})
+	}
+	return resp, nil
 }
 
 func (a *adminService) SpawnUnit(ctx context.Context, req *rtsv1.SpawnUnitRequest) (*rtsv1.SpawnUnitResponse, error) {
@@ -267,7 +271,7 @@ func (a *adminService) SpawnUnit(ctx context.Context, req *rtsv1.SpawnUnitReques
 	}
 	owner := sim.PlayerID(req.GetOwnerId())
 	known := owner == 0
-	for _, p := range a.s.cfg.Players {
+	for _, p := range a.s.players {
 		known = known || p.ID == owner
 	}
 	if !known {

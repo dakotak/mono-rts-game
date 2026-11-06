@@ -38,9 +38,11 @@ message ConnectRequest {
 }
 
 message ConnectResponse {
+  // Opaque, unpredictable player identifier (matches Entity.owner_id).
   uint32 player_id = 1;
   string session_token = 2;
   WorldInfo world = 3;
+  string player_name = 4;
 }
 
 message SubmitCommandRequest {

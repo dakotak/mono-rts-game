@@ -67,10 +67,12 @@ func (x *ConnectRequest) GetJoinToken() string {
 }
 
 type ConnectResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId      uint32                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	SessionToken  string                 `protobuf:"bytes,2,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
-	World         *WorldInfo             `protobuf:"bytes,3,opt,name=world,proto3" json:"world,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Opaque, unpredictable player identifier (matches Entity.owner_id).
+	PlayerId      uint32     `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	SessionToken  string     `protobuf:"bytes,2,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
+	World         *WorldInfo `protobuf:"bytes,3,opt,name=world,proto3" json:"world,omitempty"`
+	PlayerName    string     `protobuf:"bytes,4,opt,name=player_name,json=playerName,proto3" json:"player_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -124,6 +126,13 @@ func (x *ConnectResponse) GetWorld() *WorldInfo {
 		return x.World
 	}
 	return nil
+}
+
+func (x *ConnectResponse) GetPlayerName() string {
+	if x != nil {
+		return x.PlayerName
+	}
+	return ""
 }
 
 type SubmitCommandRequest struct {
@@ -456,11 +465,13 @@ const file_rts_v1_game_proto_rawDesc = "" +
 	"\x11rts/v1/game.proto\x12\x06rts.v1\x1a\x19google/protobuf/any.proto\x1a\x12rts/v1/types.proto\"/\n" +
 	"\x0eConnectRequest\x12\x1d\n" +
 	"\n" +
-	"join_token\x18\x01 \x01(\tR\tjoinToken\"|\n" +
+	"join_token\x18\x01 \x01(\tR\tjoinToken\"\x9d\x01\n" +
 	"\x0fConnectResponse\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\rR\bplayerId\x12#\n" +
 	"\rsession_token\x18\x02 \x01(\tR\fsessionToken\x12'\n" +
-	"\x05world\x18\x03 \x01(\v2\x11.rts.v1.WorldInfoR\x05world\"e\n" +
+	"\x05world\x18\x03 \x01(\v2\x11.rts.v1.WorldInfoR\x05world\x12\x1f\n" +
+	"\vplayer_name\x18\x04 \x01(\tR\n" +
+	"playerName\"e\n" +
 	"\x14SubmitCommandRequest\x12\x1d\n" +
 	"\n" +
 	"command_id\x18\x01 \x01(\tR\tcommandId\x12.\n" +

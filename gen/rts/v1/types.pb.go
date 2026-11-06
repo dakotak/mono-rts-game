@@ -294,9 +294,12 @@ func (*Value_PositionValue) isValue_Kind() {}
 // depends on what the observer is authorized to see.
 type Entity struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	Id    uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Kind  EntityKind             `protobuf:"varint,2,opt,name=kind,proto3,enum=rts.v1.EntityKind" json:"kind,omitempty"`
-	// Owning player, or 0 for unowned entities.
+	// Opaque, unpredictable identifier. IDs carry no information about how
+	// many entities exist or the order they were created in; do not assume
+	// they are small, dense or increasing.
+	Id   uint64     `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Kind EntityKind `protobuf:"varint,2,opt,name=kind,proto3,enum=rts.v1.EntityKind" json:"kind,omitempty"`
+	// Owning player (an opaque ID like player_id), or 0 for unowned entities.
 	OwnerId  uint32    `protobuf:"varint,3,opt,name=owner_id,json=ownerId,proto3" json:"owner_id,omitempty"`
 	Position *Position `protobuf:"bytes,4,opt,name=position,proto3" json:"position,omitempty"`
 	// Plugin-defined attributes keyed by "<plugin>.<name>", e.g.
@@ -519,7 +522,6 @@ type WorldInfo struct {
 	Width      int32                  `protobuf:"varint,1,opt,name=width,proto3" json:"width,omitempty"`
 	Height     int32                  `protobuf:"varint,2,opt,name=height,proto3" json:"height,omitempty"`
 	TickRateHz uint32                 `protobuf:"varint,3,opt,name=tick_rate_hz,json=tickRateHz,proto3" json:"tick_rate_hz,omitempty"`
-	Players    []*PlayerInfo          `protobuf:"bytes,4,rep,name=players,proto3" json:"players,omitempty"`
 	// Fully-qualified protobuf message names accepted as command payloads.
 	CommandTypes []string `protobuf:"bytes,5,rep,name=command_types,json=commandTypes,proto3" json:"command_types,omitempty"`
 	// Registered plugins, in initialization order.
@@ -577,13 +579,6 @@ func (x *WorldInfo) GetTickRateHz() uint32 {
 		return x.TickRateHz
 	}
 	return 0
-}
-
-func (x *WorldInfo) GetPlayers() []*PlayerInfo {
-	if x != nil {
-		return x.Players
-	}
-	return nil
 }
 
 func (x *WorldInfo) GetCommandTypes() []string {
@@ -828,15 +823,14 @@ const file_rts_v1_types_proto_rawDesc = "" +
 	"\x06status\x18\x03 \x01(\x0e2\x15.rts.v1.CommandStatusR\x06status\x12\x1d\n" +
 	"\n" +
 	"error_code\x18\x04 \x01(\tR\terrorCode\x12#\n" +
-	"\rerror_message\x18\x05 \x01(\tR\ferrorMessage\"\xc8\x01\n" +
+	"\rerror_message\x18\x05 \x01(\tR\ferrorMessage\"\xa9\x01\n" +
 	"\tWorldInfo\x12\x14\n" +
 	"\x05width\x18\x01 \x01(\x05R\x05width\x12\x16\n" +
 	"\x06height\x18\x02 \x01(\x05R\x06height\x12 \n" +
 	"\ftick_rate_hz\x18\x03 \x01(\rR\n" +
-	"tickRateHz\x12,\n" +
-	"\aplayers\x18\x04 \x03(\v2\x12.rts.v1.PlayerInfoR\aplayers\x12#\n" +
+	"tickRateHz\x12#\n" +
 	"\rcommand_types\x18\x05 \x03(\tR\fcommandTypes\x12\x18\n" +
-	"\aplugins\x18\x06 \x03(\tR\aplugins\"0\n" +
+	"\aplugins\x18\x06 \x03(\tR\apluginsJ\x04\b\x04\x10\x05R\aplayers\"0\n" +
 	"\n" +
 	"PlayerInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x12\n" +
@@ -898,18 +892,17 @@ var file_rts_v1_types_proto_depIdxs = []int32{
 	11, // 3: rts.v1.Entity.attributes:type_name -> rts.v1.Entity.AttributesEntry
 	12, // 4: rts.v1.Event.fields:type_name -> rts.v1.Event.FieldsEntry
 	1,  // 5: rts.v1.CommandResult.status:type_name -> rts.v1.CommandStatus
-	8,  // 6: rts.v1.WorldInfo.players:type_name -> rts.v1.PlayerInfo
-	4,  // 7: rts.v1.WorldSnapshot.entities:type_name -> rts.v1.Entity
-	4,  // 8: rts.v1.TickUpdate.changed:type_name -> rts.v1.Entity
-	5,  // 9: rts.v1.TickUpdate.events:type_name -> rts.v1.Event
-	6,  // 10: rts.v1.TickUpdate.command_results:type_name -> rts.v1.CommandResult
-	3,  // 11: rts.v1.Entity.AttributesEntry.value:type_name -> rts.v1.Value
-	3,  // 12: rts.v1.Event.FieldsEntry.value:type_name -> rts.v1.Value
-	13, // [13:13] is the sub-list for method output_type
-	13, // [13:13] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	4,  // 6: rts.v1.WorldSnapshot.entities:type_name -> rts.v1.Entity
+	4,  // 7: rts.v1.TickUpdate.changed:type_name -> rts.v1.Entity
+	5,  // 8: rts.v1.TickUpdate.events:type_name -> rts.v1.Event
+	6,  // 9: rts.v1.TickUpdate.command_results:type_name -> rts.v1.CommandResult
+	3,  // 10: rts.v1.Entity.AttributesEntry.value:type_name -> rts.v1.Value
+	3,  // 11: rts.v1.Event.FieldsEntry.value:type_name -> rts.v1.Value
+	12, // [12:12] is the sub-list for method output_type
+	12, // [12:12] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_rts_v1_types_proto_init() }

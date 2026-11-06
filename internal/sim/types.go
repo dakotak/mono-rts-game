@@ -18,11 +18,13 @@ package sim
 
 import "fmt"
 
-// EntityID identifies an entity. IDs are allocated sequentially starting at 1
-// and are never reused within a world.
+// EntityID identifies an entity. IDs are unpredictable 64-bit values derived
+// from the world's secret ID key (see DeriveID), so they reveal neither how
+// many entities exist nor their creation order. Zero is never used.
 type EntityID uint64
 
-// PlayerID identifies a player. Zero means "no owner".
+// PlayerID identifies a player. Zero means "no owner". Like entity IDs,
+// player IDs are opaque and unpredictable; the kernel does not allocate them.
 type PlayerID uint32
 
 // Tick is a simulation step number. Tick 0 is the initial state; the first

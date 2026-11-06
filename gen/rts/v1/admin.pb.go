@@ -58,8 +58,10 @@ func (*GetWorldSnapshotRequest) Descriptor() ([]byte, []int) {
 }
 
 type GetWorldSnapshotResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Snapshot      *WorldSnapshot         `protobuf:"bytes,1,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Snapshot *WorldSnapshot         `protobuf:"bytes,1,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
+	// All configured players, including those without units.
+	Players       []*PlayerInfo `protobuf:"bytes,2,rep,name=players,proto3" json:"players,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -97,6 +99,13 @@ func (*GetWorldSnapshotResponse) Descriptor() ([]byte, []int) {
 func (x *GetWorldSnapshotResponse) GetSnapshot() *WorldSnapshot {
 	if x != nil {
 		return x.Snapshot
+	}
+	return nil
+}
+
+func (x *GetWorldSnapshotResponse) GetPlayers() []*PlayerInfo {
+	if x != nil {
+		return x.Players
 	}
 	return nil
 }
@@ -306,9 +315,10 @@ var File_rts_v1_admin_proto protoreflect.FileDescriptor
 const file_rts_v1_admin_proto_rawDesc = "" +
 	"\n" +
 	"\x12rts/v1/admin.proto\x12\x06rts.v1\x1a\x12rts/v1/types.proto\"\x19\n" +
-	"\x17GetWorldSnapshotRequest\"M\n" +
+	"\x17GetWorldSnapshotRequest\"{\n" +
 	"\x18GetWorldSnapshotResponse\x121\n" +
-	"\bsnapshot\x18\x01 \x01(\v2\x15.rts.v1.WorldSnapshotR\bsnapshot\"[\n" +
+	"\bsnapshot\x18\x01 \x01(\v2\x15.rts.v1.WorldSnapshotR\bsnapshot\x12,\n" +
+	"\aplayers\x18\x02 \x03(\v2\x12.rts.v1.PlayerInfoR\aplayers\"[\n" +
 	"\x10SpawnUnitRequest\x12\x19\n" +
 	"\bowner_id\x18\x01 \x01(\rR\aownerId\x12,\n" +
 	"\bposition\x18\x02 \x01(\v2\x10.rts.v1.PositionR\bposition\"Y\n" +
@@ -347,22 +357,24 @@ var file_rts_v1_admin_proto_goTypes = []any{
 	(*SetPausedRequest)(nil),         // 4: rts.v1.SetPausedRequest
 	(*SetPausedResponse)(nil),        // 5: rts.v1.SetPausedResponse
 	(*WorldSnapshot)(nil),            // 6: rts.v1.WorldSnapshot
-	(*Position)(nil),                 // 7: rts.v1.Position
+	(*PlayerInfo)(nil),               // 7: rts.v1.PlayerInfo
+	(*Position)(nil),                 // 8: rts.v1.Position
 }
 var file_rts_v1_admin_proto_depIdxs = []int32{
 	6, // 0: rts.v1.GetWorldSnapshotResponse.snapshot:type_name -> rts.v1.WorldSnapshot
-	7, // 1: rts.v1.SpawnUnitRequest.position:type_name -> rts.v1.Position
-	0, // 2: rts.v1.AdminService.GetWorldSnapshot:input_type -> rts.v1.GetWorldSnapshotRequest
-	2, // 3: rts.v1.AdminService.SpawnUnit:input_type -> rts.v1.SpawnUnitRequest
-	4, // 4: rts.v1.AdminService.SetPaused:input_type -> rts.v1.SetPausedRequest
-	1, // 5: rts.v1.AdminService.GetWorldSnapshot:output_type -> rts.v1.GetWorldSnapshotResponse
-	3, // 6: rts.v1.AdminService.SpawnUnit:output_type -> rts.v1.SpawnUnitResponse
-	5, // 7: rts.v1.AdminService.SetPaused:output_type -> rts.v1.SetPausedResponse
-	5, // [5:8] is the sub-list for method output_type
-	2, // [2:5] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	7, // 1: rts.v1.GetWorldSnapshotResponse.players:type_name -> rts.v1.PlayerInfo
+	8, // 2: rts.v1.SpawnUnitRequest.position:type_name -> rts.v1.Position
+	0, // 3: rts.v1.AdminService.GetWorldSnapshot:input_type -> rts.v1.GetWorldSnapshotRequest
+	2, // 4: rts.v1.AdminService.SpawnUnit:input_type -> rts.v1.SpawnUnitRequest
+	4, // 5: rts.v1.AdminService.SetPaused:input_type -> rts.v1.SetPausedRequest
+	1, // 6: rts.v1.AdminService.GetWorldSnapshot:output_type -> rts.v1.GetWorldSnapshotResponse
+	3, // 7: rts.v1.AdminService.SpawnUnit:output_type -> rts.v1.SpawnUnitResponse
+	5, // 8: rts.v1.AdminService.SetPaused:output_type -> rts.v1.SetPausedResponse
+	6, // [6:9] is the sub-list for method output_type
+	3, // [3:6] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_rts_v1_admin_proto_init() }
