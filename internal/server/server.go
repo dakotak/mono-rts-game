@@ -11,6 +11,7 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -162,9 +163,6 @@ func (g *gameService) SubmitCommand(ctx context.Context, req *rtsv1.SubmitComman
 	reject := func(reason string) *rtsv1.SubmitCommandResponse {
 		return &rtsv1.SubmitCommandResponse{CommandId: id, RejectionReason: reason}
 	}
-	if req.GetPayload() == nil {
-		return reject("payload missing"), nil
-	}
 
 	// Hold the lock across dedupe check and submit so concurrent retries of
 	// one command id cannot both be scheduled.
@@ -179,11 +177,10 @@ func (g *gameService) SubmitCommand(ctx context.Context, req *rtsv1.SubmitComman
 		return prev, nil
 	}
 
-	msg, err := anypb.UnmarshalNew(req.GetPayload(), protoUnmarshalOptions)
+	typ, msg, err := decodeCommand(req.GetPayload())
 	if err != nil {
-		return reject(fmt.Sprintf("cannot decode payload %q: %v", req.GetPayload().GetTypeUrl(), err)), nil
+		return reject(err.Error()), nil
 	}
-	typ := string(msg.ProtoReflect().Descriptor().FullName())
 	tick, err := g.s.engine.Submit(sim.Command{ID: id, Issuer: sim.Principal{Player: player}, Type: typ, Payload: msg})
 	if err != nil {
 		return reject(err.Error()), nil
@@ -212,17 +209,23 @@ func (g *gameService) Observe(_ *rtsv1.ObserveRequest, stream grpc.ServerStreami
 	if err != nil {
 		return err
 	}
-	return g.s.observe(stream, viewer{player: player})
+	return g.s.observe(stream.Context(), viewer{player: player},
+		func(snap *rtsv1.WorldSnapshot) error {
+			return stream.Send(&rtsv1.ObserveResponse{Kind: &rtsv1.ObserveResponse_Snapshot{Snapshot: snap}})
+		},
+		func(u *rtsv1.TickUpdate) error {
+			return stream.Send(&rtsv1.ObserveResponse{Kind: &rtsv1.ObserveResponse_Update{Update: u}})
+		})
 }
 
 // observe streams a snapshot followed by per-tick updates, resynchronizing
-// with a new snapshot whenever the hub drops this observer for lagging.
-func (s *Server) observe(stream grpc.ServerStreamingServer[rtsv1.ObserveResponse], v viewer) error {
-	ctx := stream.Context()
+// with a new snapshot whenever the hub drops this observer for lagging. The
+// send functions wrap the messages of the specific stream type.
+func (s *Server) observe(ctx context.Context, v viewer,
+	sendSnapshot func(*rtsv1.WorldSnapshot) error, sendUpdate func(*rtsv1.TickUpdate) error) error {
 	for {
 		tick, es, sub := s.hub.Subscribe()
-		err := stream.Send(&rtsv1.ObserveResponse{Kind: &rtsv1.ObserveResponse_Snapshot{Snapshot: v.snapshot(tick, es)}})
-		if err != nil {
+		if err := sendSnapshot(v.snapshot(tick, es)); err != nil {
 			s.hub.Unsubscribe(sub)
 			return err
 		}
@@ -236,7 +239,7 @@ func (s *Server) observe(stream grpc.ServerStreamingServer[rtsv1.ObserveResponse
 					if !ok {
 						return true, nil
 					}
-					if err := stream.Send(&rtsv1.ObserveResponse{Kind: &rtsv1.ObserveResponse_Update{Update: v.update(f)}}); err != nil {
+					if err := sendUpdate(v.update(f)); err != nil {
 						return false, err
 					}
 				}
@@ -248,59 +251,18 @@ func (s *Server) observe(stream grpc.ServerStreamingServer[rtsv1.ObserveResponse
 	}
 }
 
-type adminService struct {
-	rtsv1.UnimplementedAdminServiceServer
-	s *Server
-}
-
-func (a *adminService) GetWorldSnapshot(ctx context.Context, _ *rtsv1.GetWorldSnapshotRequest) (*rtsv1.GetWorldSnapshotResponse, error) {
-	if err := a.s.requireAdmin(ctx); err != nil {
-		return nil, err
-	}
-	tick, es := a.s.hub.Snapshot()
-	resp := &rtsv1.GetWorldSnapshotResponse{Snapshot: viewer{admin: true}.snapshot(tick, es)}
-	for _, p := range a.s.players {
-		resp.Players = append(resp.Players, &rtsv1.PlayerInfo{Id: uint32(p.ID), Name: p.Name})
-	}
-	return resp, nil
-}
-
-func (a *adminService) SpawnUnit(ctx context.Context, req *rtsv1.SpawnUnitRequest) (*rtsv1.SpawnUnitResponse, error) {
-	if err := a.s.requireAdmin(ctx); err != nil {
-		return nil, err
-	}
-	owner := sim.PlayerID(req.GetOwnerId())
-	known := owner == 0
-	for _, p := range a.s.players {
-		known = known || p.ID == owner
-	}
-	if !known {
-		return nil, status.Errorf(codes.InvalidArgument, "unknown owner %d", owner)
-	}
-	if req.GetPosition() == nil {
-		return nil, status.Error(codes.InvalidArgument, "position required")
-	}
-	id := fmt.Sprintf("admin-%d", a.s.adminSeq.Add(1))
-	tick, err := a.s.engine.Submit(sim.Command{
-		ID:      id,
-		Issuer:  sim.Principal{Admin: true},
-		Type:    sim.CmdCreateEntity,
-		Payload: sim.CreateEntity{Kind: sim.KindUnit, Owner: owner, Pos: sim.Pos{X: req.GetPosition().GetX(), Y: req.GetPosition().GetY()}},
-	})
-	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-	return &rtsv1.SpawnUnitResponse{CommandId: id, ScheduledTick: uint64(tick)}, nil
-}
-
-func (a *adminService) SetPaused(ctx context.Context, req *rtsv1.SetPausedRequest) (*rtsv1.SetPausedResponse, error) {
-	if err := a.s.requireAdmin(ctx); err != nil {
-		return nil, err
-	}
-	a.s.engine.SetPaused(req.GetPaused())
-	return &rtsv1.SetPausedResponse{Paused: req.GetPaused(), Tick: uint64(a.s.engine.NextTick() - 1)}, nil
-}
-
 // protoUnmarshalOptions resolves Any payloads against the global registry,
 // which contains every compiled-in plugin's command messages.
 var protoUnmarshalOptions = proto.UnmarshalOptions{}
+
+// decodeCommand unpacks an Any payload into a command type and message.
+func decodeCommand(payload *anypb.Any) (string, proto.Message, error) {
+	if payload == nil {
+		return "", nil, errors.New("payload missing")
+	}
+	msg, err := anypb.UnmarshalNew(payload, protoUnmarshalOptions)
+	if err != nil {
+		return "", nil, fmt.Errorf("cannot decode payload %q: %v", payload.GetTypeUrl(), err)
+	}
+	return string(msg.ProtoReflect().Descriptor().FullName()), msg, nil
+}

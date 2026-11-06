@@ -94,3 +94,33 @@ aside h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; co
   main { flex-direction: column; }
   aside { width: auto; border-left: 0; border-top: 1px solid var(--border); max-height: 35vh; }
 }
+
+/* ---- admin ---- */
+.admin-badge { background: #6b4fd8; }
+.status.running { color: var(--ok); }
+.status.paused { color: var(--select); font-weight: 600; }
+.step { display: inline-flex; gap: 4px; align-items: center; }
+.step input { width: 64px; }
+button:disabled { opacity: .45; cursor: default; }
+button.danger { border-color: #7a3434; color: var(--error); }
+.tools label { display: block; margin: 4px 0; }
+.tools select { margin-left: 4px; padding: 2px 4px; }
+.form { border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px 10px; margin: 8px 0; }
+.form legend { color: var(--muted); font-size: 12px; padding: 0 4px; }
+.form label { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 4px 0; }
+.form input[type=number] { width: 110px; padding: 3px 6px; }
+.form button { margin-top: 6px; }
+.inspector table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.inspector td { padding: 2px 4px; border-bottom: 1px solid var(--border); vertical-align: top; word-break: break-all; }
+.inspector td:first-child { color: var(--muted); white-space: nowrap; word-break: normal; }
+.inspector .actions { display: flex; gap: 8px; margin-top: 8px; }
+.log li.ok { color: var(--ok); }
+body.admin aside { width: 320px; }
+
+/* ---- player energy ---- */
+.selection table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.selection td { padding: 2px 4px; border-bottom: 1px solid var(--border); }
+.selection .meter { display: inline-block; width: 48px; height: 6px; background: #000a; border-radius: 3px; vertical-align: middle; margin-right: 6px; overflow: hidden; }
+.selection .meter i { display: block; height: 100%; background: #f2d24b; }
+.amount { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 6px 0; color: var(--muted); }
+.amount input { width: 90px; padding: 3px 6px; }

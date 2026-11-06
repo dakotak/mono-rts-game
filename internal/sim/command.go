@@ -90,11 +90,25 @@ type CommandDef struct {
 	Execute   func(ctx *TickContext, cmd Command) error
 }
 
-// Built-in kernel commands.
+// Built-in kernel commands. All are admin only.
 const (
-	// CmdCreateEntity creates an entity. Admin only. Payload: CreateEntity.
+	// CmdCreateEntity creates an entity. Payload: CreateEntity.
 	CmdCreateEntity = "sim.CreateEntity"
+	// CmdRemoveEntity deletes an entity and its components. Payload: RemoveEntity.
+	CmdRemoveEntity = "sim.RemoveEntity"
+	// CmdMoveEntity teleports an entity to an empty tile. Payload: MoveEntity.
+	CmdMoveEntity = "sim.MoveEntity"
 )
+
+// Events emitted by built-in commands. They have an admin-only audience.
+const (
+	EventEntityCreated = "sim.entity_created"
+	EventEntityRemoved = "sim.entity_removed"
+	EventEntityMoved   = "sim.entity_moved"
+)
+
+// AdminAudience addresses an event to administrators only.
+func AdminAudience() Audience { return Audience{} }
 
 // CreateEntity is the payload of CmdCreateEntity.
 type CreateEntity struct {
@@ -103,19 +117,75 @@ type CreateEntity struct {
 	Pos   Pos
 }
 
+// RemoveEntity is the payload of CmdRemoveEntity.
+type RemoveEntity struct {
+	ID EntityID
+}
+
+// MoveEntity is the payload of CmdMoveEntity.
+type MoveEntity struct {
+	ID EntityID
+	To Pos
+}
+
 func builtinCommands() []CommandDef {
-	return []CommandDef{{
-		Type:      CmdCreateEntity,
-		AdminOnly: true,
-		Execute: func(ctx *TickContext, cmd Command) error {
-			p, ok := cmd.Payload.(CreateEntity)
-			if !ok {
-				return Fail(CodeInvalidArgument, "payload is %T, want sim.CreateEntity", cmd.Payload)
-			}
-			if _, err := ctx.World.CreateEntity(p.Kind, p.Owner, p.Pos); err != nil {
-				return Fail(CodeFailedPrecondition, "%v", err)
-			}
-			return nil
+	return []CommandDef{
+		{
+			Type:      CmdCreateEntity,
+			AdminOnly: true,
+			Execute: func(ctx *TickContext, cmd Command) error {
+				p, ok := cmd.Payload.(CreateEntity)
+				if !ok {
+					return Fail(CodeInvalidArgument, "payload is %T, want sim.CreateEntity", cmd.Payload)
+				}
+				id, err := ctx.World.CreateEntity(p.Kind, p.Owner, p.Pos)
+				if err != nil {
+					return Fail(CodeFailedPrecondition, "%v", err)
+				}
+				ctx.Emit(Event{Type: EventEntityCreated, Entity: id, Audience: AdminAudience(), Fields: []Field{
+					{Key: "command_id", Value: StringValue(cmd.ID)},
+					{Key: "position", Value: PosValue(p.Pos)},
+				}})
+				return nil
+			},
 		},
-	}}
+		{
+			Type:      CmdRemoveEntity,
+			AdminOnly: true,
+			Execute: func(ctx *TickContext, cmd Command) error {
+				p, ok := cmd.Payload.(RemoveEntity)
+				if !ok {
+					return Fail(CodeInvalidArgument, "payload is %T, want sim.RemoveEntity", cmd.Payload)
+				}
+				if err := ctx.World.RemoveEntity(p.ID); err != nil {
+					return Fail(CodeNotFound, "%v", err)
+				}
+				ctx.Emit(Event{Type: EventEntityRemoved, Entity: p.ID, Audience: AdminAudience(), Fields: []Field{
+					{Key: "command_id", Value: StringValue(cmd.ID)},
+				}})
+				return nil
+			},
+		},
+		{
+			Type:      CmdMoveEntity,
+			AdminOnly: true,
+			Execute: func(ctx *TickContext, cmd Command) error {
+				p, ok := cmd.Payload.(MoveEntity)
+				if !ok {
+					return Fail(CodeInvalidArgument, "payload is %T, want sim.MoveEntity", cmd.Payload)
+				}
+				if _, exists := ctx.World.Entity(p.ID); !exists {
+					return Fail(CodeNotFound, "entity %d not found", p.ID)
+				}
+				if err := ctx.World.MoveEntities([]Move{{ID: p.ID, To: p.To}}); err != nil {
+					return Fail(CodeFailedPrecondition, "%v", err)
+				}
+				ctx.Emit(Event{Type: EventEntityMoved, Entity: p.ID, Audience: AdminAudience(), Fields: []Field{
+					{Key: "command_id", Value: StringValue(cmd.ID)},
+					{Key: "position", Value: PosValue(p.To)},
+				}})
+				return nil
+			},
+		},
+	}
 }

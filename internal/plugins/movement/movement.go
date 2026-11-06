@@ -21,6 +21,12 @@
 //     column of units following its leader).
 //   - Cycles, including two units swapping places, fail as a whole.
 //
+// Energy: each successful step costs EnergyPerStep from the unit's store
+// (energy plugin). A unit that cannot pay does not propose a step this tick
+// (it neither moves nor counts as blocked); its order stays, and the owner
+// gets one "movement.stalled" event when it starts waiting. It resumes as
+// soon as it has enough energy. Failed steps cost nothing.
+//
 // A failed step does not cancel the order; the unit retries on later ticks.
 // After MaxBlockedTicks consecutive failures the order is cancelled and a
 // "movement.cancelled" event is sent to the owner. On reaching its
@@ -31,6 +37,7 @@ import (
 	"fmt"
 
 	movementv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/movement/v1"
+	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/energy"
 	"github.com/dakotaknutson/unit-strategy-game/internal/sim"
 )
 
@@ -45,6 +52,7 @@ const (
 	DerivedPace     = "movement.ticks_per_move"
 	EventArrived    = "movement.arrived"
 	EventCancelled  = "movement.cancelled"
+	EventStalled    = "movement.stalled"
 )
 
 // Command types (fully-qualified protobuf names of the payloads).
@@ -66,6 +74,9 @@ type Config struct {
 	// ContentionBackoff is the maximum number of extra ticks a unit waits
 	// after losing a contested tile.
 	ContentionBackoff int `json:"contention_backoff_ticks"`
+	// EnergyPerStep is the energy a unit spends for each tile it moves.
+	// 0 makes movement free.
+	EnergyPerStep int64 `json:"energy_per_step"`
 }
 
 // DefaultConfig returns the default configuration.
@@ -83,6 +94,9 @@ func (c Config) validate() error {
 	if c.ContentionBackoff < 0 {
 		return fmt.Errorf("contention_backoff_ticks must be >= 0, got %d", c.ContentionBackoff)
 	}
+	if c.EnergyPerStep < 0 {
+		return fmt.Errorf("energy_per_step must be >= 0, got %d", c.EnergyPerStep)
+	}
 	return nil
 }
 
@@ -90,6 +104,7 @@ func (c Config) validate() error {
 type order struct {
 	Dest    sim.Pos
 	Blocked int32 // consecutive failed steps
+	Stalled bool  // waiting for energy
 }
 
 var (
@@ -106,7 +121,7 @@ type Plugin struct {
 func New() *Plugin { return &Plugin{} }
 
 func (*Plugin) Name() string        { return Name }
-func (*Plugin) DependsOn() []string { return nil }
+func (*Plugin) DependsOn() []string { return []string{energy.Name} }
 
 // Register implements sim.Plugin.
 func (p *Plugin) Register(r *sim.Registrar) error {
@@ -137,7 +152,8 @@ func (p *Plugin) Register(r *sim.Registrar) error {
 	}}); err != nil {
 		return err
 	}
-	if err := r.Phase(sim.PhaseDef{Name: Phase}); err != nil {
+	// Energy (mining, transfers) settles before units move and pay.
+	if err := r.Phase(sim.PhaseDef{Name: Phase, After: []string{energy.Phase}}); err != nil {
 		return err
 	}
 	if err := r.System(sim.SystemDef{Name: SystemStep, Phase: Phase, Run: p.step}); err != nil {
@@ -263,6 +279,20 @@ func (p *Plugin) step(ctx *sim.TickContext) {
 		if r, ok := readyAt.Get(w, id); ok && tick < r {
 			continue
 		}
+		if cost := p.cfg.EnergyPerStep; cost > 0 {
+			if stored, _ := energy.Stored(w, id); stored < cost {
+				if !o.Stalled {
+					o.Stalled = true
+					orders.Set(w, id, o)
+					ctx.Emit(sim.Event{Type: EventStalled, Entity: id, Audience: sim.ToPlayer(e.Owner), Fields: []sim.Field{
+						{Key: "reason", Value: sim.StringValue("insufficient_energy")},
+						{Key: "required", Value: sim.IntValue(cost)},
+						{Key: "stored", Value: sim.IntValue(stored)},
+					}})
+				}
+				continue
+			}
+		}
 		to := sim.Pos{X: e.Pos.X + sign(o.Dest.X-e.Pos.X), Y: e.Pos.Y + sign(o.Dest.Y-e.Pos.Y)}
 		intents[id] = &intent{to: to}
 		claims[to]++
@@ -308,7 +338,12 @@ func (p *Plugin) step(ctx *sim.TickContext) {
 		in := intents[id]
 		o, _ := orders.Get(w, id)
 		e, _ := w.Entity(id)
+		o.Stalled = false
 		if in.state == succeeded {
+			if !energy.Spend(w, id, p.cfg.EnergyPerStep) {
+				// Checked before proposing, and nothing spends in between.
+				panic(fmt.Sprintf("movement: unit %d cannot pay for a resolved step", id))
+			}
 			pace, _ := w.Derived(DerivedPace, id)
 			readyAt.Set(w, id, tick+sim.Tick(pace))
 			if e.Pos == o.Dest {

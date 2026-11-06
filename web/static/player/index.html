@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RTS Client</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="/shared/style.css">
 </head>
 <body>
   <section id="join" class="panel">
@@ -36,9 +36,16 @@
         <ul class="controls">
           <li><b>Click</b> own unit — select (Shift adds)</li>
           <li><b>Drag</b> — box-select own units</li>
-          <li><b>Right-click</b> or click empty tile — move selection</li>
-          <li><b>S</b> — stop &nbsp; <b>Esc</b> — deselect</li>
+          <li><b>Right-click</b> empty tile — move selection</li>
+          <li><b>Right-click</b> well — mine (units walk next to it)</li>
+          <li><b>Right-click</b> own unit — send energy to it from adjacent selected units</li>
+          <li><b>S</b> — stop moving &amp; mining &nbsp; <b>Esc</b> — deselect</li>
         </ul>
+        <h2>Selection</h2>
+        <div id="selection" class="selection"><p class="hint">Nothing selected.</p></div>
+        <label class="amount">Transfer amount <input id="transfer-amount" type="number" min="1" value="20"></label>
+        <h2>Under cursor</h2>
+        <p id="hover-info" class="hint">–</p>
         <h2>Players seen</h2>
         <ul id="legend" class="legend"></ul>
         <h2>Messages</h2>
@@ -46,6 +53,7 @@
       </aside>
     </main>
   </section>
+  <script src="/shared/board.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

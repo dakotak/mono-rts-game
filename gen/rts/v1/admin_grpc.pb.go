@@ -19,9 +19,15 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AdminService_GetWorldSnapshot_FullMethodName = "/rts.v1.AdminService/GetWorldSnapshot"
-	AdminService_SpawnUnit_FullMethodName        = "/rts.v1.AdminService/SpawnUnit"
-	AdminService_SetPaused_FullMethodName        = "/rts.v1.AdminService/SetPaused"
+	AdminService_GetWorldSnapshot_FullMethodName   = "/rts.v1.AdminService/GetWorldSnapshot"
+	AdminService_ObserveWorld_FullMethodName       = "/rts.v1.AdminService/ObserveWorld"
+	AdminService_GetStatus_FullMethodName          = "/rts.v1.AdminService/GetStatus"
+	AdminService_SpawnUnit_FullMethodName          = "/rts.v1.AdminService/SpawnUnit"
+	AdminService_DeleteEntity_FullMethodName       = "/rts.v1.AdminService/DeleteEntity"
+	AdminService_MoveEntity_FullMethodName         = "/rts.v1.AdminService/MoveEntity"
+	AdminService_SubmitAdminCommand_FullMethodName = "/rts.v1.AdminService/SubmitAdminCommand"
+	AdminService_SetPaused_FullMethodName          = "/rts.v1.AdminService/SetPaused"
+	AdminService_Step_FullMethodName               = "/rts.v1.AdminService/Step"
 )
 
 // AdminServiceClient is the client API for AdminService service.
@@ -30,21 +36,41 @@ const (
 //
 // AdminService is the privileged administration API. It is authorized
 // separately from player sessions using the metadata header
-// "authorization: Bearer <admin token>".
+// "authorization: Bearer <admin token>". Player sessions are never accepted
+// here, and the admin token is never accepted by GameService.
 //
-// All world mutations are scheduled through the simulation, exactly like
-// player commands; this service never touches world state directly.
+// Visibility: every read returns the full, unfiltered world, including
+// owner-only and admin-only attributes and every event.
 //
-// Milestone 1 implements a minimal subset. Planned additions: entity
-// inspection/modification, resource placement, configuration changes.
+// Mutations: every world mutation is a command scheduled through the
+// simulation loop, exactly like player commands, so it is ordered
+// deterministically and recorded for replay. Mutation RPCs return the
+// command id and the tick it will execute in; the outcome arrives as a
+// CommandResult (and usually an event) on the ObserveWorld stream.
 type AdminServiceClient interface {
 	// GetWorldSnapshot returns the full, unfiltered world state.
 	GetWorldSnapshot(ctx context.Context, in *GetWorldSnapshotRequest, opts ...grpc.CallOption) (*GetWorldSnapshotResponse, error)
-	// SpawnUnit schedules creation of a unit. The returned tick is when it
-	// executes; the result is visible in subsequent snapshots.
+	// ObserveWorld streams the full world: a snapshot, then one TickUpdate per
+	// tick with every change, every event and the results of admin commands.
+	ObserveWorld(ctx context.Context, in *ObserveWorldRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ObserveWorldResponse], error)
+	// GetStatus returns the simulation clock state.
+	GetStatus(ctx context.Context, in *GetStatusRequest, opts ...grpc.CallOption) (*GetStatusResponse, error)
+	// SpawnUnit schedules creation of a unit.
 	SpawnUnit(ctx context.Context, in *SpawnUnitRequest, opts ...grpc.CallOption) (*SpawnUnitResponse, error)
+	// DeleteEntity schedules removal of any entity (unit, well, ...).
+	DeleteEntity(ctx context.Context, in *DeleteEntityRequest, opts ...grpc.CallOption) (*DeleteEntityResponse, error)
+	// MoveEntity schedules an instant reposition of any entity to an empty
+	// tile. It does not affect the entity's movement orders.
+	MoveEntity(ctx context.Context, in *MoveEntityRequest, opts ...grpc.CallOption) (*MoveEntityResponse, error)
+	// SubmitAdminCommand schedules a plugin-defined command with admin
+	// privileges, e.g. rts.wells.v1.CreateWellCommand. Player commands may be
+	// submitted too; ownership checks then pass for every unit.
+	SubmitAdminCommand(ctx context.Context, in *SubmitAdminCommandRequest, opts ...grpc.CallOption) (*SubmitAdminCommandResponse, error)
 	// SetPaused pauses or resumes the simulation clock.
 	SetPaused(ctx context.Context, in *SetPausedRequest, opts ...grpc.CallOption) (*SetPausedResponse, error)
+	// Step executes ticks while paused. It returns immediately; the ticks run
+	// on the simulation loop and appear on ObserveWorld.
+	Step(ctx context.Context, in *StepRequest, opts ...grpc.CallOption) (*StepResponse, error)
 }
 
 type adminServiceClient struct {
@@ -65,10 +91,69 @@ func (c *adminServiceClient) GetWorldSnapshot(ctx context.Context, in *GetWorldS
 	return out, nil
 }
 
+func (c *adminServiceClient) ObserveWorld(ctx context.Context, in *ObserveWorldRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ObserveWorldResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AdminService_ServiceDesc.Streams[0], AdminService_ObserveWorld_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[ObserveWorldRequest, ObserveWorldResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AdminService_ObserveWorldClient = grpc.ServerStreamingClient[ObserveWorldResponse]
+
+func (c *adminServiceClient) GetStatus(ctx context.Context, in *GetStatusRequest, opts ...grpc.CallOption) (*GetStatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetStatusResponse)
+	err := c.cc.Invoke(ctx, AdminService_GetStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *adminServiceClient) SpawnUnit(ctx context.Context, in *SpawnUnitRequest, opts ...grpc.CallOption) (*SpawnUnitResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SpawnUnitResponse)
 	err := c.cc.Invoke(ctx, AdminService_SpawnUnit_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminServiceClient) DeleteEntity(ctx context.Context, in *DeleteEntityRequest, opts ...grpc.CallOption) (*DeleteEntityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteEntityResponse)
+	err := c.cc.Invoke(ctx, AdminService_DeleteEntity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminServiceClient) MoveEntity(ctx context.Context, in *MoveEntityRequest, opts ...grpc.CallOption) (*MoveEntityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MoveEntityResponse)
+	err := c.cc.Invoke(ctx, AdminService_MoveEntity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminServiceClient) SubmitAdminCommand(ctx context.Context, in *SubmitAdminCommandRequest, opts ...grpc.CallOption) (*SubmitAdminCommandResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SubmitAdminCommandResponse)
+	err := c.cc.Invoke(ctx, AdminService_SubmitAdminCommand_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -85,27 +170,57 @@ func (c *adminServiceClient) SetPaused(ctx context.Context, in *SetPausedRequest
 	return out, nil
 }
 
+func (c *adminServiceClient) Step(ctx context.Context, in *StepRequest, opts ...grpc.CallOption) (*StepResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StepResponse)
+	err := c.cc.Invoke(ctx, AdminService_Step_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AdminServiceServer is the server API for AdminService service.
 // All implementations must embed UnimplementedAdminServiceServer
 // for forward compatibility.
 //
 // AdminService is the privileged administration API. It is authorized
 // separately from player sessions using the metadata header
-// "authorization: Bearer <admin token>".
+// "authorization: Bearer <admin token>". Player sessions are never accepted
+// here, and the admin token is never accepted by GameService.
 //
-// All world mutations are scheduled through the simulation, exactly like
-// player commands; this service never touches world state directly.
+// Visibility: every read returns the full, unfiltered world, including
+// owner-only and admin-only attributes and every event.
 //
-// Milestone 1 implements a minimal subset. Planned additions: entity
-// inspection/modification, resource placement, configuration changes.
+// Mutations: every world mutation is a command scheduled through the
+// simulation loop, exactly like player commands, so it is ordered
+// deterministically and recorded for replay. Mutation RPCs return the
+// command id and the tick it will execute in; the outcome arrives as a
+// CommandResult (and usually an event) on the ObserveWorld stream.
 type AdminServiceServer interface {
 	// GetWorldSnapshot returns the full, unfiltered world state.
 	GetWorldSnapshot(context.Context, *GetWorldSnapshotRequest) (*GetWorldSnapshotResponse, error)
-	// SpawnUnit schedules creation of a unit. The returned tick is when it
-	// executes; the result is visible in subsequent snapshots.
+	// ObserveWorld streams the full world: a snapshot, then one TickUpdate per
+	// tick with every change, every event and the results of admin commands.
+	ObserveWorld(*ObserveWorldRequest, grpc.ServerStreamingServer[ObserveWorldResponse]) error
+	// GetStatus returns the simulation clock state.
+	GetStatus(context.Context, *GetStatusRequest) (*GetStatusResponse, error)
+	// SpawnUnit schedules creation of a unit.
 	SpawnUnit(context.Context, *SpawnUnitRequest) (*SpawnUnitResponse, error)
+	// DeleteEntity schedules removal of any entity (unit, well, ...).
+	DeleteEntity(context.Context, *DeleteEntityRequest) (*DeleteEntityResponse, error)
+	// MoveEntity schedules an instant reposition of any entity to an empty
+	// tile. It does not affect the entity's movement orders.
+	MoveEntity(context.Context, *MoveEntityRequest) (*MoveEntityResponse, error)
+	// SubmitAdminCommand schedules a plugin-defined command with admin
+	// privileges, e.g. rts.wells.v1.CreateWellCommand. Player commands may be
+	// submitted too; ownership checks then pass for every unit.
+	SubmitAdminCommand(context.Context, *SubmitAdminCommandRequest) (*SubmitAdminCommandResponse, error)
 	// SetPaused pauses or resumes the simulation clock.
 	SetPaused(context.Context, *SetPausedRequest) (*SetPausedResponse, error)
+	// Step executes ticks while paused. It returns immediately; the ticks run
+	// on the simulation loop and appear on ObserveWorld.
+	Step(context.Context, *StepRequest) (*StepResponse, error)
 	mustEmbedUnimplementedAdminServiceServer()
 }
 
@@ -119,11 +234,29 @@ type UnimplementedAdminServiceServer struct{}
 func (UnimplementedAdminServiceServer) GetWorldSnapshot(context.Context, *GetWorldSnapshotRequest) (*GetWorldSnapshotResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetWorldSnapshot not implemented")
 }
+func (UnimplementedAdminServiceServer) ObserveWorld(*ObserveWorldRequest, grpc.ServerStreamingServer[ObserveWorldResponse]) error {
+	return status.Error(codes.Unimplemented, "method ObserveWorld not implemented")
+}
+func (UnimplementedAdminServiceServer) GetStatus(context.Context, *GetStatusRequest) (*GetStatusResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetStatus not implemented")
+}
 func (UnimplementedAdminServiceServer) SpawnUnit(context.Context, *SpawnUnitRequest) (*SpawnUnitResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SpawnUnit not implemented")
 }
+func (UnimplementedAdminServiceServer) DeleteEntity(context.Context, *DeleteEntityRequest) (*DeleteEntityResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteEntity not implemented")
+}
+func (UnimplementedAdminServiceServer) MoveEntity(context.Context, *MoveEntityRequest) (*MoveEntityResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method MoveEntity not implemented")
+}
+func (UnimplementedAdminServiceServer) SubmitAdminCommand(context.Context, *SubmitAdminCommandRequest) (*SubmitAdminCommandResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SubmitAdminCommand not implemented")
+}
 func (UnimplementedAdminServiceServer) SetPaused(context.Context, *SetPausedRequest) (*SetPausedResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetPaused not implemented")
+}
+func (UnimplementedAdminServiceServer) Step(context.Context, *StepRequest) (*StepResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Step not implemented")
 }
 func (UnimplementedAdminServiceServer) mustEmbedUnimplementedAdminServiceServer() {}
 func (UnimplementedAdminServiceServer) testEmbeddedByValue()                      {}
@@ -164,6 +297,35 @@ func _AdminService_GetWorldSnapshot_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AdminService_ObserveWorld_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ObserveWorldRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AdminServiceServer).ObserveWorld(m, &grpc.GenericServerStream[ObserveWorldRequest, ObserveWorldResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AdminService_ObserveWorldServer = grpc.ServerStreamingServer[ObserveWorldResponse]
+
+func _AdminService_GetStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).GetStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminService_GetStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).GetStatus(ctx, req.(*GetStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AdminService_SpawnUnit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SpawnUnitRequest)
 	if err := dec(in); err != nil {
@@ -178,6 +340,60 @@ func _AdminService_SpawnUnit_Handler(srv interface{}, ctx context.Context, dec f
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(AdminServiceServer).SpawnUnit(ctx, req.(*SpawnUnitRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminService_DeleteEntity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteEntityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).DeleteEntity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminService_DeleteEntity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).DeleteEntity(ctx, req.(*DeleteEntityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminService_MoveEntity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MoveEntityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).MoveEntity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminService_MoveEntity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).MoveEntity(ctx, req.(*MoveEntityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminService_SubmitAdminCommand_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SubmitAdminCommandRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).SubmitAdminCommand(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminService_SubmitAdminCommand_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).SubmitAdminCommand(ctx, req.(*SubmitAdminCommandRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -200,6 +416,24 @@ func _AdminService_SetPaused_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AdminService_Step_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StepRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).Step(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminService_Step_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).Step(ctx, req.(*StepRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AdminService_ServiceDesc is the grpc.ServiceDesc for AdminService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -212,14 +446,40 @@ var AdminService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _AdminService_GetWorldSnapshot_Handler,
 		},
 		{
+			MethodName: "GetStatus",
+			Handler:    _AdminService_GetStatus_Handler,
+		},
+		{
 			MethodName: "SpawnUnit",
 			Handler:    _AdminService_SpawnUnit_Handler,
+		},
+		{
+			MethodName: "DeleteEntity",
+			Handler:    _AdminService_DeleteEntity_Handler,
+		},
+		{
+			MethodName: "MoveEntity",
+			Handler:    _AdminService_MoveEntity_Handler,
+		},
+		{
+			MethodName: "SubmitAdminCommand",
+			Handler:    _AdminService_SubmitAdminCommand_Handler,
 		},
 		{
 			MethodName: "SetPaused",
 			Handler:    _AdminService_SetPaused_Handler,
 		},
+		{
+			MethodName: "Step",
+			Handler:    _AdminService_Step_Handler,
+		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "ObserveWorld",
+			Handler:       _AdminService_ObserveWorld_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "rts/v1/admin.proto",
 }

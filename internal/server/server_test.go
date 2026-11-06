@@ -39,6 +39,12 @@ type env struct {
 
 func newEnv(t *testing.T) *env {
 	t.Helper()
+	return newEnvWith(t, nil)
+}
+
+// newEnvWith is newEnv with a hook to adjust the configuration.
+func newEnvWith(t *testing.T, adjust func(*game.Config)) *env {
+	t.Helper()
 	cfg := &game.Config{
 		World:      game.WorldConfig{Width: 12, Height: 8, Seed: 1, TickRateHz: 10},
 		Players:    []game.PlayerConfig{{Slot: 1, Name: "Red", JoinToken: "red"}, {Slot: 2, Name: "Blue", JoinToken: "blue"}},
@@ -47,6 +53,9 @@ func newEnv(t *testing.T) *env {
 			{Owner: 1, X: 0, Y: 0},  // red unit
 			{Owner: 2, X: 11, Y: 7}, // blue unit
 		},
+	}
+	if adjust != nil {
+		adjust(cfg)
 	}
 	gm, err := game.New(cfg)
 	if err != nil {

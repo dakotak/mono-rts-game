@@ -14,7 +14,9 @@ import (
 	"os"
 	"time"
 
+	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/energy"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/movement"
+	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/wells"
 	"github.com/dakotaknutson/unit-strategy-game/internal/sim"
 )
 
@@ -126,7 +128,7 @@ func LoadConfig(path string) (*Config, error) {
 // Plugins returns the compiled-in plugins. Adding a mechanic means adding
 // it here.
 func Plugins() []sim.Plugin {
-	return []sim.Plugin{movement.New()}
+	return []sim.Plugin{wells.New(), energy.New(), movement.New()}
 }
 
 // Player is a resolved player slot.
@@ -188,6 +190,10 @@ func New(c *Config) (*Game, error) {
 				}
 			}
 		}
+	}
+	// Plugins place their own initial entities (e.g. wells) after units.
+	if err := e.Init(); err != nil {
+		return nil, err
 	}
 	return g, nil
 }

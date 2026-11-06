@@ -86,6 +86,13 @@ func (h *Hub) Snapshot() (sim.Tick, []sim.EntityView) {
 	return h.tick, h.snapshotLocked()
 }
 
+// Tick returns the last published tick.
+func (h *Hub) Tick() sim.Tick {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.tick
+}
+
 // Subscribe atomically captures a snapshot and starts delivering every
 // subsequent frame, so applying the frames to the snapshot never misses or
 // repeats a tick.

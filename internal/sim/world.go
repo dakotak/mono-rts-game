@@ -123,6 +123,9 @@ func (w *World) CreateEntity(kind Kind, owner PlayerID, pos Pos) (EntityID, erro
 	w.ids = slices.Insert(w.ids, i, id)
 	w.occupied[pos] = id
 	w.dirty[id] = struct{}{}
+	for _, hook := range w.rules.onCreate {
+		hook(w, w.entities[id])
+	}
 	return id, nil
 }
 

@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package rts.wells.v1;
+
+import "rts/v1/types.proto";
+
+option go_package = "github.com/dakotaknutson/unit-strategy-game/gen/rts/wells/v1;wellsv1";
+
+// Admin-only command payloads owned by the wells plugin. Submit them with
+// rts.v1.AdminService.SubmitAdminCommand. Delete a well with
+// AdminService.DeleteEntity and reposition it with AdminService.MoveEntity.
+//
+// Energy quantities are integers in abstract energy units.
+
+// CreateWellCommand places an energy well on an empty tile. Unset fields
+// take the server's configured defaults.
+message CreateWellCommand {
+  rts.v1.Position position = 1;
+  optional int64 energy = 2;
+  optional int64 capacity = 3;
+  optional int64 extraction_rate = 4;
+  optional bool unlimited = 5;
+}
+
+// ConfigureWellCommand changes a well's parameters. Only set fields change.
+// The result must satisfy 0 <= energy <= capacity and extraction_rate >= 0.
+message ConfigureWellCommand {
+  uint64 well_id = 1;
+  optional int64 energy = 2;
+  optional int64 capacity = 3;
+  optional int64 extraction_rate = 4;
+  optional bool unlimited = 5;
+}

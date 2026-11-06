@@ -2,29 +2,63 @@ syntax = "proto3";
 
 package rts.v1;
 
+import "google/protobuf/any.proto";
 import "rts/v1/types.proto";
 
 option go_package = "github.com/dakotaknutson/unit-strategy-game/gen/rts/v1;rtsv1";
 
 // AdminService is the privileged administration API. It is authorized
 // separately from player sessions using the metadata header
-// "authorization: Bearer <admin token>".
+// "authorization: Bearer <admin token>". Player sessions are never accepted
+// here, and the admin token is never accepted by GameService.
 //
-// All world mutations are scheduled through the simulation, exactly like
-// player commands; this service never touches world state directly.
+// Visibility: every read returns the full, unfiltered world, including
+// owner-only and admin-only attributes and every event.
 //
-// Milestone 1 implements a minimal subset. Planned additions: entity
-// inspection/modification, resource placement, configuration changes.
+// Mutations: every world mutation is a command scheduled through the
+// simulation loop, exactly like player commands, so it is ordered
+// deterministically and recorded for replay. Mutation RPCs return the
+// command id and the tick it will execute in; the outcome arrives as a
+// CommandResult (and usually an event) on the ObserveWorld stream.
 service AdminService {
   // GetWorldSnapshot returns the full, unfiltered world state.
   rpc GetWorldSnapshot(GetWorldSnapshotRequest) returns (GetWorldSnapshotResponse);
 
-  // SpawnUnit schedules creation of a unit. The returned tick is when it
-  // executes; the result is visible in subsequent snapshots.
+  // ObserveWorld streams the full world: a snapshot, then one TickUpdate per
+  // tick with every change, every event and the results of admin commands.
+  rpc ObserveWorld(ObserveWorldRequest) returns (stream ObserveWorldResponse);
+
+  // GetStatus returns the simulation clock state.
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+
+  // SpawnUnit schedules creation of a unit.
   rpc SpawnUnit(SpawnUnitRequest) returns (SpawnUnitResponse);
+
+  // DeleteEntity schedules removal of any entity (unit, well, ...).
+  rpc DeleteEntity(DeleteEntityRequest) returns (DeleteEntityResponse);
+
+  // MoveEntity schedules an instant reposition of any entity to an empty
+  // tile. It does not affect the entity's movement orders.
+  rpc MoveEntity(MoveEntityRequest) returns (MoveEntityResponse);
+
+  // SubmitAdminCommand schedules a plugin-defined command with admin
+  // privileges, e.g. rts.wells.v1.CreateWellCommand. Player commands may be
+  // submitted too; ownership checks then pass for every unit.
+  rpc SubmitAdminCommand(SubmitAdminCommandRequest) returns (SubmitAdminCommandResponse);
 
   // SetPaused pauses or resumes the simulation clock.
   rpc SetPaused(SetPausedRequest) returns (SetPausedResponse);
+
+  // Step executes ticks while paused. It returns immediately; the ticks run
+  // on the simulation loop and appear on ObserveWorld.
+  rpc Step(StepRequest) returns (StepResponse);
+}
+
+message SimulationStatus {
+  // Last executed tick.
+  uint64 tick = 1;
+  bool paused = 2;
+  uint32 tick_rate_hz = 3;
 }
 
 message GetWorldSnapshotRequest {}
@@ -33,6 +67,23 @@ message GetWorldSnapshotResponse {
   WorldSnapshot snapshot = 1;
   // All configured players, including those without units.
   repeated PlayerInfo players = 2;
+  SimulationStatus status = 3;
+  WorldInfo world = 4;
+}
+
+message ObserveWorldRequest {}
+
+message ObserveWorldResponse {
+  oneof kind {
+    WorldSnapshot snapshot = 1;
+    TickUpdate update = 2;
+  }
+}
+
+message GetStatusRequest {}
+
+message GetStatusResponse {
+  SimulationStatus status = 1;
 }
 
 message SpawnUnitRequest {
@@ -45,6 +96,36 @@ message SpawnUnitResponse {
   uint64 scheduled_tick = 2;
 }
 
+message DeleteEntityRequest {
+  uint64 entity_id = 1;
+}
+
+message DeleteEntityResponse {
+  string command_id = 1;
+  uint64 scheduled_tick = 2;
+}
+
+message MoveEntityRequest {
+  uint64 entity_id = 1;
+  Position position = 2;
+}
+
+message MoveEntityResponse {
+  string command_id = 1;
+  uint64 scheduled_tick = 2;
+}
+
+message SubmitAdminCommandRequest {
+  google.protobuf.Any payload = 1;
+}
+
+message SubmitAdminCommandResponse {
+  string command_id = 1;
+  bool accepted = 2;
+  uint64 scheduled_tick = 3;
+  string rejection_reason = 4;
+}
+
 message SetPausedRequest {
   bool paused = 1;
 }
@@ -52,4 +133,15 @@ message SetPausedRequest {
 message SetPausedResponse {
   bool paused = 1;
   uint64 tick = 2;
+}
+
+message StepRequest {
+  // Number of ticks, 1..1000. Defaults to 1.
+  uint32 count = 1;
+}
+
+message StepResponse {
+  // First tick that will execute.
+  uint64 first_tick = 1;
+  uint32 count = 2;
 }

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RTS Admin</title>
+  <link rel="stylesheet" href="/shared/style.css">
+</head>
+<body class="admin">
+  <section id="login" class="panel">
+    <h1>RTS — administration</h1>
+    <form id="login-form">
+      <label for="admin-token">Admin token</label>
+      <input id="admin-token" type="password" autocomplete="off" required autofocus>
+      <button type="submit">Sign in</button>
+    </form>
+    <p class="hint">Uses the server's <code>admin_token</code>. Player join tokens and sessions are not accepted here.</p>
+    <p id="login-error" class="error" role="alert"></p>
+  </section>
+
+  <section id="game" hidden>
+    <header>
+      <span class="badge admin-badge">Admin</span>
+      <span>Tick <strong id="tick">–</strong></span>
+      <span id="sim-status" class="status">–</span>
+      <span id="conn" class="conn">connecting…</span>
+      <span>Entities <strong id="entity-count">0</strong></span>
+      <button id="pause-btn" type="button">Pause</button>
+      <span class="step">
+        <button id="step-btn" type="button" disabled>Step</button>
+        <input id="step-count" type="number" min="1" max="1000" value="1" aria-label="Ticks per step">
+      </span>
+      <span class="spacer"></span>
+      <button id="logout-btn" type="button">Sign out</button>
+    </header>
+    <main>
+      <div id="board"><canvas id="canvas"></canvas></div>
+      <aside>
+        <h2>Tool</h2>
+        <div class="tools" role="radiogroup">
+          <label><input type="radio" name="tool" value="select" checked> Select / inspect</label>
+          <label><input type="radio" name="tool" value="spawn"> Spawn unit for
+            <select id="spawn-owner"></select></label>
+          <label><input type="radio" name="tool" value="well"> Create well</label>
+          <label><input type="radio" name="tool" value="move"> Reposition selected</label>
+        </div>
+        <fieldset id="well-defaults" class="form">
+          <legend>New well (blank = server default)</legend>
+          <label>Energy <input id="nw-energy" type="number" min="0"></label>
+          <label>Capacity <input id="nw-capacity" type="number" min="0"></label>
+          <label>Rate/tick <input id="nw-rate" type="number" min="0"></label>
+          <label><input id="nw-unlimited" type="checkbox"> Unlimited</label>
+        </fieldset>
+
+        <h2>Inspector</h2>
+        <div id="inspector" class="inspector"><p class="hint">Click an entity to inspect it.</p></div>
+
+        <h2>Players</h2>
+        <ul id="legend" class="legend"></ul>
+        <h2>Log</h2>
+        <ol id="log" class="log" aria-live="polite"></ol>
+      </aside>
+    </main>
+  </section>
+  <script src="/shared/board.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>

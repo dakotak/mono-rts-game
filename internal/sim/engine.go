@@ -59,12 +59,17 @@ type Frame struct {
 var (
 	ErrUnknownCommand = errors.New("unknown command type")
 	ErrAdminOnly      = errors.New("command requires admin privileges")
+	ErrNotPaused      = errors.New("simulation is not paused")
+	ErrStepBusy       = errors.New("a step request is already pending")
 )
+
+// MaxStepRequest bounds RequestSteps.
+const MaxStepRequest = 1000
 
 // Engine drives a World through ticks.
 //
-// Concurrency: Submit, SetPaused, Paused and NextTick may be called from any
-// goroutine. Everything else, and all world access, belongs to the
+// Concurrency: Submit, SetPaused, Paused, RequestSteps and NextTick may be
+// called from any goroutine. Everything else, and all world access, belongs to the
 // simulation goroutine (the one calling Run or Step), or to setup code before
 // the engine starts.
 type Engine struct {
@@ -77,7 +82,9 @@ type Engine struct {
 	pending  []Command
 	seq      map[Principal]uint64
 
-	paused atomic.Bool
+	paused   atomic.Bool
+	stepReq  chan int
+	initDone bool
 }
 
 // NewEngine creates an engine with an empty world.
@@ -93,7 +100,23 @@ func NewEngine(cfg Config, rules *Ruleset) (*Engine, error) {
 		world:    newWorld(cfg.Width, cfg.Height, cfg.Seed, cfg.IDKey, rules),
 		nextTick: 1,
 		seq:      make(map[Principal]uint64),
+		stepReq:  make(chan int, 1),
 	}, nil
+}
+
+// Init runs the plugins' Init functions. Call it once, after creating the
+// initial entities from configuration and before the first tick.
+func (e *Engine) Init() error {
+	if e.initDone {
+		return errors.New("engine already initialized")
+	}
+	e.initDone = true
+	for _, in := range e.rules.inits {
+		if err := in.fn(e.world); err != nil {
+			return fmt.Errorf("init plugin %q: %w", in.plugin, err)
+		}
+	}
+	return nil
 }
 
 // World returns the world. Only use it from the simulation goroutine or
@@ -141,6 +164,25 @@ func (e *Engine) SetPaused(p bool) { e.paused.Store(p) }
 
 // Paused reports whether Run is paused.
 func (e *Engine) Paused() bool { return e.paused.Load() }
+
+// RequestSteps asks Run to execute n ticks while paused. It returns the
+// first tick that will execute; the steps happen asynchronously on the
+// simulation goroutine. Only one request may be pending at a time.
+func (e *Engine) RequestSteps(n int) (Tick, error) {
+	if n < 1 || n > MaxStepRequest {
+		return 0, fmt.Errorf("step count must be 1..%d, got %d", MaxStepRequest, n)
+	}
+	if !e.paused.Load() {
+		return 0, ErrNotPaused
+	}
+	first := e.NextTick()
+	select {
+	case e.stepReq <- n:
+		return first, nil
+	default:
+		return 0, ErrStepBusy
+	}
+}
 
 // Step executes one tick with all commands submitted since the previous tick.
 func (e *Engine) Step() *Frame {
@@ -223,6 +265,10 @@ func (e *Engine) Run(ctx context.Context, interval time.Duration) error {
 			return ctx.Err()
 		case <-t.C:
 			if !e.paused.Load() {
+				e.Step()
+			}
+		case n := <-e.stepReq:
+			for range n {
 				e.Step()
 			}
 		}

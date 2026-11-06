@@ -7,7 +7,9 @@ import (
 
 	movementv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/movement/v1"
 	rtsv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/v1"
+	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/energy"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/movement"
+	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/wells"
 	"github.com/dakotaknutson/unit-strategy-game/internal/sim"
 )
 
@@ -23,7 +25,7 @@ func newHarness(t *testing.T, w, h int32, cfg string) *harness {
 	if cfg != "" {
 		conf = map[string]json.RawMessage{movement.Name: json.RawMessage(cfg)}
 	}
-	rs, err := sim.NewRuleset([]sim.Plugin{movement.New()}, conf)
+	rs, err := sim.NewRuleset([]sim.Plugin{wells.New(), energy.New(), movement.New()}, conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,11 +105,17 @@ func TestMoveToEmptyTileAndArrive(t *testing.T) {
 		t.Fatalf("events = %+v", f.Events)
 	}
 	// Order removed: the unit's view no longer carries a destination.
-	if v := f.Changed[0]; len(v.Attrs) != 0 {
-		t.Errorf("attrs after arrival = %+v", v.Attrs)
+	for _, a := range f.Changed[0].Attrs {
+		if a.Key == movement.AttrDestination {
+			t.Errorf("destination after arrival = %+v", a)
+		}
 	}
 	if f := h.steps(1)[0]; len(f.Changed) != 0 {
 		t.Errorf("idle unit changed: %+v", f.Changed)
+	}
+	// Movement is free by default: energy untouched.
+	if e, _ := energy.Stored(h.e.World(), u); e != energy.DefaultConfig().InitialEnergy {
+		t.Errorf("energy = %d", e)
 	}
 }
 
@@ -116,9 +124,14 @@ func TestDestinationIsOwnerVisibleAttribute(t *testing.T) {
 	u := h.unit(1, 0, 0)
 	h.move(1, map[sim.EntityID]sim.Pos{u: p(5, 0)})
 	f := h.steps(1)[0]
-	a := f.Changed[0].Attrs
-	if len(a) != 1 || a[0].Key != movement.AttrDestination || a[0].Value.Pos != p(5, 0) || a[0].Visibility != sim.VisibleOwner {
-		t.Fatalf("attrs = %+v", a)
+	var dest *sim.Attr
+	for i, a := range f.Changed[0].Attrs {
+		if a.Key == movement.AttrDestination {
+			dest = &f.Changed[0].Attrs[i]
+		}
+	}
+	if dest == nil || dest.Value.Pos != p(5, 0) || dest.Visibility != sim.VisibleOwner {
+		t.Fatalf("attrs = %+v", f.Changed[0].Attrs)
 	}
 }
 
@@ -316,8 +329,8 @@ func TestNewOrderReplacesOld(t *testing.T) {
 }
 
 func TestConfigValidation(t *testing.T) {
-	for _, cfg := range []string{`{"ticks_per_move":0}`, `{"max_blocked_ticks":-1}`, `{"bogus":1}`} {
-		_, err := sim.NewRuleset([]sim.Plugin{movement.New()}, map[string]json.RawMessage{movement.Name: json.RawMessage(cfg)})
+	for _, cfg := range []string{`{"ticks_per_move":0}`, `{"max_blocked_ticks":-1}`, `{"energy_per_step":-1}`, `{"bogus":1}`} {
+		_, err := sim.NewRuleset([]sim.Plugin{wells.New(), energy.New(), movement.New()}, map[string]json.RawMessage{movement.Name: json.RawMessage(cfg)})
 		if err == nil {
 			t.Errorf("config %s accepted", cfg)
 		}

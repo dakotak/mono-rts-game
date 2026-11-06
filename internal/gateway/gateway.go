@@ -1,17 +1,37 @@
-// Package gateway translates between browsers and the public GameService.
+// Package gateway translates between browsers and the server's gRPC APIs.
 //
 // It is a thin protocol adapter with no game logic and no access to the
-// simulation: it is just another gRPC client. Messages are the GameService
-// protobuf messages in their canonical protojson form:
+// simulation: it is just another gRPC client. Messages are the protobuf
+// request/response messages in their canonical protojson form, and streams
+// are newline-delimited JSON. Credentials travel in the
+// "Authorization: Bearer <token>" header and are forwarded as gRPC metadata.
+//
+// Player and admin traffic are served by separate handlers, meant for
+// separate listeners: the player handler only ever calls GameService, the
+// admin handler only ever calls AdminService.
+//
+// Player API (New):
 //
 //	POST /api/connect   ConnectRequest        -> ConnectResponse
 //	POST /api/command   SubmitCommandRequest  -> SubmitCommandResponse
 //	GET  /api/snapshot                        -> GetSnapshotResponse
-//	GET  /api/observe                         -> newline-delimited ObserveResponse stream
+//	GET  /api/observe                         -> ObserveResponse stream
 //
-// The session token travels in the "Authorization: Bearer <token>" header and
-// is forwarded as gRPC metadata. Everything else is served from the static
-// file system (the browser client).
+// Admin API (NewAdmin):
+//
+//	GET  /api/snapshot                           -> GetWorldSnapshotResponse
+//	GET  /api/status                             -> GetStatusResponse
+//	GET  /api/observe                            -> ObserveWorldResponse stream
+//	POST /api/spawn     SpawnUnitRequest          -> SpawnUnitResponse
+//	POST /api/delete    DeleteEntityRequest       -> DeleteEntityResponse
+//	POST /api/move      MoveEntityRequest         -> MoveEntityResponse
+//	POST /api/command   SubmitAdminCommandRequest -> SubmitAdminCommandResponse
+//	POST /api/pause     SetPausedRequest          -> SetPausedResponse
+//	POST /api/step      StepRequest               -> StepResponse
+//
+// Static files: the player handler serves web/static/player at "/", the
+// admin handler serves web/static/admin at "/"; both serve
+// web/static/shared at "/shared/".
 package gateway
 
 import (
@@ -32,8 +52,10 @@ import (
 	// Command payloads are carried in google.protobuf.Any; protojson needs
 	// their types registered to translate them. Each plugin's command
 	// package must be imported here.
+	_ "github.com/dakotaknutson/unit-strategy-game/gen/rts/energy/v1"
 	_ "github.com/dakotaknutson/unit-strategy-game/gen/rts/movement/v1"
 	rtsv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/v1"
+	_ "github.com/dakotaknutson/unit-strategy-game/gen/rts/wells/v1"
 )
 
 const maxBody = 1 << 20
@@ -43,20 +65,42 @@ var (
 	unmarshal = protojson.UnmarshalOptions{}
 )
 
-// New returns the gateway handler.
+// New returns the player gateway handler. static is the web/static tree.
 func New(conn grpc.ClientConnInterface, static fs.FS) http.Handler {
-	g := &gateway{client: rtsv1.NewGameServiceClient(conn)}
+	c := rtsv1.NewGameServiceClient(conn)
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/connect", g.connect)
-	mux.HandleFunc("POST /api/command", g.command)
-	mux.HandleFunc("GET /api/snapshot", g.snapshot)
-	mux.HandleFunc("GET /api/observe", g.observe)
-	mux.Handle("GET /", http.FileServerFS(static))
+	mux.HandleFunc("POST /api/connect", unary(c.Connect))
+	mux.HandleFunc("POST /api/command", unary(c.SubmitCommand))
+	mux.HandleFunc("GET /api/snapshot", unary(c.GetSnapshot))
+	mux.HandleFunc("GET /api/observe", streaming(c.Observe))
+	serveStatic(mux, static, "player")
 	return mux
 }
 
-type gateway struct {
-	client rtsv1.GameServiceClient
+// NewAdmin returns the admin gateway handler. static is the web/static tree.
+func NewAdmin(conn grpc.ClientConnInterface, static fs.FS) http.Handler {
+	c := rtsv1.NewAdminServiceClient(conn)
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/snapshot", unary(c.GetWorldSnapshot))
+	mux.HandleFunc("GET /api/status", unary(c.GetStatus))
+	mux.HandleFunc("GET /api/observe", streaming(c.ObserveWorld))
+	mux.HandleFunc("POST /api/spawn", unary(c.SpawnUnit))
+	mux.HandleFunc("POST /api/delete", unary(c.DeleteEntity))
+	mux.HandleFunc("POST /api/move", unary(c.MoveEntity))
+	mux.HandleFunc("POST /api/command", unary(c.SubmitAdminCommand))
+	mux.HandleFunc("POST /api/pause", unary(c.SetPaused))
+	mux.HandleFunc("POST /api/step", unary(c.Step))
+	serveStatic(mux, static, "admin")
+	return mux
+}
+
+func serveStatic(mux *http.ServeMux, static fs.FS, app string) {
+	appFS, err := fs.Sub(static, app)
+	if err != nil {
+		panic(err)
+	}
+	mux.Handle("GET /shared/", http.FileServerFS(static))
+	mux.Handle("GET /", http.FileServerFS(appFS))
 }
 
 // outgoing forwards the caller's Authorization header to the server.
@@ -68,26 +112,81 @@ func outgoing(r *http.Request) context.Context {
 	return ctx
 }
 
-func readJSON(w http.ResponseWriter, r *http.Request, m proto.Message) bool {
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
-	if err == nil {
-		err = unmarshal.Unmarshal(body, m)
+// unary adapts a unary gRPC client method. GET requests send an empty
+// request message; POST requests decode the body as protojson.
+func unary[Req any, Resp proto.Message, PReq interface {
+	*Req
+	proto.Message
+}](call func(context.Context, PReq, ...grpc.CallOption) (Resp, error)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		req := PReq(new(Req))
+		if r.Method == http.MethodPost {
+			body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
+			if err == nil {
+				err = unmarshal.Unmarshal(body, req)
+			}
+			if err != nil {
+				writeError(w, http.StatusBadRequest, "InvalidArgument", err.Error())
+				return
+			}
+		}
+		resp, err := call(outgoing(r), req)
+		if err != nil {
+			writeGRPCError(w, err)
+			return
+		}
+		b, err := marshal.Marshal(resp)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "Internal", err.Error())
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(b)
 	}
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "InvalidArgument", err.Error())
-		return false
-	}
-	return true
 }
 
-func writeJSON(w http.ResponseWriter, m proto.Message) {
-	b, err := marshal.Marshal(m)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Internal", err.Error())
-		return
+// streaming adapts a server-streaming gRPC client method to NDJSON.
+func streaming[Req any, Resp any, PReq interface {
+	*Req
+	proto.Message
+}](call func(context.Context, PReq, ...grpc.CallOption) (grpc.ServerStreamingClient[Resp], error)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		stream, err := call(outgoing(r), PReq(new(Req)))
+		if err != nil {
+			writeGRPCError(w, err)
+			return
+		}
+		// Wait for the first message so authentication errors become proper
+		// HTTP statuses instead of a broken stream.
+		msg, err := stream.Recv()
+		if err != nil {
+			writeGRPCError(w, err)
+			return
+		}
+		flusher, _ := w.(http.Flusher)
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("X-Accel-Buffering", "no")
+		for {
+			b, err := marshal.Marshal(any(msg).(proto.Message))
+			if err != nil {
+				log.Printf("observe: marshal: %v", err)
+				return
+			}
+			if _, err := w.Write(append(b, '\n')); err != nil {
+				return // browser went away
+			}
+			if flusher != nil {
+				flusher.Flush()
+			}
+			if msg, err = stream.Recv(); err != nil {
+				if r.Context().Err() == nil {
+					log.Printf("observe: upstream ended: %v", err)
+				}
+				return
+			}
+		}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write(b)
 }
 
 func writeError(w http.ResponseWriter, httpStatus int, code, msg string) {
@@ -106,81 +205,10 @@ func writeGRPCError(w http.ResponseWriter, err error) {
 		httpStatus = http.StatusForbidden
 	case codes.InvalidArgument:
 		httpStatus = http.StatusBadRequest
+	case codes.FailedPrecondition:
+		httpStatus = http.StatusConflict
 	case codes.Unavailable:
 		httpStatus = http.StatusServiceUnavailable
 	}
 	writeError(w, httpStatus, st.Code().String(), st.Message())
-}
-
-func (g *gateway) connect(w http.ResponseWriter, r *http.Request) {
-	var req rtsv1.ConnectRequest
-	if !readJSON(w, r, &req) {
-		return
-	}
-	resp, err := g.client.Connect(r.Context(), &req)
-	if err != nil {
-		writeGRPCError(w, err)
-		return
-	}
-	writeJSON(w, resp)
-}
-
-func (g *gateway) command(w http.ResponseWriter, r *http.Request) {
-	var req rtsv1.SubmitCommandRequest
-	if !readJSON(w, r, &req) {
-		return
-	}
-	resp, err := g.client.SubmitCommand(outgoing(r), &req)
-	if err != nil {
-		writeGRPCError(w, err)
-		return
-	}
-	writeJSON(w, resp)
-}
-
-func (g *gateway) snapshot(w http.ResponseWriter, r *http.Request) {
-	resp, err := g.client.GetSnapshot(outgoing(r), &rtsv1.GetSnapshotRequest{})
-	if err != nil {
-		writeGRPCError(w, err)
-		return
-	}
-	writeJSON(w, resp)
-}
-
-func (g *gateway) observe(w http.ResponseWriter, r *http.Request) {
-	stream, err := g.client.Observe(outgoing(r), &rtsv1.ObserveRequest{})
-	if err != nil {
-		writeGRPCError(w, err)
-		return
-	}
-	// Wait for the first message so authentication errors become proper
-	// HTTP statuses instead of a broken stream.
-	first, err := stream.Recv()
-	if err != nil {
-		writeGRPCError(w, err)
-		return
-	}
-	flusher, _ := w.(http.Flusher)
-	w.Header().Set("Content-Type", "application/x-ndjson")
-	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("X-Accel-Buffering", "no")
-	for msg := first; ; {
-		b, err := marshal.Marshal(msg)
-		if err != nil {
-			log.Printf("observe: marshal: %v", err)
-			return
-		}
-		if _, err := w.Write(append(b, '\n')); err != nil {
-			return // browser went away
-		}
-		if flusher != nil {
-			flusher.Flush()
-		}
-		if msg, err = stream.Recv(); err != nil {
-			if r.Context().Err() == nil {
-				log.Printf("observe: upstream ended: %v", err)
-			}
-			return
-		}
-	}
 }

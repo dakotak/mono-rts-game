@@ -1,14 +1,19 @@
 package game_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand/v2"
 	"testing"
 
+	energyv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/energy/v1"
 	movementv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/movement/v1"
 	rtsv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/v1"
+	wellsv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/wells/v1"
 	"github.com/dakotaknutson/unit-strategy-game/internal/game"
+	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/energy"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/movement"
+	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/wells"
 	"github.com/dakotaknutson/unit-strategy-game/internal/sim"
 )
 
@@ -206,5 +211,134 @@ func TestPlayerIDsAreOpaque(t *testing.T) {
 	g4, _ := game.New(c)
 	if g3.Players[0].ID == g4.Players[0].ID {
 		t.Fatal("generated keys produced identical player ids")
+	}
+}
+
+// TestReplayWithAdminMutations interleaves admin mutations (spawn, move,
+// delete, well creation and configuration) with player commands and checks
+// that the recorded log replays to identical state.
+func TestReplayWithAdminMutations(t *testing.T) {
+	run := func(log [][]sim.Command) ([]uint64, [][]sim.Command) {
+		g, err := game.New(testConfig())
+		if err != nil {
+			t.Fatal(err)
+		}
+		e := g.Engine
+		r := rand.New(rand.NewPCG(9, 9))
+		admin := sim.Principal{Admin: true}
+		var hashes []uint64
+		var out [][]sim.Command
+		for tick := range 300 {
+			if log != nil {
+				e.StepWith(log[tick])
+				hashes = append(hashes, e.World().StateHash())
+				continue
+			}
+			ids := e.World().EntityIDs()
+			pos := sim.Pos{X: int32(r.IntN(40)), Y: int32(r.IntN(30))}
+			var cmd sim.Command
+			switch r.IntN(6) {
+			case 0:
+				cmd = sim.Command{Type: sim.CmdCreateEntity, Payload: sim.CreateEntity{Kind: sim.KindUnit, Owner: g.Players[r.IntN(3)].ID, Pos: pos}}
+			case 1:
+				cmd = sim.Command{Type: sim.CmdMoveEntity, Payload: sim.MoveEntity{ID: ids[r.IntN(len(ids))], To: pos}}
+			case 2:
+				cmd = sim.Command{Type: sim.CmdRemoveEntity, Payload: sim.RemoveEntity{ID: ids[r.IntN(len(ids))]}}
+			case 3:
+				cmd = sim.Command{Type: wells.CommandCreate, Payload: &wellsv1.CreateWellCommand{Position: &rtsv1.Position{X: pos.X, Y: pos.Y}}}
+			case 4:
+				cmd = sim.Command{Type: wells.CommandConfigure, Payload: &wellsv1.ConfigureWellCommand{WellId: uint64(ids[r.IntN(len(ids))]), Energy: ptrI64(int64(r.IntN(900)))}}
+			default:
+				cmd = sim.Command{Type: movement.CommandMove, Payload: &movementv1.MoveCommand{Orders: []*movementv1.UnitDestination{{UnitId: uint64(ids[r.IntN(len(ids))]), Destination: &rtsv1.Position{X: pos.X, Y: pos.Y}}}}}
+			}
+			cmd.ID, cmd.Issuer = fmt.Sprint(tick), admin
+			if _, err := e.Submit(cmd); err != nil {
+				t.Fatal(err)
+			}
+			f := e.Step()
+			out = append(out, f.Commands)
+			hashes = append(hashes, e.World().StateHash())
+		}
+		return hashes, out
+	}
+	live, log := run(nil)
+	replayed, _ := run(log)
+	for i := range live {
+		if live[i] != replayed[i] {
+			t.Fatalf("replay diverged at tick %d", i+1)
+		}
+	}
+}
+
+func ptrI64(v int64) *int64 { return &v }
+
+// TestDeterministicEnergyEconomy runs mining, transfers and paid movement
+// from a scripted command stream twice and through replay.
+func TestDeterministicEnergyEconomy(t *testing.T) {
+	cfg := func() *game.Config {
+		c := testConfig()
+		c.Plugins = map[string]json.RawMessage{
+			"wells":    json.RawMessage(`{"wells":[{"x":10,"y":8,"energy":300,"capacity":300,"extraction_rate":7},{"x":35,"y":26,"unlimited":true}]}`),
+			"energy":   json.RawMessage(`{"unit_capacity":60,"initial_energy":10,"extraction_rate":3,"transfer_rate":4}`),
+			"movement": json.RawMessage(`{"energy_per_step":1}`),
+		}
+		return c
+	}
+	run := func(log [][]sim.Command) ([]uint64, [][]sim.Command) {
+		g, err := game.New(cfg())
+		if err != nil {
+			t.Fatal(err)
+		}
+		e := g.Engine
+		wellIDs := wells.IDs(e.World())
+		r := rand.New(rand.NewPCG(11, 12))
+		var hashes []uint64
+		var out [][]sim.Command
+		for tick := range 400 {
+			if log != nil {
+				e.StepWith(log[tick])
+				hashes = append(hashes, e.World().StateHash())
+				continue
+			}
+			ids := e.World().EntityIDs()
+			for c := range 3 {
+				u := ids[r.IntN(len(ids))]
+				ent, _ := e.World().Entity(u)
+				if ent.Kind != sim.KindUnit {
+					continue
+				}
+				var cmd sim.Command
+				switch r.IntN(3) {
+				case 0:
+					wid := wellIDs[r.IntN(len(wellIDs))]
+					wp, _ := e.World().Entity(wid)
+					cmd = sim.Command{Type: movement.CommandMove, Payload: &movementv1.MoveCommand{Orders: []*movementv1.UnitDestination{{UnitId: uint64(u), Destination: &rtsv1.Position{X: wp.Pos.X + int32(r.IntN(3)) - 1, Y: wp.Pos.Y - 1}}}}}
+					if _, err := e.Submit(sim.Command{ID: fmt.Sprint(tick, "m", c), Issuer: sim.Principal{Player: ent.Owner}, Type: energy.CommandMine, Payload: &energyv1.MineCommand{UnitIds: []uint64{uint64(u)}, WellId: uint64(wid)}}); err != nil {
+						t.Fatal(err)
+					}
+				case 1:
+					v := ids[r.IntN(len(ids))]
+					cmd = sim.Command{Type: energy.CommandTransfer, Payload: &energyv1.TransferCommand{FromUnitId: uint64(u), ToUnitId: uint64(v), Amount: int64(1 + r.IntN(20))}}
+				default:
+					cmd = sim.Command{Type: movement.CommandMove, Payload: &movementv1.MoveCommand{Orders: []*movementv1.UnitDestination{{UnitId: uint64(u), Destination: &rtsv1.Position{X: int32(r.IntN(40)), Y: int32(r.IntN(30))}}}}}
+				}
+				cmd.ID, cmd.Issuer = fmt.Sprint(tick, "-", c), sim.Principal{Player: ent.Owner}
+				if _, err := e.Submit(cmd); err != nil {
+					t.Fatal(err)
+				}
+			}
+			f := e.Step()
+			out = append(out, f.Commands)
+			hashes = append(hashes, e.World().StateHash())
+		}
+		return hashes, out
+	}
+	h1, log := run(nil)
+	h2, _ := run(nil)
+	h3, _ := run(log)
+	for i := range h1 {
+		if h1[i] != h2[i] || h1[i] != h3[i] {
+			t.Fatalf("diverged at tick %d (run %v, replay %v)", i+1, h1[i] == h2[i], h1[i] == h3[i])
+		}
 	}
 }

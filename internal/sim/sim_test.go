@@ -1,12 +1,14 @@
 package sim
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // testPlugin is a configurable plugin for exercising the registry.
@@ -408,5 +410,118 @@ func TestEntityIDsAreUnpredictable(t *testing.T) {
 func TestEngineRequiresIDKey(t *testing.T) {
 	if _, err := NewEngine(Config{Width: 1, Height: 1, IDKey: []byte("short")}, mustRules(t)); err == nil {
 		t.Fatal("short key accepted")
+	}
+}
+
+func TestAdminRemoveAndMoveCommands(t *testing.T) {
+	e := mustEngine(t, mustRules(t))
+	w := e.World()
+	a, _ := w.CreateEntity(KindUnit, 1, Pos{0, 0})
+	b, _ := w.CreateEntity(KindUnit, 1, Pos{1, 0})
+	e.Step()
+	admin := Principal{Admin: true}
+	if _, err := e.Submit(Command{Type: CmdMoveEntity, Issuer: Principal{Player: 1}}); !errors.Is(err, ErrAdminOnly) {
+		t.Fatalf("player teleport: %v", err)
+	}
+	for _, c := range []Command{
+		{ID: "mv", Type: CmdMoveEntity, Payload: MoveEntity{ID: a, To: Pos{5, 5}}},
+		{ID: "into", Type: CmdMoveEntity, Payload: MoveEntity{ID: b, To: Pos{5, 5}}},
+		{ID: "oob", Type: CmdMoveEntity, Payload: MoveEntity{ID: b, To: Pos{-1, 0}}},
+		{ID: "rm", Type: CmdRemoveEntity, Payload: RemoveEntity{ID: b}},
+		{ID: "rm2", Type: CmdRemoveEntity, Payload: RemoveEntity{ID: b}},
+		{ID: "ghost", Type: CmdMoveEntity, Payload: MoveEntity{ID: b, To: Pos{2, 2}}},
+	} {
+		c.Issuer = admin
+		if _, err := e.Submit(c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f := e.Step()
+	var got []string
+	for _, r := range f.Results {
+		got = append(got, fmt.Sprintf("%s:%v:%s", r.CommandID, r.OK, r.Code))
+	}
+	want := "mv:true:|into:false:failed_precondition|oob:false:failed_precondition|rm:true:|rm2:false:not_found|ghost:false:not_found"
+	if strings.Join(got, "|") != want {
+		t.Fatalf("results\n got %s\nwant %s", strings.Join(got, "|"), want)
+	}
+	if ent, _ := w.Entity(a); ent.Pos != (Pos{5, 5}) {
+		t.Fatalf("a at %v", ent.Pos)
+	}
+	if len(f.Removed) != 1 || f.Removed[0] != b {
+		t.Fatalf("removed = %v", f.Removed)
+	}
+	// Events are admin-only and identify the command.
+	if len(f.Events) != 2 || f.Events[0].Type != EventEntityMoved || f.Events[0].Audience != AdminAudience() {
+		t.Fatalf("events = %+v", f.Events)
+	}
+}
+
+func TestInitAndOnCreateHooks(t *testing.T) {
+	tagc := NewComponent[int64]("rec.tag")
+	var initRan int
+	p := testPlugin{name: "rec", register: func(r *Registrar) error {
+		r.Init(func(w *World) error {
+			initRan++
+			_, err := w.CreateEntity(KindResource, 0, Pos{3, 3})
+			return err
+		})
+		r.OnCreate(func(w *World, e Entity) {
+			if e.Kind == KindUnit {
+				tagc.Set(w, e.ID, int64(e.Owner)*10)
+			}
+		})
+		return r.Component(tagc.Def(VisibleOwner, nil))
+	}}
+	e := mustEngine(t, mustRules(t, p))
+	u, _ := e.World().CreateEntity(KindUnit, 4, Pos{0, 0})
+	if v, ok := tagc.Get(e.World(), u); !ok || v != 40 {
+		t.Fatalf("OnCreate did not run: %v %v", v, ok)
+	}
+	if err := e.Init(); err != nil || initRan != 1 || e.World().EntityCount() != 2 {
+		t.Fatalf("Init: %v ran=%d count=%d", err, initRan, e.World().EntityCount())
+	}
+	if err := e.Init(); err == nil {
+		t.Fatal("second Init accepted")
+	}
+	// Hooks also run for entities created by commands mid-tick.
+	_, _ = e.Submit(Command{Issuer: Principal{Admin: true}, Type: CmdCreateEntity, Payload: CreateEntity{Kind: KindUnit, Owner: 2, Pos: Pos{1, 1}}})
+	e.Step()
+	id, _ := e.World().EntityAt(Pos{1, 1})
+	if v, _ := tagc.Get(e.World(), id); v != 20 {
+		t.Fatalf("hook on command-created unit: %v", v)
+	}
+}
+
+func TestRequestSteps(t *testing.T) {
+	e := mustEngine(t, mustRules(t))
+	if _, err := e.RequestSteps(1); !errors.Is(err, ErrNotPaused) {
+		t.Fatalf("running: %v", err)
+	}
+	e.SetPaused(true)
+	if _, err := e.RequestSteps(0); err == nil {
+		t.Fatal("zero steps accepted")
+	}
+	frames := make(chan Tick, 10)
+	e.SetFrameSink(func(f *Frame) { frames <- f.Tick })
+	first, err := e.RequestSteps(3)
+	if err != nil || first != 1 {
+		t.Fatalf("request: %v %v", first, err)
+	}
+	if _, err := e.RequestSteps(1); !errors.Is(err, ErrStepBusy) {
+		t.Fatalf("second pending request: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { _ = e.Run(ctx, time.Hour); close(done) }()
+	for want := Tick(1); want <= 3; want++ {
+		if got := <-frames; got != want {
+			t.Fatalf("stepped tick %d, want %d", got, want)
+		}
+	}
+	cancel()
+	<-done
+	if e.NextTick() != 4 {
+		t.Fatalf("next tick = %d", e.NextTick())
 	}
 }

@@ -134,6 +134,22 @@ func (r *Registrar) Component(c ComponentDef) error {
 	return nil
 }
 
+// Init registers a function run once by Engine.Init, after the initial
+// world from configuration has been created and before the first tick.
+// Plugins use it to place their own initial entities. Init functions run in
+// plugin registration order.
+func (r *Registrar) Init(fn func(w *World) error) {
+	r.b.inits = append(r.b.inits, namedInit{plugin: r.plugin, fn: fn})
+}
+
+// OnCreate registers a function called whenever an entity is created, right
+// after it exists (in setup code, commands or systems). Plugins use it to
+// attach default components, e.g. an energy store to every new unit. Hooks
+// run in plugin registration order and must not create or remove entities.
+func (r *Registrar) OnCreate(fn func(w *World, e Entity)) {
+	r.b.onCreate = append(r.b.onCreate, fn)
+}
+
 // Derived declares a derived property.
 func (r *Registrar) Derived(d DerivedDef) error {
 	if err := r.requirePrefix("derived property", d.Name); err != nil {
@@ -158,6 +174,13 @@ type Ruleset struct {
 	components     map[string]ComponentDef
 	componentOrder []string // sorted
 	derived        map[string]DerivedDef
+	inits          []namedInit
+	onCreate       []func(w *World, e Entity)
+}
+
+type namedInit struct {
+	plugin string
+	fn     func(w *World) error
 }
 
 type phase struct {
@@ -200,6 +223,8 @@ type rulesetBuilder struct {
 	commands   map[string]CommandDef
 	components map[string]ComponentDef
 	derived    map[string]DerivedDef
+	inits      []namedInit
+	onCreate   []func(w *World, e Entity)
 }
 
 // NewRuleset validates and registers plugins. config maps plugin names to
@@ -262,6 +287,8 @@ func NewRuleset(plugins []Plugin, config map[string]json.RawMessage) (*Ruleset, 
 		commands:   b.commands,
 		components: b.components,
 		derived:    b.derived,
+		inits:      b.inits,
+		onCreate:   b.onCreate,
 	}
 	for id := range b.components {
 		rs.componentOrder = append(rs.componentOrder, id)
