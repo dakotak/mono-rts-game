@@ -1,0 +1,26 @@
+{
+  "world": {
+    "width": 32,
+    "height": 20,
+    "seed": 42,
+    "tick_rate_hz": 10
+  },
+  "players": [
+    { "id": 1, "name": "Red", "join_token": "red" },
+    { "id": 2, "name": "Blue", "join_token": "blue" }
+  ],
+  "admin_token": "dev-admin",
+  "units": [
+    { "owner": 1, "x": 2, "y": 3, "w": 4, "h": 3 },
+    { "owner": 1, "x": 3, "y": 12 },
+    { "owner": 2, "x": 26, "y": 14, "w": 4, "h": 3 },
+    { "owner": 2, "x": 28, "y": 5 }
+  ],
+  "plugins": {
+    "movement": {
+      "ticks_per_move": 2,
+      "max_blocked_ticks": 30,
+      "contention_backoff_ticks": 2
+    }
+  }
+}

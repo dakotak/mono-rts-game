@@ -1,0 +1,113 @@
+syntax = "proto3";
+
+package rts.v1;
+
+option go_package = "github.com/dakotaknutson/unit-strategy-game/gen/rts/v1;rtsv1";
+
+// Shared types used by both the player-facing GameService and the
+// privileged AdminService.
+//
+// Versioning: fields are only ever added. Plugin-specific data travels in
+// generic containers (google.protobuf.Any for commands, attribute maps and
+// typed event names for observations) so that new mechanics do not require
+// changes to these core messages.
+
+// Position is a tile coordinate on the world grid. (0,0) is the top-left tile.
+message Position {
+  int32 x = 1;
+  int32 y = 2;
+}
+
+enum EntityKind {
+  ENTITY_KIND_UNSPECIFIED = 0;
+  ENTITY_KIND_UNIT = 1;
+  ENTITY_KIND_RESOURCE = 2;
+  ENTITY_KIND_TERRAIN = 3;
+}
+
+// Value is a plugin-defined attribute or event field value.
+message Value {
+  oneof kind {
+    int64 int_value = 1;
+    bool bool_value = 2;
+    string string_value = 3;
+    Position position_value = 4;
+  }
+}
+
+// Entity is an observation of a single entity. Which attributes are present
+// depends on what the observer is authorized to see.
+message Entity {
+  uint64 id = 1;
+  EntityKind kind = 2;
+  // Owning player, or 0 for unowned entities.
+  uint32 owner_id = 3;
+  Position position = 4;
+  // Plugin-defined attributes keyed by "<plugin>.<name>", e.g.
+  // "movement.destination".
+  map<string, Value> attributes = 5;
+}
+
+// Event is a plugin-defined occurrence during a tick, e.g. "movement.arrived".
+message Event {
+  string type = 1;
+  // Primary entity the event concerns, or 0.
+  uint64 entity_id = 2;
+  map<string, Value> fields = 3;
+}
+
+enum CommandStatus {
+  COMMAND_STATUS_UNSPECIFIED = 0;
+  COMMAND_STATUS_SUCCEEDED = 1;
+  COMMAND_STATUS_FAILED = 2;
+}
+
+// CommandResult reports the outcome of executing a previously accepted
+// command. Acceptance (see SubmitCommandResponse) and execution are separate.
+message CommandResult {
+  string command_id = 1;
+  // Tick in which the command executed.
+  uint64 tick = 2;
+  CommandStatus status = 3;
+  // Machine-readable failure code, e.g. "permission_denied", "not_found",
+  // "invalid_argument". Empty on success.
+  string error_code = 4;
+  string error_message = 5;
+}
+
+message WorldInfo {
+  int32 width = 1;
+  int32 height = 2;
+  uint32 tick_rate_hz = 3;
+  repeated PlayerInfo players = 4;
+  // Fully-qualified protobuf message names accepted as command payloads.
+  repeated string command_types = 5;
+  // Registered plugins, in initialization order.
+  repeated string plugins = 6;
+}
+
+message PlayerInfo {
+  uint32 id = 1;
+  string name = 2;
+}
+
+// WorldSnapshot is a complete, consistent view of the world at a tick, as
+// visible to the requester.
+message WorldSnapshot {
+  uint64 tick = 1;
+  // Sorted by entity id.
+  repeated Entity entities = 2;
+}
+
+// TickUpdate is the batched set of changes produced by one simulation tick,
+// as visible to the requester. Applying it to the snapshot of tick-1 yields
+// the snapshot of tick.
+message TickUpdate {
+  uint64 tick = 1;
+  // Entities that were created or changed this tick (full replacement).
+  repeated Entity changed = 2;
+  repeated uint64 removed = 3;
+  repeated Event events = 4;
+  // Results for the requester's own commands executed this tick.
+  repeated CommandResult command_results = 5;
+}

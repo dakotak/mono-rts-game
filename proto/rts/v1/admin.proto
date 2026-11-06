@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package rts.v1;
+
+import "rts/v1/types.proto";
+
+option go_package = "github.com/dakotaknutson/unit-strategy-game/gen/rts/v1;rtsv1";
+
+// AdminService is the privileged administration API. It is authorized
+// separately from player sessions using the metadata header
+// "authorization: Bearer <admin token>".
+//
+// All world mutations are scheduled through the simulation, exactly like
+// player commands; this service never touches world state directly.
+//
+// Milestone 1 implements a minimal subset. Planned additions: entity
+// inspection/modification, resource placement, configuration changes.
+service AdminService {
+  // GetWorldSnapshot returns the full, unfiltered world state.
+  rpc GetWorldSnapshot(GetWorldSnapshotRequest) returns (GetWorldSnapshotResponse);
+
+  // SpawnUnit schedules creation of a unit. The returned tick is when it
+  // executes; the result is visible in subsequent snapshots.
+  rpc SpawnUnit(SpawnUnitRequest) returns (SpawnUnitResponse);
+
+  // SetPaused pauses or resumes the simulation clock.
+  rpc SetPaused(SetPausedRequest) returns (SetPausedResponse);
+}
+
+message GetWorldSnapshotRequest {}
+
+message GetWorldSnapshotResponse {
+  WorldSnapshot snapshot = 1;
+}
+
+message SpawnUnitRequest {
+  uint32 owner_id = 1;
+  Position position = 2;
+}
+
+message SpawnUnitResponse {
+  string command_id = 1;
+  uint64 scheduled_tick = 2;
+}
+
+message SetPausedRequest {
+  bool paused = 1;
+}
+
+message SetPausedResponse {
+  bool paused = 1;
+  uint64 tick = 2;
+}

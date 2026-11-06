@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package rts.movement.v1;
+
+import "rts/v1/types.proto";
+
+option go_package = "github.com/dakotaknutson/unit-strategy-game/gen/rts/movement/v1;movementv1";
+
+// Command payloads owned by the movement plugin. Clients wrap these in
+// google.protobuf.Any inside rts.v1.SubmitCommandRequest.
+
+// MoveCommand gives each listed unit a persistent order to walk to its
+// destination. The command is atomic: if any order is invalid (unknown
+// unit, not owned by the issuer, out of bounds, duplicate unit), no order is
+// changed. A new order replaces a unit's previous one.
+message MoveCommand {
+  repeated UnitDestination orders = 1;
+}
+
+message UnitDestination {
+  uint64 unit_id = 1;
+  rts.v1.Position destination = 2;
+}
+
+// StopCommand cancels the movement orders of the listed units.
+message StopCommand {
+  repeated uint64 unit_ids = 1;
+}

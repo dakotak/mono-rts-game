@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RTS Client</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <section id="join" class="panel">
+    <h1>RTS — join game</h1>
+    <form id="join-form">
+      <label for="join-token">Join token</label>
+      <input id="join-token" name="token" autocomplete="off" placeholder="e.g. red" required autofocus>
+      <button type="submit">Connect</button>
+    </form>
+    <p class="hint">Each browser tab is an independent session. The development config accepts <code>red</code> and <code>blue</code>.</p>
+    <p id="join-error" class="error" role="alert"></p>
+  </section>
+
+  <section id="game" hidden>
+    <header>
+      <span id="player-badge" class="badge"></span>
+      <span>Tick <strong id="tick">–</strong></span>
+      <span id="conn" class="conn">connecting…</span>
+      <span>Units <strong id="unit-count">0</strong></span>
+      <span>Selected <strong id="sel-count">0</strong></span>
+      <span class="spacer"></span>
+      <button id="stop-btn" type="button" title="Stop selected units (S)">Stop</button>
+      <button id="leave-btn" type="button">Leave</button>
+    </header>
+    <main>
+      <div id="board"><canvas id="canvas"></canvas></div>
+      <aside>
+        <h2>Controls</h2>
+        <ul class="controls">
+          <li><b>Click</b> own unit — select (Shift adds)</li>
+          <li><b>Drag</b> — box-select own units</li>
+          <li><b>Right-click</b> or click empty tile — move selection</li>
+          <li><b>S</b> — stop &nbsp; <b>Esc</b> — deselect</li>
+        </ul>
+        <h2>Players</h2>
+        <ul id="legend" class="legend"></ul>
+        <h2>Messages</h2>
+        <ol id="log" class="log" aria-live="polite"></ol>
+      </aside>
+    </main>
+  </section>
+  <script src="app.js"></script>
+</body>
+</html>

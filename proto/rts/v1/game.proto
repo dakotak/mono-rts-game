@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+package rts.v1;
+
+import "google/protobuf/any.proto";
+import "rts/v1/types.proto";
+
+option go_package = "github.com/dakotaknutson/unit-strategy-game/gen/rts/v1;rtsv1";
+
+// GameService is the public player API. Every client (human UI or AI agent)
+// uses this same service; the server does not distinguish between them.
+//
+// Authentication: Connect exchanges a join token for a session token. All
+// other RPCs require the metadata header "authorization: Bearer <session>".
+service GameService {
+  // Connect joins the game as a player and returns a session token. Calling
+  // Connect again with the same join token (e.g. after a crash) returns a new
+  // session for the same player; earlier sessions remain valid.
+  rpc Connect(ConnectRequest) returns (ConnectResponse);
+
+  // SubmitCommand validates a command's envelope and schedules it for a
+  // future tick. Acceptance is not execution: the outcome arrives later as a
+  // CommandResult in the Observe stream (and is idempotent by command_id).
+  rpc SubmitCommand(SubmitCommandRequest) returns (SubmitCommandResponse);
+
+  // GetSnapshot returns the latest world state visible to the player.
+  rpc GetSnapshot(GetSnapshotRequest) returns (GetSnapshotResponse);
+
+  // Observe streams the player's view: first a full snapshot, then one
+  // TickUpdate per tick. If the client falls behind, the server sends a fresh
+  // snapshot instead of the missed updates. Reconnecting is simply calling
+  // Observe again.
+  rpc Observe(ObserveRequest) returns (stream ObserveResponse);
+}
+
+message ConnectRequest {
+  string join_token = 1;
+}
+
+message ConnectResponse {
+  uint32 player_id = 1;
+  string session_token = 2;
+  WorldInfo world = 3;
+}
+
+message SubmitCommandRequest {
+  // Client-chosen unique identifier (per player). Resubmitting the same id
+  // returns the original acknowledgment without scheduling it again.
+  string command_id = 1;
+  // Plugin-defined command message, e.g. rts.movement.v1.MoveCommand.
+  google.protobuf.Any payload = 2;
+}
+
+message SubmitCommandResponse {
+  string command_id = 1;
+  bool accepted = 2;
+  // Tick in which the command will execute (if accepted).
+  uint64 scheduled_tick = 3;
+  // Why the command was rejected (if not accepted).
+  string rejection_reason = 4;
+}
+
+message GetSnapshotRequest {}
+
+message GetSnapshotResponse {
+  WorldSnapshot snapshot = 1;
+}
+
+message ObserveRequest {}
+
+message ObserveResponse {
+  oneof kind {
+    WorldSnapshot snapshot = 1;
+    TickUpdate update = 2;
+  }
+}
