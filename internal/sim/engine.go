@@ -109,6 +109,60 @@ type Frame struct {
 	// Commands executed this tick, in execution order. This, together with
 	// the initial world, is the replay log.
 	Commands []Command
+	// Observations is set when an observation authority (the visibility
+	// plugin) is active: it then defines exactly what each player may see
+	// of entities they do not own, and servers must not show players
+	// anything else about foreign entities. Sorted by player.
+	Observations []Observation
+	// ObservationMode reports whether an observation authority is active
+	// (even if no player observed anything this tick).
+	ObservationMode bool
+}
+
+// Observation is one player's change in observation over a tick.
+type Observation struct {
+	Player PlayerID
+	// Tiles that became / stopped being visible, sorted (y, then x).
+	TilesEntered, TilesExited []Pos
+	// Foreign entities that became observable or whose observable (already
+	// filtered) state changed. Sorted by ID.
+	Upserts []ObservedEntity
+	// Foreign entities that are no longer observable, sorted. Loss of
+	// detection and destruction are indistinguishable here.
+	Lost []EntityID
+	// Diagnostics carries detection changes (observer, scores) that did not
+	// change what the player sees. For administrators only; servers must
+	// never send it to players.
+	Diagnostics []ObservedEntity
+}
+
+// Identification levels of a foreign entity.
+type Level uint8
+
+const (
+	LevelNone Level = iota
+	LevelBasic
+	LevelEstimated
+	LevelDetailed
+)
+
+// ObservedEntity is a foreign entity as one player observes it: already
+// filtered to what the player is allowed to know.
+type ObservedEntity struct {
+	View  EntityView
+	Level Level
+	// Diagnostics for administrators (never sent to players).
+	Observer           EntityID
+	DetectScore, Ident int64
+}
+
+// ObservationAuthority is implemented by a plugin that decides what each
+// player observes. Registering one (Registrar.ObservationAuthority) turns
+// on ObservationMode.
+type ObservationAuthority interface {
+	// Observations returns this tick's per-player deltas. It runs after
+	// all systems, on the simulation goroutine.
+	Observations(ctx *TickContext) []Observation
 }
 
 // Errors returned by Submit.
@@ -298,14 +352,22 @@ func (e *Engine) execute(tick Tick, cmds []Command) *Frame {
 		}
 	}
 
+	// The observation authority runs last, after every system, so players
+	// never see intermediate states. Its events join the tick's events.
+	var obs []Observation
+	if e.rules.observer != nil {
+		obs = e.rules.observer.Observations(ctx)
+	}
 	changed, removed := w.takeChanges()
 	f := &Frame{
-		Tick:     tick,
-		Changed:  changed,
-		Removed:  removed,
-		Events:   ctx.events,
-		Results:  results,
-		Commands: cmds,
+		Tick:            tick,
+		Changed:         changed,
+		Removed:         removed,
+		Events:          ctx.events,
+		Results:         results,
+		Commands:        cmds,
+		Observations:    obs,
+		ObservationMode: e.rules.observer != nil,
 	}
 	if e.sink != nil {
 		e.sink(f)

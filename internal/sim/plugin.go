@@ -165,6 +165,16 @@ func (r *Registrar) Describe(v any) error {
 	return nil
 }
 
+// ObservationAuthority makes the plugin the single authority on what
+// players observe of entities they do not own (see Frame.Observations).
+func (r *Registrar) ObservationAuthority(a ObservationAuthority) error {
+	if r.b.observer != nil {
+		return fmt.Errorf("plugin %q: an observation authority is already registered", r.plugin)
+	}
+	r.b.observer = a
+	return nil
+}
+
 // Derived declares a derived property.
 func (r *Registrar) Derived(d DerivedDef) error {
 	if err := r.requirePrefix("derived property", d.Name); err != nil {
@@ -192,7 +202,12 @@ type Ruleset struct {
 	inits          []namedInit
 	onCreate       []func(w *World, e Entity)
 	rules          map[string]json.RawMessage
+	observer       ObservationAuthority
 }
+
+// HasObservationAuthority reports whether a plugin decides what players
+// observe (fog of war).
+func (rs *Ruleset) HasObservationAuthority() bool { return rs.observer != nil }
 
 // Rules returns each plugin's published rule description (see
 // Registrar.Describe), keyed by plugin name.
@@ -246,6 +261,7 @@ type rulesetBuilder struct {
 	inits      []namedInit
 	onCreate   []func(w *World, e Entity)
 	rules      map[string]json.RawMessage
+	observer   ObservationAuthority
 }
 
 // NewRuleset validates and registers plugins. config maps plugin names to
@@ -312,6 +328,7 @@ func NewRuleset(plugins []Plugin, config map[string]json.RawMessage) (*Ruleset, 
 		inits:      b.inits,
 		onCreate:   b.onCreate,
 		rules:      b.rules,
+		observer:   b.observer,
 	}
 	for id := range b.components {
 		rs.componentOrder = append(rs.componentOrder, id)

@@ -580,6 +580,113 @@ so replays are exact (tested at scale).
 - Filter entities, events and snapshots by what each player sees.
 - Then pursuit with simple pathfinding.
 
+## Fog of war, sensors and intelligence (Milestone 5)
+
+**Observation authority.** The `visibility` plugin registers as the
+kernel's single *observation authority*
+(`Registrar.ObservationAuthority`).
+
+- **When it runs.** After **all** systems each tick (commands → energy →
+  salvage → movement → combat → upgrades → cloning → *observation*). Players
+  therefore only see settled end-of-tick state: post-move positions,
+  post-combat damage and destruction, offspring, executed admin mutations.
+- **Its output.** A typed per-player `Observation` in the frame: tiles
+  entered and exited, foreign-entity upserts (already filtered), lost
+  entities, and admin-only diagnostics.
+- **What commands use.** Commands that refer to foreign entities (attacks,
+  mining, salvage) and continuing attack orders use the observation from the
+  end of the *previous* tick, which is what the player actually knew.
+
+**Model (per player, deterministic, integer).**
+
+- **Visible:** a tile within an own unit's vision range. The metric is
+  chebyshev, manhattan or euclidean (rounded); there is no occlusion yet
+  (`occlusion: "none"` is validated).
+- **Detected:** on a visible tile, and
+  `detection_formula(observer_*, target_*, distance) >= detection_threshold`
+  for an observer that sees it.
+- **Identification level:** the best observer's `identification_formula`
+  against `estimated_threshold` and `detailed_threshold`.
+- **Resources** use `resource_signature`.
+- **Stats.** All four sensor stats (vision, sensor, signature,
+  identification) bind to attributes. Scouts and stealth units arise from
+  upgrades alone.
+
+**Disclosure.** Foreign attributes are disclosed only through
+`disclosure` rules: an exact key or `prefix.*`, with a per-level precision of
+0 (hidden), 1 (exact) or N (an estimate range `[⌊v/N⌋N, ⌊v/N⌋N+N−1]`).
+
+- Higher levels must be at least as precise; validation enforces it.
+- Metadata, orders, upgrade progress and combat targets have no rule by
+  default, so they are never sent.
+- A foreign entity is re-sent only when its **filtered** view changes, so
+  hidden attribute changes cause no observable traffic.
+
+**Server.**
+
+- **The hub** keeps each player's current observation, built from frames:
+  visible tiles plus the disclosed foreign views.
+- **Snapshots and updates** are built from:
+  - the player's own entities (in full),
+  - that observation,
+  - `removed` restricted to their own entities plus entities they lost
+    (loss and destruction are indistinguishable),
+  - events addressed to them.
+- **Never per-player world serialization.** The server never serializes the
+  whole world per player per tick; per-player work is proportional to what
+  that player observes and what changed.
+- **Admin.** Admins keep the full world. `AdminService.GetPlayerView`
+  previews any player's exact snapshot with the detections behind it.
+
+**Information-security review (fixes made):**
+
+| Leak | Fix |
+|---|---|
+| Global `removed` list | Only own entities and lost entities |
+| `energy.well_depleted` broadcast | Sent only to the owners whose units drained the well |
+| "Not found" vs "not yours" vs "not visible" errors | One `not_found` "X is not available" for players (move, stop, mine, transfer, upgrade, clone, metadata, attack, salvage) |
+| Failed upgrade/clone events sent to the *target's* owner | Never sent |
+| Attack orders revealing destruction | End with `target_unavailable` the moment the target is no longer detected |
+| Public health, well and wreck values | Now subject to disclosure rules |
+
+Entity IDs remain opaque, global counts are admin-only, and command timing
+does not depend on hidden state.
+
+**Client memory.** The server keeps no explored-map history. The client
+keeps explored tiles (per tab) and "last known" ghosts of lost entities,
+drawn as stale outlines with the tick last seen.
+
+**Performance.** 4,000 units, vision 5, densely overlapping:
+
+- about 14 ms per tick for observation in steady state
+- about 39 ms per tick with 200 reorders per tick
+
+That's within the 10 Hz budget. The cost is dominated by per-tile scans and
+formula evaluation per observer/target pair.
+
+**Known limitations:**
+
+- **Movement collisions can reveal hidden blocking units.** A blocked step
+  is physics.
+- **Observation cost.** It isn't incremental: it recomputes all
+  observer/target pairs each tick.
+- **Estimates can be correlated** across ticks. Ranges are fixed buckets, so
+  a value crossing a boundary narrows it down.
+- **No team or alliance concept:** owner = team.
+- **Terrain.** No terrain entities exist yet. Tiles carry only visibility.
+- **Admin preview** is polled, not streamed.
+
+**Recommended Milestone 6:**
+
+- Line-of-sight and terrain (occlusion behind the existing `occlusion` and
+  metric options).
+- Incremental visibility (spatial buckets; recompute only around moved or
+  changed units).
+- Alliances and shared vision.
+- Pursuit and pathfinding on known terrain.
+- Replay files that include per-player observation streams, for spectator
+  and anti-cheat review.
+
 ## Public API
 
 Protobuf files live in `proto/`, are linted by `buf` (STANDARD rules) and

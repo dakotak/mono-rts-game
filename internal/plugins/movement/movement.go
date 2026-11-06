@@ -200,10 +200,10 @@ func checkUnit(w *sim.World, issuer sim.Principal, id uint64, seen map[sim.Entit
 	seen[eid] = true
 	e, ok := w.Entity(eid)
 	if !ok || e.Kind != sim.KindUnit {
-		return sim.Fail(sim.CodeNotFound, "unit %d not found", id)
+		return sim.Unavailable("unit", sim.EntityID(id))
 	}
 	if !issuer.Admin && e.Owner != issuer.Player {
-		return sim.Fail(sim.CodePermissionDenied, "unit %d is not yours", id)
+		return sim.Unavailable("unit", sim.EntityID(id))
 	}
 	return nil
 }

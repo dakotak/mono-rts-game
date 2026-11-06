@@ -5,7 +5,26 @@ Go. One server process hosts one world; any number of players (humans or AI
 agents, indistinguishable to the server) connect over a public gRPC API.
 Game mechanics are compiled-in plugins.
 
-**Status: Milestone 4** — combat, destruction and salvage:
+**Status: Milestone 5** — fog of war, sensors and intelligence:
+
+- **Visibility plugin** (`internal/plugins/visibility`): per-player
+  visible tiles, detection and identification (basic / estimated /
+  detailed), all from configurable attributes and integer formulas.
+  Configurable per-attribute disclosure: exact, estimated as a deterministic
+  range, or hidden.
+- **Leak-free player API.** Players receive only their own entities and what
+  they currently detect. Hidden destruction, movement, mining and cloning
+  produce nothing. Commands answer "not available" identically for missing,
+  foreign and undetected entities.
+- **Player client:** visible, explored and unexplored tiles; last-known ghosts
+  with the tick they were last seen; ranges shown as `≈lo–hi`; a sensors
+  panel; a vision-range overlay.
+- **Admin:** "View as" a player, with detection diagnostics.
+
+Fog is enabled in `configs/dev.json` (`plugins.visibility.enabled`). It is
+off by default so older configurations behave as before.
+
+Milestone 4 added combat, destruction and salvage:
 
 - **Combat** (`internal/plugins/combat`): persistent attack orders against
   enemy units. Health, attack, range and cooldown are bound to attributes or

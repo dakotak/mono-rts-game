@@ -73,6 +73,67 @@ func (EntityKind) EnumDescriptor() ([]byte, []int) {
 	return file_rts_v1_types_proto_rawDescGZIP(), []int{0}
 }
 
+// How much a player knows about an entity. Own entities are OWN; foreign
+// entities carry the level their sensors achieved.
+type IdentificationLevel int32
+
+const (
+	IdentificationLevel_IDENTIFICATION_LEVEL_UNSPECIFIED IdentificationLevel = 0
+	// Position, owner and kind only (plus anything rules disclose at basic).
+	IdentificationLevel_IDENTIFICATION_LEVEL_BASIC IdentificationLevel = 1
+	// Approximate values for permitted attributes.
+	IdentificationLevel_IDENTIFICATION_LEVEL_ESTIMATED IdentificationLevel = 2
+	// Exact values for permitted attributes.
+	IdentificationLevel_IDENTIFICATION_LEVEL_DETAILED IdentificationLevel = 3
+	// The player's own entity: everything.
+	IdentificationLevel_IDENTIFICATION_LEVEL_OWN IdentificationLevel = 4
+)
+
+// Enum value maps for IdentificationLevel.
+var (
+	IdentificationLevel_name = map[int32]string{
+		0: "IDENTIFICATION_LEVEL_UNSPECIFIED",
+		1: "IDENTIFICATION_LEVEL_BASIC",
+		2: "IDENTIFICATION_LEVEL_ESTIMATED",
+		3: "IDENTIFICATION_LEVEL_DETAILED",
+		4: "IDENTIFICATION_LEVEL_OWN",
+	}
+	IdentificationLevel_value = map[string]int32{
+		"IDENTIFICATION_LEVEL_UNSPECIFIED": 0,
+		"IDENTIFICATION_LEVEL_BASIC":       1,
+		"IDENTIFICATION_LEVEL_ESTIMATED":   2,
+		"IDENTIFICATION_LEVEL_DETAILED":    3,
+		"IDENTIFICATION_LEVEL_OWN":         4,
+	}
+)
+
+func (x IdentificationLevel) Enum() *IdentificationLevel {
+	p := new(IdentificationLevel)
+	*p = x
+	return p
+}
+
+func (x IdentificationLevel) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (IdentificationLevel) Descriptor() protoreflect.EnumDescriptor {
+	return file_rts_v1_types_proto_enumTypes[1].Descriptor()
+}
+
+func (IdentificationLevel) Type() protoreflect.EnumType {
+	return &file_rts_v1_types_proto_enumTypes[1]
+}
+
+func (x IdentificationLevel) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use IdentificationLevel.Descriptor instead.
+func (IdentificationLevel) EnumDescriptor() ([]byte, []int) {
+	return file_rts_v1_types_proto_rawDescGZIP(), []int{1}
+}
+
 type CommandStatus int32
 
 const (
@@ -111,11 +172,11 @@ func (x CommandStatus) String() string {
 }
 
 func (CommandStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_rts_v1_types_proto_enumTypes[1].Descriptor()
+	return file_rts_v1_types_proto_enumTypes[2].Descriptor()
 }
 
 func (CommandStatus) Type() protoreflect.EnumType {
-	return &file_rts_v1_types_proto_enumTypes[1]
+	return &file_rts_v1_types_proto_enumTypes[2]
 }
 
 func (x CommandStatus) Number() protoreflect.EnumNumber {
@@ -124,7 +185,7 @@ func (x CommandStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use CommandStatus.Descriptor instead.
 func (CommandStatus) EnumDescriptor() ([]byte, []int) {
-	return file_rts_v1_types_proto_rawDescGZIP(), []int{1}
+	return file_rts_v1_types_proto_rawDescGZIP(), []int{2}
 }
 
 // Position is a tile coordinate on the world grid. (0,0) is the top-left tile.
@@ -189,6 +250,7 @@ type Value struct {
 	//	*Value_BoolValue
 	//	*Value_StringValue
 	//	*Value_PositionValue
+	//	*Value_RangeValue
 	Kind          isValue_Kind `protobuf_oneof:"kind"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -267,6 +329,15 @@ func (x *Value) GetPositionValue() *Position {
 	return nil
 }
 
+func (x *Value) GetRangeValue() *Range {
+	if x != nil {
+		if x, ok := x.Kind.(*Value_RangeValue); ok {
+			return x.RangeValue
+		}
+	}
+	return nil
+}
+
 type isValue_Kind interface {
 	isValue_Kind()
 }
@@ -287,6 +358,12 @@ type Value_PositionValue struct {
 	PositionValue *Position `protobuf:"bytes,4,opt,name=position_value,json=positionValue,proto3,oneof"`
 }
 
+type Value_RangeValue struct {
+	// An estimate: the true value lies in [low, high]. Sensors disclose
+	// estimates of foreign entities at lower identification levels.
+	RangeValue *Range `protobuf:"bytes,5,opt,name=range_value,json=rangeValue,proto3,oneof"`
+}
+
 func (*Value_IntValue) isValue_Kind() {}
 
 func (*Value_BoolValue) isValue_Kind() {}
@@ -294,6 +371,60 @@ func (*Value_BoolValue) isValue_Kind() {}
 func (*Value_StringValue) isValue_Kind() {}
 
 func (*Value_PositionValue) isValue_Kind() {}
+
+func (*Value_RangeValue) isValue_Kind() {}
+
+type Range struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Low           int64                  `protobuf:"varint,1,opt,name=low,proto3" json:"low,omitempty"`
+	High          int64                  `protobuf:"varint,2,opt,name=high,proto3" json:"high,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Range) Reset() {
+	*x = Range{}
+	mi := &file_rts_v1_types_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Range) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Range) ProtoMessage() {}
+
+func (x *Range) ProtoReflect() protoreflect.Message {
+	mi := &file_rts_v1_types_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Range.ProtoReflect.Descriptor instead.
+func (*Range) Descriptor() ([]byte, []int) {
+	return file_rts_v1_types_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *Range) GetLow() int64 {
+	if x != nil {
+		return x.Low
+	}
+	return 0
+}
+
+func (x *Range) GetHigh() int64 {
+	if x != nil {
+		return x.High
+	}
+	return 0
+}
 
 // Entity is an observation of a single entity. Which attributes are present
 // depends on what the observer is authorized to see.
@@ -312,14 +443,19 @@ type Entity struct {
 	Attributes map[string]*Value `protobuf:"bytes,5,rep,name=attributes,proto3" json:"attributes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// Passable entities (e.g. wreckage) do not block their tile; units can
 	// stand on them and several may share a tile.
-	Passable      bool `protobuf:"varint,6,opt,name=passable,proto3" json:"passable,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Passable bool `protobuf:"varint,6,opt,name=passable,proto3" json:"passable,omitempty"`
+	// Set when fog of war is on: OWN for the player's own entities, the
+	// sensor identification level for foreign ones. Under fog of war, a
+	// foreign entity's attributes are exactly what disclosure rules allow at
+	// that level; nothing else is sent.
+	Identification IdentificationLevel `protobuf:"varint,7,opt,name=identification,proto3,enum=rts.v1.IdentificationLevel" json:"identification,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *Entity) Reset() {
 	*x = Entity{}
-	mi := &file_rts_v1_types_proto_msgTypes[2]
+	mi := &file_rts_v1_types_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -331,7 +467,7 @@ func (x *Entity) String() string {
 func (*Entity) ProtoMessage() {}
 
 func (x *Entity) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_types_proto_msgTypes[2]
+	mi := &file_rts_v1_types_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -344,7 +480,7 @@ func (x *Entity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Entity.ProtoReflect.Descriptor instead.
 func (*Entity) Descriptor() ([]byte, []int) {
-	return file_rts_v1_types_proto_rawDescGZIP(), []int{2}
+	return file_rts_v1_types_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *Entity) GetId() uint64 {
@@ -389,6 +525,74 @@ func (x *Entity) GetPassable() bool {
 	return false
 }
 
+func (x *Entity) GetIdentification() IdentificationLevel {
+	if x != nil {
+		return x.Identification
+	}
+	return IdentificationLevel_IDENTIFICATION_LEVEL_UNSPECIFIED
+}
+
+// TileRun is a horizontal run of tiles: (x .. x+length-1, y).
+type TileRun struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Y             int32                  `protobuf:"varint,1,opt,name=y,proto3" json:"y,omitempty"`
+	X             int32                  `protobuf:"varint,2,opt,name=x,proto3" json:"x,omitempty"`
+	Length        int32                  `protobuf:"varint,3,opt,name=length,proto3" json:"length,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TileRun) Reset() {
+	*x = TileRun{}
+	mi := &file_rts_v1_types_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TileRun) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TileRun) ProtoMessage() {}
+
+func (x *TileRun) ProtoReflect() protoreflect.Message {
+	mi := &file_rts_v1_types_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TileRun.ProtoReflect.Descriptor instead.
+func (*TileRun) Descriptor() ([]byte, []int) {
+	return file_rts_v1_types_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *TileRun) GetY() int32 {
+	if x != nil {
+		return x.Y
+	}
+	return 0
+}
+
+func (x *TileRun) GetX() int32 {
+	if x != nil {
+		return x.X
+	}
+	return 0
+}
+
+func (x *TileRun) GetLength() int32 {
+	if x != nil {
+		return x.Length
+	}
+	return 0
+}
+
 // Event is a plugin-defined occurrence during a tick, e.g. "movement.arrived".
 type Event struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -402,7 +606,7 @@ type Event struct {
 
 func (x *Event) Reset() {
 	*x = Event{}
-	mi := &file_rts_v1_types_proto_msgTypes[3]
+	mi := &file_rts_v1_types_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -414,7 +618,7 @@ func (x *Event) String() string {
 func (*Event) ProtoMessage() {}
 
 func (x *Event) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_types_proto_msgTypes[3]
+	mi := &file_rts_v1_types_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -427,7 +631,7 @@ func (x *Event) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Event.ProtoReflect.Descriptor instead.
 func (*Event) Descriptor() ([]byte, []int) {
-	return file_rts_v1_types_proto_rawDescGZIP(), []int{3}
+	return file_rts_v1_types_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Event) GetType() string {
@@ -472,7 +676,7 @@ type CommandResult struct {
 
 func (x *CommandResult) Reset() {
 	*x = CommandResult{}
-	mi := &file_rts_v1_types_proto_msgTypes[4]
+	mi := &file_rts_v1_types_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -484,7 +688,7 @@ func (x *CommandResult) String() string {
 func (*CommandResult) ProtoMessage() {}
 
 func (x *CommandResult) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_types_proto_msgTypes[4]
+	mi := &file_rts_v1_types_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -497,7 +701,7 @@ func (x *CommandResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandResult.ProtoReflect.Descriptor instead.
 func (*CommandResult) Descriptor() ([]byte, []int) {
-	return file_rts_v1_types_proto_rawDescGZIP(), []int{4}
+	return file_rts_v1_types_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *CommandResult) GetCommandId() string {
@@ -554,7 +758,7 @@ type UnitResult struct {
 
 func (x *UnitResult) Reset() {
 	*x = UnitResult{}
-	mi := &file_rts_v1_types_proto_msgTypes[5]
+	mi := &file_rts_v1_types_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -566,7 +770,7 @@ func (x *UnitResult) String() string {
 func (*UnitResult) ProtoMessage() {}
 
 func (x *UnitResult) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_types_proto_msgTypes[5]
+	mi := &file_rts_v1_types_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -579,7 +783,7 @@ func (x *UnitResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnitResult.ProtoReflect.Descriptor instead.
 func (*UnitResult) Descriptor() ([]byte, []int) {
-	return file_rts_v1_types_proto_rawDescGZIP(), []int{5}
+	return file_rts_v1_types_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *UnitResult) GetUnitId() uint64 {
@@ -633,7 +837,7 @@ type WorldInfo struct {
 
 func (x *WorldInfo) Reset() {
 	*x = WorldInfo{}
-	mi := &file_rts_v1_types_proto_msgTypes[6]
+	mi := &file_rts_v1_types_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -645,7 +849,7 @@ func (x *WorldInfo) String() string {
 func (*WorldInfo) ProtoMessage() {}
 
 func (x *WorldInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_types_proto_msgTypes[6]
+	mi := &file_rts_v1_types_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -658,7 +862,7 @@ func (x *WorldInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorldInfo.ProtoReflect.Descriptor instead.
 func (*WorldInfo) Descriptor() ([]byte, []int) {
-	return file_rts_v1_types_proto_rawDescGZIP(), []int{6}
+	return file_rts_v1_types_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *WorldInfo) GetWidth() int32 {
@@ -727,7 +931,7 @@ type PlayerInfo struct {
 
 func (x *PlayerInfo) Reset() {
 	*x = PlayerInfo{}
-	mi := &file_rts_v1_types_proto_msgTypes[7]
+	mi := &file_rts_v1_types_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -739,7 +943,7 @@ func (x *PlayerInfo) String() string {
 func (*PlayerInfo) ProtoMessage() {}
 
 func (x *PlayerInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_types_proto_msgTypes[7]
+	mi := &file_rts_v1_types_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -752,7 +956,7 @@ func (x *PlayerInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerInfo.ProtoReflect.Descriptor instead.
 func (*PlayerInfo) Descriptor() ([]byte, []int) {
-	return file_rts_v1_types_proto_rawDescGZIP(), []int{7}
+	return file_rts_v1_types_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *PlayerInfo) GetId() uint32 {
@@ -774,15 +978,21 @@ func (x *PlayerInfo) GetName() string {
 type WorldSnapshot struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Tick  uint64                 `protobuf:"varint,1,opt,name=tick,proto3" json:"tick,omitempty"`
-	// Sorted by entity id.
-	Entities      []*Entity `protobuf:"bytes,2,rep,name=entities,proto3" json:"entities,omitempty"`
+	// Sorted by entity id. Under fog of war: the player's own entities and
+	// the foreign entities they currently detect.
+	Entities []*Entity `protobuf:"bytes,2,rep,name=entities,proto3" json:"entities,omitempty"`
+	// Whether fog of war is on. When false, everything is visible and
+	// visible_tiles is empty.
+	FogOfWar bool `protobuf:"varint,3,opt,name=fog_of_war,json=fogOfWar,proto3" json:"fog_of_war,omitempty"`
+	// Tiles currently visible to the player (fog of war only).
+	VisibleTiles  []*TileRun `protobuf:"bytes,4,rep,name=visible_tiles,json=visibleTiles,proto3" json:"visible_tiles,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *WorldSnapshot) Reset() {
 	*x = WorldSnapshot{}
-	mi := &file_rts_v1_types_proto_msgTypes[8]
+	mi := &file_rts_v1_types_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -794,7 +1004,7 @@ func (x *WorldSnapshot) String() string {
 func (*WorldSnapshot) ProtoMessage() {}
 
 func (x *WorldSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_types_proto_msgTypes[8]
+	mi := &file_rts_v1_types_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -807,7 +1017,7 @@ func (x *WorldSnapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorldSnapshot.ProtoReflect.Descriptor instead.
 func (*WorldSnapshot) Descriptor() ([]byte, []int) {
-	return file_rts_v1_types_proto_rawDescGZIP(), []int{8}
+	return file_rts_v1_types_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *WorldSnapshot) GetTick() uint64 {
@@ -824,25 +1034,47 @@ func (x *WorldSnapshot) GetEntities() []*Entity {
 	return nil
 }
 
+func (x *WorldSnapshot) GetFogOfWar() bool {
+	if x != nil {
+		return x.FogOfWar
+	}
+	return false
+}
+
+func (x *WorldSnapshot) GetVisibleTiles() []*TileRun {
+	if x != nil {
+		return x.VisibleTiles
+	}
+	return nil
+}
+
 // TickUpdate is the batched set of changes produced by one simulation tick,
 // as visible to the requester. Applying it to the snapshot of tick-1 yields
 // the snapshot of tick.
 type TickUpdate struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Tick  uint64                 `protobuf:"varint,1,opt,name=tick,proto3" json:"tick,omitempty"`
-	// Entities that were created or changed this tick (full replacement).
+	// Entities that were created, changed or became observable this tick
+	// (full replacement of what the client holds).
 	Changed []*Entity `protobuf:"bytes,2,rep,name=changed,proto3" json:"changed,omitempty"`
-	Removed []uint64  `protobuf:"varint,3,rep,packed,name=removed,proto3" json:"removed,omitempty"`
-	Events  []*Event  `protobuf:"bytes,4,rep,name=events,proto3" json:"events,omitempty"`
+	// Entities the player no longer observes. Under fog of war this does not
+	// say why: a foreign entity may have left detection or been destroyed.
+	// Clients should keep a stale "last known" copy of foreign entities.
+	Removed []uint64 `protobuf:"varint,3,rep,packed,name=removed,proto3" json:"removed,omitempty"`
+	Events  []*Event `protobuf:"bytes,4,rep,name=events,proto3" json:"events,omitempty"`
 	// Results for the requester's own commands executed this tick.
 	CommandResults []*CommandResult `protobuf:"bytes,5,rep,name=command_results,json=commandResults,proto3" json:"command_results,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Tiles that became visible / stopped being visible this tick (fog of
+	// war only), sorted by row then column.
+	TilesEntered  []*Position `protobuf:"bytes,6,rep,name=tiles_entered,json=tilesEntered,proto3" json:"tiles_entered,omitempty"`
+	TilesExited   []*Position `protobuf:"bytes,7,rep,name=tiles_exited,json=tilesExited,proto3" json:"tiles_exited,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *TickUpdate) Reset() {
 	*x = TickUpdate{}
-	mi := &file_rts_v1_types_proto_msgTypes[9]
+	mi := &file_rts_v1_types_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -854,7 +1086,7 @@ func (x *TickUpdate) String() string {
 func (*TickUpdate) ProtoMessage() {}
 
 func (x *TickUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_types_proto_msgTypes[9]
+	mi := &file_rts_v1_types_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -867,7 +1099,7 @@ func (x *TickUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TickUpdate.ProtoReflect.Descriptor instead.
 func (*TickUpdate) Descriptor() ([]byte, []int) {
-	return file_rts_v1_types_proto_rawDescGZIP(), []int{9}
+	return file_rts_v1_types_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *TickUpdate) GetTick() uint64 {
@@ -905,6 +1137,20 @@ func (x *TickUpdate) GetCommandResults() []*CommandResult {
 	return nil
 }
 
+func (x *TickUpdate) GetTilesEntered() []*Position {
+	if x != nil {
+		return x.TilesEntered
+	}
+	return nil
+}
+
+func (x *TickUpdate) GetTilesExited() []*Position {
+	if x != nil {
+		return x.TilesExited
+	}
+	return nil
+}
+
 var File_rts_v1_types_proto protoreflect.FileDescriptor
 
 const file_rts_v1_types_proto_rawDesc = "" +
@@ -912,14 +1158,19 @@ const file_rts_v1_types_proto_rawDesc = "" +
 	"\x12rts/v1/types.proto\x12\x06rts.v1\"&\n" +
 	"\bPosition\x12\f\n" +
 	"\x01x\x18\x01 \x01(\x05R\x01x\x12\f\n" +
-	"\x01y\x18\x02 \x01(\x05R\x01y\"\xaf\x01\n" +
+	"\x01y\x18\x02 \x01(\x05R\x01y\"\xe1\x01\n" +
 	"\x05Value\x12\x1d\n" +
 	"\tint_value\x18\x01 \x01(\x03H\x00R\bintValue\x12\x1f\n" +
 	"\n" +
 	"bool_value\x18\x02 \x01(\bH\x00R\tboolValue\x12#\n" +
 	"\fstring_value\x18\x03 \x01(\tH\x00R\vstringValue\x129\n" +
-	"\x0eposition_value\x18\x04 \x01(\v2\x10.rts.v1.PositionH\x00R\rpositionValueB\x06\n" +
-	"\x04kind\"\xb3\x02\n" +
+	"\x0eposition_value\x18\x04 \x01(\v2\x10.rts.v1.PositionH\x00R\rpositionValue\x120\n" +
+	"\vrange_value\x18\x05 \x01(\v2\r.rts.v1.RangeH\x00R\n" +
+	"rangeValueB\x06\n" +
+	"\x04kind\"-\n" +
+	"\x05Range\x12\x10\n" +
+	"\x03low\x18\x01 \x01(\x03R\x03low\x12\x12\n" +
+	"\x04high\x18\x02 \x01(\x03R\x04high\"\xf8\x02\n" +
 	"\x06Entity\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12&\n" +
 	"\x04kind\x18\x02 \x01(\x0e2\x12.rts.v1.EntityKindR\x04kind\x12\x19\n" +
@@ -928,10 +1179,15 @@ const file_rts_v1_types_proto_rawDesc = "" +
 	"\n" +
 	"attributes\x18\x05 \x03(\v2\x1e.rts.v1.Entity.AttributesEntryR\n" +
 	"attributes\x12\x1a\n" +
-	"\bpassable\x18\x06 \x01(\bR\bpassable\x1aL\n" +
+	"\bpassable\x18\x06 \x01(\bR\bpassable\x12C\n" +
+	"\x0eidentification\x18\a \x01(\x0e2\x1b.rts.v1.IdentificationLevelR\x0eidentification\x1aL\n" +
 	"\x0fAttributesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12#\n" +
-	"\x05value\x18\x02 \x01(\v2\r.rts.v1.ValueR\x05value:\x028\x01\"\xb5\x01\n" +
+	"\x05value\x18\x02 \x01(\v2\r.rts.v1.ValueR\x05value:\x028\x01\"=\n" +
+	"\aTileRun\x12\f\n" +
+	"\x01y\x18\x01 \x01(\x05R\x01y\x12\f\n" +
+	"\x01x\x18\x02 \x01(\x05R\x01x\x12\x16\n" +
+	"\x06length\x18\x03 \x01(\x05R\x06length\"\xb5\x01\n" +
 	"\x05Event\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x1b\n" +
 	"\tentity_id\x18\x02 \x01(\x04R\bentityId\x121\n" +
@@ -969,23 +1225,34 @@ const file_rts_v1_types_proto_rawDesc = "" +
 	"\n" +
 	"PlayerInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\"O\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\"\xa3\x01\n" +
 	"\rWorldSnapshot\x12\x12\n" +
 	"\x04tick\x18\x01 \x01(\x04R\x04tick\x12*\n" +
-	"\bentities\x18\x02 \x03(\v2\x0e.rts.v1.EntityR\bentities\"\xcb\x01\n" +
+	"\bentities\x18\x02 \x03(\v2\x0e.rts.v1.EntityR\bentities\x12\x1c\n" +
+	"\n" +
+	"fog_of_war\x18\x03 \x01(\bR\bfogOfWar\x124\n" +
+	"\rvisible_tiles\x18\x04 \x03(\v2\x0f.rts.v1.TileRunR\fvisibleTiles\"\xb7\x02\n" +
 	"\n" +
 	"TickUpdate\x12\x12\n" +
 	"\x04tick\x18\x01 \x01(\x04R\x04tick\x12(\n" +
 	"\achanged\x18\x02 \x03(\v2\x0e.rts.v1.EntityR\achanged\x12\x18\n" +
 	"\aremoved\x18\x03 \x03(\x04R\aremoved\x12%\n" +
 	"\x06events\x18\x04 \x03(\v2\r.rts.v1.EventR\x06events\x12>\n" +
-	"\x0fcommand_results\x18\x05 \x03(\v2\x15.rts.v1.CommandResultR\x0ecommandResults*r\n" +
+	"\x0fcommand_results\x18\x05 \x03(\v2\x15.rts.v1.CommandResultR\x0ecommandResults\x125\n" +
+	"\rtiles_entered\x18\x06 \x03(\v2\x10.rts.v1.PositionR\ftilesEntered\x123\n" +
+	"\ftiles_exited\x18\a \x03(\v2\x10.rts.v1.PositionR\vtilesExited*r\n" +
 	"\n" +
 	"EntityKind\x12\x1b\n" +
 	"\x17ENTITY_KIND_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10ENTITY_KIND_UNIT\x10\x01\x12\x18\n" +
 	"\x14ENTITY_KIND_RESOURCE\x10\x02\x12\x17\n" +
-	"\x13ENTITY_KIND_TERRAIN\x10\x03*\x84\x01\n" +
+	"\x13ENTITY_KIND_TERRAIN\x10\x03*\xc0\x01\n" +
+	"\x13IdentificationLevel\x12$\n" +
+	" IDENTIFICATION_LEVEL_UNSPECIFIED\x10\x00\x12\x1e\n" +
+	"\x1aIDENTIFICATION_LEVEL_BASIC\x10\x01\x12\"\n" +
+	"\x1eIDENTIFICATION_LEVEL_ESTIMATED\x10\x02\x12!\n" +
+	"\x1dIDENTIFICATION_LEVEL_DETAILED\x10\x03\x12\x1c\n" +
+	"\x18IDENTIFICATION_LEVEL_OWN\x10\x04*\x84\x01\n" +
 	"\rCommandStatus\x12\x1e\n" +
 	"\x1aCOMMAND_STATUS_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18COMMAND_STATUS_SUCCEEDED\x10\x01\x12\x19\n" +
@@ -1004,43 +1271,51 @@ func file_rts_v1_types_proto_rawDescGZIP() []byte {
 	return file_rts_v1_types_proto_rawDescData
 }
 
-var file_rts_v1_types_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_rts_v1_types_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_rts_v1_types_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_rts_v1_types_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_rts_v1_types_proto_goTypes = []any{
-	(EntityKind)(0),       // 0: rts.v1.EntityKind
-	(CommandStatus)(0),    // 1: rts.v1.CommandStatus
-	(*Position)(nil),      // 2: rts.v1.Position
-	(*Value)(nil),         // 3: rts.v1.Value
-	(*Entity)(nil),        // 4: rts.v1.Entity
-	(*Event)(nil),         // 5: rts.v1.Event
-	(*CommandResult)(nil), // 6: rts.v1.CommandResult
-	(*UnitResult)(nil),    // 7: rts.v1.UnitResult
-	(*WorldInfo)(nil),     // 8: rts.v1.WorldInfo
-	(*PlayerInfo)(nil),    // 9: rts.v1.PlayerInfo
-	(*WorldSnapshot)(nil), // 10: rts.v1.WorldSnapshot
-	(*TickUpdate)(nil),    // 11: rts.v1.TickUpdate
-	nil,                   // 12: rts.v1.Entity.AttributesEntry
-	nil,                   // 13: rts.v1.Event.FieldsEntry
+	(EntityKind)(0),          // 0: rts.v1.EntityKind
+	(IdentificationLevel)(0), // 1: rts.v1.IdentificationLevel
+	(CommandStatus)(0),       // 2: rts.v1.CommandStatus
+	(*Position)(nil),         // 3: rts.v1.Position
+	(*Value)(nil),            // 4: rts.v1.Value
+	(*Range)(nil),            // 5: rts.v1.Range
+	(*Entity)(nil),           // 6: rts.v1.Entity
+	(*TileRun)(nil),          // 7: rts.v1.TileRun
+	(*Event)(nil),            // 8: rts.v1.Event
+	(*CommandResult)(nil),    // 9: rts.v1.CommandResult
+	(*UnitResult)(nil),       // 10: rts.v1.UnitResult
+	(*WorldInfo)(nil),        // 11: rts.v1.WorldInfo
+	(*PlayerInfo)(nil),       // 12: rts.v1.PlayerInfo
+	(*WorldSnapshot)(nil),    // 13: rts.v1.WorldSnapshot
+	(*TickUpdate)(nil),       // 14: rts.v1.TickUpdate
+	nil,                      // 15: rts.v1.Entity.AttributesEntry
+	nil,                      // 16: rts.v1.Event.FieldsEntry
 }
 var file_rts_v1_types_proto_depIdxs = []int32{
-	2,  // 0: rts.v1.Value.position_value:type_name -> rts.v1.Position
-	0,  // 1: rts.v1.Entity.kind:type_name -> rts.v1.EntityKind
-	2,  // 2: rts.v1.Entity.position:type_name -> rts.v1.Position
-	12, // 3: rts.v1.Entity.attributes:type_name -> rts.v1.Entity.AttributesEntry
-	13, // 4: rts.v1.Event.fields:type_name -> rts.v1.Event.FieldsEntry
-	1,  // 5: rts.v1.CommandResult.status:type_name -> rts.v1.CommandStatus
-	7,  // 6: rts.v1.CommandResult.unit_results:type_name -> rts.v1.UnitResult
-	4,  // 7: rts.v1.WorldSnapshot.entities:type_name -> rts.v1.Entity
-	4,  // 8: rts.v1.TickUpdate.changed:type_name -> rts.v1.Entity
-	5,  // 9: rts.v1.TickUpdate.events:type_name -> rts.v1.Event
-	6,  // 10: rts.v1.TickUpdate.command_results:type_name -> rts.v1.CommandResult
-	3,  // 11: rts.v1.Entity.AttributesEntry.value:type_name -> rts.v1.Value
-	3,  // 12: rts.v1.Event.FieldsEntry.value:type_name -> rts.v1.Value
-	13, // [13:13] is the sub-list for method output_type
-	13, // [13:13] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	3,  // 0: rts.v1.Value.position_value:type_name -> rts.v1.Position
+	5,  // 1: rts.v1.Value.range_value:type_name -> rts.v1.Range
+	0,  // 2: rts.v1.Entity.kind:type_name -> rts.v1.EntityKind
+	3,  // 3: rts.v1.Entity.position:type_name -> rts.v1.Position
+	15, // 4: rts.v1.Entity.attributes:type_name -> rts.v1.Entity.AttributesEntry
+	1,  // 5: rts.v1.Entity.identification:type_name -> rts.v1.IdentificationLevel
+	16, // 6: rts.v1.Event.fields:type_name -> rts.v1.Event.FieldsEntry
+	2,  // 7: rts.v1.CommandResult.status:type_name -> rts.v1.CommandStatus
+	10, // 8: rts.v1.CommandResult.unit_results:type_name -> rts.v1.UnitResult
+	6,  // 9: rts.v1.WorldSnapshot.entities:type_name -> rts.v1.Entity
+	7,  // 10: rts.v1.WorldSnapshot.visible_tiles:type_name -> rts.v1.TileRun
+	6,  // 11: rts.v1.TickUpdate.changed:type_name -> rts.v1.Entity
+	8,  // 12: rts.v1.TickUpdate.events:type_name -> rts.v1.Event
+	9,  // 13: rts.v1.TickUpdate.command_results:type_name -> rts.v1.CommandResult
+	3,  // 14: rts.v1.TickUpdate.tiles_entered:type_name -> rts.v1.Position
+	3,  // 15: rts.v1.TickUpdate.tiles_exited:type_name -> rts.v1.Position
+	4,  // 16: rts.v1.Entity.AttributesEntry.value:type_name -> rts.v1.Value
+	4,  // 17: rts.v1.Event.FieldsEntry.value:type_name -> rts.v1.Value
+	18, // [18:18] is the sub-list for method output_type
+	18, // [18:18] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_rts_v1_types_proto_init() }
@@ -1053,14 +1328,15 @@ func file_rts_v1_types_proto_init() {
 		(*Value_BoolValue)(nil),
 		(*Value_StringValue)(nil),
 		(*Value_PositionValue)(nil),
+		(*Value_RangeValue)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rts_v1_types_proto_rawDesc), len(file_rts_v1_types_proto_rawDesc)),
-			NumEnums:      2,
-			NumMessages:   12,
+			NumEnums:      3,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

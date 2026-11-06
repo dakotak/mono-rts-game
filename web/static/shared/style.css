@@ -155,3 +155,6 @@ body.admin aside { width: 320px; }
 
 /* ---- combat ---- */
 .tools input[type=number] { width: 64px; padding: 2px 4px; }
+
+/* ---- fog ---- */
+.viewas select { margin-left: 4px; padding: 3px 4px; }

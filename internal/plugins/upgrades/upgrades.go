@@ -134,11 +134,12 @@ func (p *Plugin) validate(w *sim.World, issuer sim.Principal, m *upgradesv1.Upgr
 	e, ok := w.Entity(id)
 	st, hasAttrs := p.attrs.Get(w, id)
 	if !ok || e.Kind != sim.KindUnit || !hasAttrs {
-		return plan{}, sim.Fail(sim.CodeNotFound, "unit %d not found", id)
+		return plan{}, sim.Unavailable("unit", sim.EntityID(id))
 	}
 	pl := plan{unit: id, owner: e.Owner}
 	if !issuer.Admin && e.Owner != issuer.Player {
-		return pl, sim.Fail(sim.CodePermissionDenied, "unit %d is not yours", id)
+		// No event to the real owner: the request is not theirs.
+		return plan{}, sim.Unavailable("unit", sim.EntityID(id))
 	}
 	i, ok := p.attrs.Index(m.GetAttribute())
 	if !ok {

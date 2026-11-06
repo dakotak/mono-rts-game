@@ -89,12 +89,12 @@ func TestSetRemoveAndLimits(t *testing.T) {
 		cmd  proto.Message
 		code string
 	}{
-		{"not yours", 1, metadata.CommandSet, set("squad", "x", theirs), sim.CodePermissionDenied},
+		{"not yours", 1, metadata.CommandSet, set("squad", "x", theirs), sim.CodeNotFound},
 		{"bad key", 1, metadata.CommandSet, set("Squad!", "x", u), sim.CodeInvalidArgument},
 		{"long value", 1, metadata.CommandSet, set("k", "123456789", u), sim.CodeInvalidArgument},
 		{"non-printable", 1, metadata.CommandSet, set("k", "a\x01", u), sim.CodeInvalidArgument},
 		{"full", 1, metadata.CommandSet, set("k4", "x", u), sim.CodeFailedPrecondition}, // u has 2, +k3 below makes 3
-		{"remove not yours", 1, metadata.CommandRemove, &metadatav1.RemoveMetadataCommand{UnitIds: []uint64{uint64(theirs)}, Key: "squad"}, sim.CodePermissionDenied},
+		{"remove not yours", 1, metadata.CommandRemove, &metadatav1.RemoveMetadataCommand{UnitIds: []uint64{uint64(theirs)}, Key: "squad"}, sim.CodeNotFound},
 	}
 	ok(h.Submit(1, metadata.CommandSet, set("k3", "x", u)), h.Step())
 	for _, c := range cases {

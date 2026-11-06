@@ -52,6 +52,30 @@ service AdminService {
   // Step executes ticks while paused. It returns immediately; the ticks run
   // on the simulation loop and appear on ObserveWorld.
   rpc Step(StepRequest) returns (StepResponse);
+
+  // GetPlayerView previews exactly what one player currently observes (the
+  // same snapshot GameService would send them), plus the detection details
+  // behind it. For debugging fog of war; never available to players.
+  rpc GetPlayerView(GetPlayerViewRequest) returns (GetPlayerViewResponse);
+}
+
+message GetPlayerViewRequest {
+  uint32 player_id = 1;
+}
+
+message GetPlayerViewResponse {
+  WorldSnapshot snapshot = 1;
+  repeated Detection detections = 2;
+}
+
+// Detection explains why a player observes a foreign entity.
+message Detection {
+  uint64 entity_id = 1;
+  IdentificationLevel level = 2;
+  // The player's unit contributing the best observation.
+  uint64 observer_id = 3;
+  int64 detection_score = 4;
+  int64 identification_score = 5;
 }
 
 message SimulationStatus {

@@ -149,8 +149,57 @@ function setConn(text, cls) {
   el.className = "conn " + (cls || "");
 }
 
+// ---- visibility preview ------------------------------------------------------
+//
+// "View as" polls AdminService.GetPlayerView: the exact snapshot that player
+// would receive, plus which of their units detects each foreign entity and
+// with what scores. Players never have access to this.
+
+let viewAs = 0;
+let preview = null; // {entities: Map, visible: Set, detections: Map}
+let previewTimer = null;
+
+async function pollPreview() {
+  if (!viewAs) return;
+  try {
+    const r = await api("/api/playerview", { playerId: viewAs });
+    const ents = new Map(r.snapshot.entities.map((e) => [e.id, e]));
+    const visible = new Set();
+    for (const run of r.snapshot.visibleTiles || []) {
+      for (let i = 0; i < (run.length || 0); i++) visible.add(`${(run.x || 0) + i},${run.y || 0}`);
+    }
+    const detections = new Map((r.detections || []).map((d) => [d.entityId, d]));
+    if (preview) {
+      const added = [...detections.keys()].filter((id) => !preview.detections.has(id));
+      const lost = [...preview.detections.keys()].filter((id) => !detections.has(id));
+      if (added.length || lost.length) {
+        say(`${playerName(viewAs)} @${r.snapshot.tick}: ` + [added.length ? `+${added.map(tag).join(" ")}` : "", lost.length ? `−${lost.map(tag).join(" ")}` : ""].filter(Boolean).join("  "), "info");
+      }
+    }
+    preview = { entities: ents, visible, detections, fog: r.snapshot.fogOfWar };
+    render();
+  } catch (e) {
+    say(`Preview: ${e.message}`, "error");
+  }
+}
+
+function setViewAs(id) {
+  viewAs = Number(id) || 0;
+  preview = null;
+  clearInterval(previewTimer);
+  if (viewAs) {
+    pollPreview();
+    previewTimer = setInterval(pollPreview, 500);
+  }
+  inspected = "";
+  render();
+}
+
 function renderPlayers() {
   const legend = $("legend"), sel = $("spawn-owner");
+  const va = $("view-as");
+  while (va.options.length > 1) va.remove(1);
+  for (const p of players) va.append(new Option(p.name, p.id));
   legend.replaceChildren();
   sel.replaceChildren();
   players.forEach((p, i) => {
@@ -288,6 +337,20 @@ function renderInspector() {
     td.colSpan = 2;
     td.textContent = name;
   };
+  if (viewAs) {
+    group(`as seen by ${playerName(viewAs)}`);
+    const d = preview && preview.detections.get(e.id);
+    if (e.ownerId === viewAs) row("visibility", "own unit (full information)");
+    else if (!d) row("visibility", "not detected");
+    else {
+      row("level", (d.level || "").replace("IDENTIFICATION_LEVEL_", "").toLowerCase());
+      row("detected by", tag(d.observerId));
+      row("detection score", d.detectionScore || 0);
+      row("identification score", d.identificationScore || 0);
+      const seen = preview.entities.get(e.id);
+      if (seen) row("disclosed", Object.keys(seen.attributes || {}).sort().map((k) => `${k}=${fmtValue(seen.attributes[k])}`).join(", ") || "position/owner/kind only");
+    }
+  }
   group("entity");
   row("id", e.id);
   row("kind", e.kind.replace("ENTITY_KIND_", "").toLowerCase());
@@ -399,7 +462,21 @@ function render() {
     const d = attrPos(e, "movement.destination");
     if (d) lines.push({ from: e.position, to: d, cross: true, color: "rgba(255,255,255,0.25)" });
   }
-  board.draw({ entities, selected, lines, colorFor, mine: isUnit });
+  if (viewAs && preview) {
+    // The selected player's view: their entities and what they detect,
+    // with tiles they cannot see darkened, and detection lines.
+    const plines = [];
+    for (const id of selected) {
+      const d = preview.detections.get(id), obs = d && entities.get(d.observerId), t = entities.get(id);
+      if (obs && t) plines.push({ from: obs.position, to: t.position, color: "rgba(120,180,255,0.8)" });
+    }
+    board.draw({
+      entities: preview.entities, selected, lines: plines, colorFor, mine: (e) => isUnit(e) && e.ownerId === viewAs,
+      fog: preview.fog ? { visible: preview.visible, explored: new Set() } : null,
+    });
+  } else {
+    board.draw({ entities, selected, lines, colorFor, mine: isUnit });
+  }
   // Re-render the inspector only when the inspected data changed, so form
   // inputs being edited are not clobbered every tick.
   const key = JSON.stringify([...selected].map((id) => entities.get(id)));
@@ -424,6 +501,7 @@ $("step-btn").addEventListener("click", async () => {
 });
 $("logout-btn").addEventListener("click", () => logout(""));
 $("rules-btn").addEventListener("click", showRules);
+$("view-as").addEventListener("change", (ev) => setViewAs(ev.target.value));
 $("rules-close").addEventListener("click", () => { $("rules-panel").hidden = true; });
 
 // showRules renders every plugin's published rules: attribute definitions

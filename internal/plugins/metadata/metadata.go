@@ -183,10 +183,10 @@ func (p *Plugin) checkValue(v string) error {
 func ownedUnit(w *sim.World, issuer sim.Principal, id sim.EntityID) error {
 	e, ok := w.Entity(id)
 	if !ok || e.Kind != sim.KindUnit {
-		return sim.Fail(sim.CodeNotFound, "unit %d not found", id)
+		return sim.Unavailable("unit", sim.EntityID(id))
 	}
 	if !issuer.Admin && e.Owner != issuer.Player {
-		return sim.Fail(sim.CodePermissionDenied, "unit %d is not yours", id)
+		return sim.Unavailable("unit", sim.EntityID(id))
 	}
 	return nil
 }

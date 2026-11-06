@@ -251,7 +251,7 @@ func TestOwnershipEnforcedAtExecution(t *testing.T) {
 	}
 	e.engine.Step()
 	r := bo.next().GetCommandResults()
-	if len(r) != 1 || r[0].GetStatus() != rtsv1.CommandStatus_COMMAND_STATUS_FAILED || r[0].GetErrorCode() != sim.CodePermissionDenied {
+	if len(r) != 1 || r[0].GetStatus() != rtsv1.CommandStatus_COMMAND_STATUS_FAILED || r[0].GetErrorCode() != sim.CodeNotFound {
 		t.Fatalf("blue results = %v", r)
 	}
 	ru := ro.next()

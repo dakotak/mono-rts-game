@@ -93,6 +93,9 @@ const (
 	ValueBool
 	ValueString
 	ValuePos
+	// ValueRange is an approximate integer: the true value lies in
+	// [Int, Hi]. Used for estimates disclosed by sensors.
+	ValueRange
 )
 
 // Value is a small tagged union used for plugin-defined attributes and event
@@ -101,6 +104,7 @@ const (
 type Value struct {
 	Kind ValueKind
 	Int  int64
+	Hi   int64 // upper bound for ValueRange
 	Bool bool
 	Str  string
 	Pos  Pos
@@ -110,6 +114,9 @@ func IntValue(v int64) Value     { return Value{Kind: ValueInt, Int: v} }
 func BoolValue(v bool) Value     { return Value{Kind: ValueBool, Bool: v} }
 func StringValue(v string) Value { return Value{Kind: ValueString, Str: v} }
 func PosValue(v Pos) Value       { return Value{Kind: ValuePos, Pos: v} }
+
+// RangeValue is an estimate: the true value lies in [lo, hi].
+func RangeValue(lo, hi int64) Value { return Value{Kind: ValueRange, Int: lo, Hi: hi} }
 
 // Field is a named Value.
 type Field struct {
@@ -142,4 +149,12 @@ type Event struct {
 	Entity   EntityID
 	Audience Audience
 	Fields   []Field
+}
+
+// Unavailable is the error players get for any entity they may not act on
+// or refer to: one that does not exist, is not theirs, or is not currently
+// observable to them. Using a single code and message for all of these
+// keeps commands from becoming a way to probe for hidden entities.
+func Unavailable(what string, id EntityID) error {
+	return Fail(CodeNotFound, "%s %d is not available", what, id)
 }

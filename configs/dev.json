@@ -137,6 +137,38 @@
           "cost": "(v - 50) * (v - 50) / 50 + (v - 50)",
           "duration": "(v - 50) / 5",
           "description": "Structural integrity (max health)."
+        },
+        "vision": {
+          "default": 4,
+          "min": 1,
+          "max": 10,
+          "cost": "(v - 1) * (v - 1) * 12",
+          "duration": "(v - 1) * 6",
+          "description": "Vision range in tiles."
+        },
+        "sensor": {
+          "default": 4,
+          "min": 0,
+          "max": 16,
+          "cost": "v * v * 6",
+          "duration": "v * 3",
+          "description": "Detection strength against stealth."
+        },
+        "stealth": {
+          "default": 0,
+          "min": 0,
+          "max": 12,
+          "cost": "v * v * 10",
+          "duration": "v * 5",
+          "description": "Signature reduction: harder to detect."
+        },
+        "optics": {
+          "default": 1,
+          "min": 0,
+          "max": 8,
+          "cost": "v * v * 15",
+          "duration": "v * 5",
+          "description": "Identification strength: how much is learned about detected units."
         }
       },
       "derived": {
@@ -202,6 +234,87 @@
         "property": "mining_efficiency",
         "default": 2
       }
+    },
+    "visibility": {
+      "enabled": true,
+      "vision": {
+        "property": "vision",
+        "default": 4
+      },
+      "sensor": {
+        "property": "sensor",
+        "default": 4
+      },
+      "signature": {
+        "property": "stealth",
+        "default": 0
+      },
+      "identification": {
+        "property": "optics",
+        "default": 1
+      },
+      "resource_signature": 0,
+      "detection_formula": "observer_sensor * 2 - target_signature * 3 - distance",
+      "detection_threshold": 0,
+      "identification_formula": "observer_identification * 2 - distance",
+      "estimated_threshold": 0,
+      "detailed_threshold": 4,
+      "distance_metric": "chebyshev",
+      "occlusion": "none",
+      "disclosure": [
+        {
+          "key": "combat.health",
+          "basic": 25,
+          "estimated": 10,
+          "detailed": 1
+        },
+        {
+          "key": "combat.max_health",
+          "estimated": 10,
+          "detailed": 1
+        },
+        {
+          "key": "energy.stored",
+          "estimated": 50,
+          "detailed": 1
+        },
+        {
+          "key": "energy.capacity",
+          "detailed": 1
+        },
+        {
+          "key": "wells.energy",
+          "basic": 500,
+          "estimated": 100,
+          "detailed": 1
+        },
+        {
+          "key": "wells.capacity",
+          "estimated": 100,
+          "detailed": 1
+        },
+        {
+          "key": "wells.extraction_rate",
+          "detailed": 1
+        },
+        {
+          "key": "wells.unlimited",
+          "basic": 1
+        },
+        {
+          "key": "salvage.energy",
+          "estimated": 10,
+          "detailed": 1
+        },
+        {
+          "key": "salvage.initial",
+          "detailed": 1
+        },
+        {
+          "key": "attributes.*",
+          "detailed": 1
+        }
+      ]
     }
   }
 }

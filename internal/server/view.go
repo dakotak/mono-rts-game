@@ -1,13 +1,21 @@
 package server
 
 import (
+	"cmp"
+	"slices"
+
 	rtsv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/v1"
 	"github.com/dakotaknutson/unit-strategy-game/internal/sim"
 )
 
-// viewer is who is looking. It decides which attributes, events and command
-// results are disclosed. Milestone 1 filters by ownership only; fog of war
-// will extend this to per-entity visibility.
+// viewer is who is looking. It decides which entities, attributes, events
+// and command results are disclosed.
+//
+// Without fog of war, every entity is visible and attributes are filtered
+// by their visibility (owner / public). With fog of war, a player sees
+// their own entities in full and foreign entities only through the
+// observation authority's already-filtered views; the global entity list
+// is never consulted for foreign entities. Admins always see everything.
 type viewer struct {
 	player sim.PlayerID
 	admin  bool
@@ -23,13 +31,18 @@ func (v viewer) canSee(a sim.Attr, owner sim.PlayerID) bool {
 	return false
 }
 
-func (v viewer) entity(e sim.EntityView) *rtsv1.Entity {
+// entity converts a full view, filtering attributes by visibility. Under
+// fog it is only used for the viewer's own entities.
+func (v viewer) entity(e sim.EntityView, fog bool) *rtsv1.Entity {
 	out := &rtsv1.Entity{
 		Id:       uint64(e.ID),
 		Kind:     kindToProto(e.Kind),
 		OwnerId:  uint32(e.Owner),
 		Position: posToProto(e.Pos),
 		Passable: e.Passable,
+	}
+	if fog {
+		out.Identification = rtsv1.IdentificationLevel_IDENTIFICATION_LEVEL_OWN
 	}
 	for _, a := range e.Attrs {
 		if !v.canSee(a, e.Owner) {
@@ -43,22 +56,72 @@ func (v viewer) entity(e sim.EntityView) *rtsv1.Entity {
 	return out
 }
 
-func (v viewer) entities(es []sim.EntityView) []*rtsv1.Entity {
-	out := make([]*rtsv1.Entity, len(es))
-	for i, e := range es {
-		out[i] = v.entity(e)
+// observed converts a foreign entity as disclosed by the observation
+// authority. Its attributes are already filtered: all are sent.
+func (v viewer) observed(oe sim.ObservedEntity) *rtsv1.Entity {
+	e := oe.View
+	out := &rtsv1.Entity{
+		Id:             uint64(e.ID),
+		Kind:           kindToProto(e.Kind),
+		OwnerId:        uint32(e.Owner),
+		Position:       posToProto(e.Pos),
+		Passable:       e.Passable,
+		Identification: levelToProto(oe.Level),
+	}
+	for _, a := range e.Attrs {
+		if out.Attributes == nil {
+			out.Attributes = make(map[string]*rtsv1.Value, len(e.Attrs))
+		}
+		out.Attributes[a.Key] = valueToProto(a.Value)
 	}
 	return out
 }
 
-func (v viewer) snapshot(tick sim.Tick, es []sim.EntityView) *rtsv1.WorldSnapshot {
-	return &rtsv1.WorldSnapshot{Tick: uint64(tick), Entities: v.entities(es)}
+func observationFor(f *sim.Frame, p sim.PlayerID) sim.Observation {
+	i, ok := slices.BinarySearchFunc(f.Observations, p, func(o sim.Observation, p sim.PlayerID) int { return cmp.Compare(o.Player, p) })
+	if !ok {
+		return sim.Observation{}
+	}
+	return f.Observations[i]
 }
 
-func (v viewer) update(f *sim.Frame) *rtsv1.TickUpdate {
-	u := &rtsv1.TickUpdate{Tick: uint64(f.Tick), Changed: v.entities(f.Changed)}
-	for _, id := range f.Removed {
-		u.Removed = append(u.Removed, uint64(id))
+func (v viewer) update(pub *published) *rtsv1.TickUpdate {
+	f := pub.frame
+	u := &rtsv1.TickUpdate{Tick: uint64(f.Tick)}
+	if f.ObservationMode && !v.admin {
+		// Own entities in full; foreign entities only as observed.
+		for _, e := range f.Changed {
+			if e.Owner != 0 && e.Owner == v.player {
+				u.Changed = append(u.Changed, v.entity(e, true))
+			}
+		}
+		for _, id := range f.Removed {
+			if o := pub.removedOwner[id]; o != 0 && o == v.player {
+				u.Removed = append(u.Removed, uint64(id))
+			}
+		}
+		obs := observationFor(f, v.player)
+		for _, oe := range obs.Upserts {
+			u.Changed = append(u.Changed, v.observed(oe))
+		}
+		for _, id := range obs.Lost {
+			u.Removed = append(u.Removed, uint64(id))
+		}
+		slices.SortFunc(u.Changed, func(a, b *rtsv1.Entity) int { return cmp.Compare(a.GetId(), b.GetId()) })
+		slices.Sort(u.Removed)
+		for _, t := range obs.TilesEntered {
+			u.TilesEntered = append(u.TilesEntered, posToProto(t))
+		}
+		for _, t := range obs.TilesExited {
+			u.TilesExited = append(u.TilesExited, posToProto(t))
+		}
+	} else {
+		for _, e := range f.Changed {
+			u.Changed = append(u.Changed, v.entity(e, false))
+		}
+		for _, id := range f.Removed {
+			u.Removed = append(u.Removed, uint64(id))
+		}
 	}
 	for _, ev := range f.Events {
 		if !v.admin && !ev.Audience.All && ev.Audience.Player != v.player {
@@ -117,6 +180,20 @@ func valueToProto(v sim.Value) *rtsv1.Value {
 		return &rtsv1.Value{Kind: &rtsv1.Value_StringValue{StringValue: v.Str}}
 	case sim.ValuePos:
 		return &rtsv1.Value{Kind: &rtsv1.Value_PositionValue{PositionValue: posToProto(v.Pos)}}
+	case sim.ValueRange:
+		return &rtsv1.Value{Kind: &rtsv1.Value_RangeValue{RangeValue: &rtsv1.Range{Low: v.Int, High: v.Hi}}}
 	}
 	return &rtsv1.Value{}
+}
+
+func levelToProto(l sim.Level) rtsv1.IdentificationLevel {
+	switch l {
+	case sim.LevelBasic:
+		return rtsv1.IdentificationLevel_IDENTIFICATION_LEVEL_BASIC
+	case sim.LevelEstimated:
+		return rtsv1.IdentificationLevel_IDENTIFICATION_LEVEL_ESTIMATED
+	case sim.LevelDetailed:
+		return rtsv1.IdentificationLevel_IDENTIFICATION_LEVEL_DETAILED
+	}
+	return rtsv1.IdentificationLevel_IDENTIFICATION_LEVEL_UNSPECIFIED
 }

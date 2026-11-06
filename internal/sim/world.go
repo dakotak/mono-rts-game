@@ -267,6 +267,21 @@ func (w *World) view(id EntityID) EntityView {
 	return v
 }
 
+// View returns the full observable state of one entity.
+func (w *World) View(id EntityID) (EntityView, bool) {
+	if _, ok := w.entities[id]; !ok {
+		return EntityView{}, false
+	}
+	return w.view(id), true
+}
+
+// Changed reports whether an entity was created or modified in the
+// current tick (so far).
+func (w *World) Changed(id EntityID) bool {
+	_, ok := w.dirty[id]
+	return ok
+}
+
 // FullView returns the observable state of every entity, sorted by ID.
 func (w *World) FullView() []EntityView {
 	out := make([]EntityView, 0, len(w.ids))

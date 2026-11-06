@@ -32,7 +32,29 @@ message Value {
     bool bool_value = 2;
     string string_value = 3;
     Position position_value = 4;
+    // An estimate: the true value lies in [low, high]. Sensors disclose
+    // estimates of foreign entities at lower identification levels.
+    Range range_value = 5;
   }
+}
+
+message Range {
+  int64 low = 1;
+  int64 high = 2;
+}
+
+// How much a player knows about an entity. Own entities are OWN; foreign
+// entities carry the level their sensors achieved.
+enum IdentificationLevel {
+  IDENTIFICATION_LEVEL_UNSPECIFIED = 0;
+  // Position, owner and kind only (plus anything rules disclose at basic).
+  IDENTIFICATION_LEVEL_BASIC = 1;
+  // Approximate values for permitted attributes.
+  IDENTIFICATION_LEVEL_ESTIMATED = 2;
+  // Exact values for permitted attributes.
+  IDENTIFICATION_LEVEL_DETAILED = 3;
+  // The player's own entity: everything.
+  IDENTIFICATION_LEVEL_OWN = 4;
 }
 
 // Entity is an observation of a single entity. Which attributes are present
@@ -52,6 +74,18 @@ message Entity {
   // Passable entities (e.g. wreckage) do not block their tile; units can
   // stand on them and several may share a tile.
   bool passable = 6;
+  // Set when fog of war is on: OWN for the player's own entities, the
+  // sensor identification level for foreign ones. Under fog of war, a
+  // foreign entity's attributes are exactly what disclosure rules allow at
+  // that level; nothing else is sent.
+  IdentificationLevel identification = 7;
+}
+
+// TileRun is a horizontal run of tiles: (x .. x+length-1, y).
+message TileRun {
+  int32 y = 1;
+  int32 x = 2;
+  int32 length = 3;
 }
 
 // Event is a plugin-defined occurrence during a tick, e.g. "movement.arrived".
@@ -126,8 +160,14 @@ message PlayerInfo {
 // visible to the requester.
 message WorldSnapshot {
   uint64 tick = 1;
-  // Sorted by entity id.
+  // Sorted by entity id. Under fog of war: the player's own entities and
+  // the foreign entities they currently detect.
   repeated Entity entities = 2;
+  // Whether fog of war is on. When false, everything is visible and
+  // visible_tiles is empty.
+  bool fog_of_war = 3;
+  // Tiles currently visible to the player (fog of war only).
+  repeated TileRun visible_tiles = 4;
 }
 
 // TickUpdate is the batched set of changes produced by one simulation tick,
@@ -135,10 +175,18 @@ message WorldSnapshot {
 // the snapshot of tick.
 message TickUpdate {
   uint64 tick = 1;
-  // Entities that were created or changed this tick (full replacement).
+  // Entities that were created, changed or became observable this tick
+  // (full replacement of what the client holds).
   repeated Entity changed = 2;
+  // Entities the player no longer observes. Under fog of war this does not
+  // say why: a foreign entity may have left detection or been destroyed.
+  // Clients should keep a stale "last known" copy of foreign entities.
   repeated uint64 removed = 3;
   repeated Event events = 4;
   // Results for the requester's own commands executed this tick.
   repeated CommandResult command_results = 5;
+  // Tiles that became visible / stopped being visible this tick (fog of
+  // war only), sorted by row then column.
+  repeated Position tiles_entered = 6;
+  repeated Position tiles_exited = 7;
 }

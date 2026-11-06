@@ -168,6 +168,7 @@ function renderLegend() {
 // ---- observation --------------------------------------------------------
 
 function handleMessage(msg) {
+  if (typeof fogBefore === "function") fogBefore(msg);
   tick = applyMessage(entities, msg);
   for (const id of [...selected]) if (!entities.has(id)) selected.delete(id);
   if (msg.update) {
@@ -379,8 +380,10 @@ function render() {
   const now = performance.now();
   floaters = floaters.filter((f) => now - f.born < FLOAT_MS);
   const fl = floaters.map((f) => ({ ...f, alpha: 1 - (now - f.born) / FLOAT_MS }));
-  board.draw({ entities, selected, lines, floaters: fl, colorFor: (e) => ownerInfo(e.ownerId).color, mine: isMine });
+  const fog = typeof fogState === "function" ? fogState() : {};
+  board.draw({ entities, selected, lines, floaters: fl, colorFor: (e) => ownerInfo(e.ownerId).color, mine: isMine, ...fog });
   renderSelection();
+  if (typeof renderFogPanel === "function") renderFogPanel();
   if (typeof renderEvolution === "function") renderEvolution();
 }
 
@@ -426,7 +429,7 @@ function renderSelection() {
 function showHover(t) {
   const el = $("hover-info");
   const e = t && board.entityAt(t.x, t.y);
-  const extra = e && typeof combatHover === "function" ? combatHover(e) : null;
+  const extra = (t && typeof fogHover === "function" ? fogHover(t) : null) || (e && typeof combatHover === "function" ? combatHover(e) : null);
   if (!t) el.textContent = "–";
   else if (extra) el.textContent = extra;
   else if (!e) el.textContent = `Empty tile ${fmtPos(t)}`;

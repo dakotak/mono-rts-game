@@ -155,7 +155,7 @@ func TestCloneValidation(t *testing.T) {
 	}{
 		{"busy upgrading", 1, clone(0, mine), sim.CodeFailedPrecondition},
 		{"insufficient energy", 1, clone(0, poor), energy.CodeInsufficientEnergy},
-		{"not yours", 1, clone(0, theirs), sim.CodePermissionDenied},
+		{"not yours", 1, clone(0, theirs), sim.CodeNotFound},
 		{"no free tile", 1, clone(0, boxed), sim.CodeFailedPrecondition},
 		{"direction out of bounds", 1, clone(cloningv1.Direction_DIRECTION_NORTH, corner), sim.CodeFailedPrecondition},
 		{"invalid direction", 1, clone(cloningv1.Direction(42), corner), sim.CodeInvalidArgument},

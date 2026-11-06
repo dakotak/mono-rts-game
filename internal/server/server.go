@@ -61,7 +61,7 @@ type ackLog struct {
 // sink, so call it before the engine starts.
 func New(cfg *game.Config, g *game.Game) *Server {
 	engine := g.Engine
-	hub := NewHub(engine.NextTick()-1, engine.World().FullView())
+	hub := NewHub(engine.NextTick()-1, engine.World().FullView(), engine.Rules().HasObservationAuthority())
 	engine.SetFrameSink(hub.Publish)
 
 	info := &rtsv1.WorldInfo{
@@ -206,8 +206,7 @@ func (g *gameService) GetSnapshot(ctx context.Context, _ *rtsv1.GetSnapshotReque
 	if err != nil {
 		return nil, err
 	}
-	tick, es := g.s.hub.Snapshot()
-	return &rtsv1.GetSnapshotResponse{Snapshot: viewer{player: player}.snapshot(tick, es)}, nil
+	return &rtsv1.GetSnapshotResponse{Snapshot: g.s.hub.Snapshot(viewer{player: player})}, nil
 }
 
 func (g *gameService) Observe(_ *rtsv1.ObserveRequest, stream grpc.ServerStreamingServer[rtsv1.ObserveResponse]) error {
@@ -230,8 +229,8 @@ func (g *gameService) Observe(_ *rtsv1.ObserveRequest, stream grpc.ServerStreami
 func (s *Server) observe(ctx context.Context, v viewer,
 	sendSnapshot func(*rtsv1.WorldSnapshot) error, sendUpdate func(*rtsv1.TickUpdate) error) error {
 	for {
-		tick, es, sub := s.hub.Subscribe()
-		if err := sendSnapshot(v.snapshot(tick, es)); err != nil {
+		snap, sub := s.hub.Subscribe(v)
+		if err := sendSnapshot(snap); err != nil {
 			s.hub.Unsubscribe(sub)
 			return err
 		}

@@ -103,7 +103,7 @@ func TestAttackValidation(t *testing.T) {
 	}{
 		{"friendly target", 1, attack(friend, a), sim.CodePermissionDenied},
 		{"self", 1, attack(a, a), sim.CodePermissionDenied},
-		{"not your unit", 2, attack(friend, a), sim.CodePermissionDenied},
+		{"not your unit", 2, attack(friend, a), sim.CodeNotFound},
 		{"unknown target", 1, attack(4242, a), sim.CodeNotFound},
 		{"non-unit target", 1, attack(wellID, a), sim.CodeNotFound},
 		{"unknown attacker", 1, attack(enemy, 777), sim.CodeNotFound},

@@ -28,6 +28,7 @@ const (
 	AdminService_SubmitAdminCommand_FullMethodName = "/rts.v1.AdminService/SubmitAdminCommand"
 	AdminService_SetPaused_FullMethodName          = "/rts.v1.AdminService/SetPaused"
 	AdminService_Step_FullMethodName               = "/rts.v1.AdminService/Step"
+	AdminService_GetPlayerView_FullMethodName      = "/rts.v1.AdminService/GetPlayerView"
 )
 
 // AdminServiceClient is the client API for AdminService service.
@@ -71,6 +72,10 @@ type AdminServiceClient interface {
 	// Step executes ticks while paused. It returns immediately; the ticks run
 	// on the simulation loop and appear on ObserveWorld.
 	Step(ctx context.Context, in *StepRequest, opts ...grpc.CallOption) (*StepResponse, error)
+	// GetPlayerView previews exactly what one player currently observes (the
+	// same snapshot GameService would send them), plus the detection details
+	// behind it. For debugging fog of war; never available to players.
+	GetPlayerView(ctx context.Context, in *GetPlayerViewRequest, opts ...grpc.CallOption) (*GetPlayerViewResponse, error)
 }
 
 type adminServiceClient struct {
@@ -180,6 +185,16 @@ func (c *adminServiceClient) Step(ctx context.Context, in *StepRequest, opts ...
 	return out, nil
 }
 
+func (c *adminServiceClient) GetPlayerView(ctx context.Context, in *GetPlayerViewRequest, opts ...grpc.CallOption) (*GetPlayerViewResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetPlayerViewResponse)
+	err := c.cc.Invoke(ctx, AdminService_GetPlayerView_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AdminServiceServer is the server API for AdminService service.
 // All implementations must embed UnimplementedAdminServiceServer
 // for forward compatibility.
@@ -221,6 +236,10 @@ type AdminServiceServer interface {
 	// Step executes ticks while paused. It returns immediately; the ticks run
 	// on the simulation loop and appear on ObserveWorld.
 	Step(context.Context, *StepRequest) (*StepResponse, error)
+	// GetPlayerView previews exactly what one player currently observes (the
+	// same snapshot GameService would send them), plus the detection details
+	// behind it. For debugging fog of war; never available to players.
+	GetPlayerView(context.Context, *GetPlayerViewRequest) (*GetPlayerViewResponse, error)
 	mustEmbedUnimplementedAdminServiceServer()
 }
 
@@ -257,6 +276,9 @@ func (UnimplementedAdminServiceServer) SetPaused(context.Context, *SetPausedRequ
 }
 func (UnimplementedAdminServiceServer) Step(context.Context, *StepRequest) (*StepResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Step not implemented")
+}
+func (UnimplementedAdminServiceServer) GetPlayerView(context.Context, *GetPlayerViewRequest) (*GetPlayerViewResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetPlayerView not implemented")
 }
 func (UnimplementedAdminServiceServer) mustEmbedUnimplementedAdminServiceServer() {}
 func (UnimplementedAdminServiceServer) testEmbeddedByValue()                      {}
@@ -434,6 +456,24 @@ func _AdminService_Step_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AdminService_GetPlayerView_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPlayerViewRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).GetPlayerView(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminService_GetPlayerView_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).GetPlayerView(ctx, req.(*GetPlayerViewRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AdminService_ServiceDesc is the grpc.ServiceDesc for AdminService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -472,6 +512,10 @@ var AdminService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Step",
 			Handler:    _AdminService_Step_Handler,
+		},
+		{
+			MethodName: "GetPlayerView",
+			Handler:    _AdminService_GetPlayerView_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

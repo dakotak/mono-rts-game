@@ -244,7 +244,8 @@ func TestFiniteWellDepletes(t *testing.T) {
 		t.Fatalf("well %d, units %d+%d", h.wellEnergy(wid), h.stored(a), h.stored(b))
 	}
 	dep := events(fs, energy.EventWellDepleted)
-	if len(dep) != 1 || dep[0].Entity != wid || !dep[0].Audience.All {
+	// Only the players whose units drained it are told (one event each).
+	if len(dep) != 2 || dep[0].Entity != wid || dep[0].Audience != sim.ToPlayer(1) || dep[1].Audience != sim.ToPlayer(2) {
 		t.Fatalf("depleted events = %+v", dep)
 	}
 	stopped := events(fs, energy.EventMiningStopped)
@@ -343,7 +344,7 @@ func TestMiningCommandValidation(t *testing.T) {
 		code string
 	}{
 		{"no units", &energyv1.MineCommand{WellId: uint64(wid)}, sim.CodeInvalidArgument},
-		{"not yours", &energyv1.MineCommand{WellId: uint64(wid), UnitIds: []uint64{uint64(theirs)}}, sim.CodePermissionDenied},
+		{"not yours", &energyv1.MineCommand{WellId: uint64(wid), UnitIds: []uint64{uint64(theirs)}}, sim.CodeNotFound},
 		{"no such well", &energyv1.MineCommand{WellId: 42, UnitIds: []uint64{uint64(mine)}}, sim.CodeNotFound},
 		{"unit is not a well", &energyv1.MineCommand{WellId: uint64(theirs), UnitIds: []uint64{uint64(mine)}}, sim.CodeNotFound},
 		{"well is not a unit", &energyv1.MineCommand{WellId: uint64(wid), UnitIds: []uint64{uint64(wid)}}, sim.CodeNotFound},
@@ -461,9 +462,9 @@ func TestInvalidAndUnauthorizedTransfers(t *testing.T) {
 		{"zero amount", player(1), a, b, 0, sim.CodeInvalidArgument},
 		{"negative amount", player(1), a, b, -5, sim.CodeInvalidArgument},
 		{"to self", player(1), a, a, 5, sim.CodeInvalidArgument},
-		{"sender not yours", player(2), a, b, 5, sim.CodePermissionDenied},
-		{"to enemy", player(1), a, enemy, 5, sim.CodePermissionDenied},
-		{"from enemy to me", player(1), enemy, a, 5, sim.CodePermissionDenied},
+		{"sender not yours", player(2), a, b, 5, sim.CodeNotFound},
+		{"to enemy", player(1), a, enemy, 5, sim.CodeNotFound},
+		{"from enemy to me", player(1), enemy, a, 5, sim.CodeNotFound},
 		{"admin across owners", admin, a, enemy, 5, sim.CodePermissionDenied},
 		{"not adjacent", player(1), a, far, 5, sim.CodeFailedPrecondition},
 		{"unknown receiver", player(1), a, 77, 5, sim.CodeNotFound},

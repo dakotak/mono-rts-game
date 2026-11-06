@@ -43,8 +43,7 @@ func (a *adminService) GetWorldSnapshot(ctx context.Context, _ *rtsv1.GetWorldSn
 	if err := a.s.requireAdmin(ctx); err != nil {
 		return nil, err
 	}
-	tick, es := a.s.hub.Snapshot()
-	resp := &rtsv1.GetWorldSnapshotResponse{Snapshot: adminViewer.snapshot(tick, es), Status: a.s.status(), World: a.s.info}
+	resp := &rtsv1.GetWorldSnapshotResponse{Snapshot: a.s.hub.Snapshot(adminViewer), Status: a.s.status(), World: a.s.info}
 	for _, p := range a.s.players {
 		resp.Players = append(resp.Players, &rtsv1.PlayerInfo{Id: uint32(p.ID), Name: p.Name})
 	}
@@ -163,4 +162,20 @@ func (a *adminService) Step(ctx context.Context, req *rtsv1.StepRequest) (*rtsv1
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 	return &rtsv1.StepResponse{FirstTick: uint64(first), Count: uint32(n)}, nil
+}
+
+func (a *adminService) GetPlayerView(ctx context.Context, req *rtsv1.GetPlayerViewRequest) (*rtsv1.GetPlayerViewResponse, error) {
+	if err := a.s.requireAdmin(ctx); err != nil {
+		return nil, err
+	}
+	p := sim.PlayerID(req.GetPlayerId())
+	known := false
+	for _, pl := range a.s.players {
+		known = known || pl.ID == p
+	}
+	if !known {
+		return nil, status.Errorf(codes.InvalidArgument, "unknown player %d", p)
+	}
+	snap, dets := a.s.hub.PlayerView(p)
+	return &rtsv1.GetPlayerViewResponse{Snapshot: snap, Detections: dets}, nil
 }

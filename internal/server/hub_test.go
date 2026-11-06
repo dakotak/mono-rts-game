@@ -7,9 +7,9 @@ import (
 )
 
 func TestHubDropsLaggingSubscriber(t *testing.T) {
-	h := NewHub(0, []sim.EntityView{{ID: 1, Kind: sim.KindUnit, Owner: 1}})
-	_, snap, slow := h.Subscribe()
-	if len(snap) != 1 {
+	h := NewHub(0, []sim.EntityView{{ID: 1, Kind: sim.KindUnit, Owner: 1}}, false)
+	snap, slow := h.Subscribe(adminViewer)
+	if len(snap.GetEntities()) != 1 {
 		t.Fatalf("snapshot = %v", snap)
 	}
 	for i := range subscriberBuffer + 1 {
@@ -27,9 +27,9 @@ func TestHubDropsLaggingSubscriber(t *testing.T) {
 	}
 	h.Unsubscribe(slow) // must be safe after drop
 
-	tick, snap, fresh := h.Subscribe()
+	snap, fresh := h.Subscribe(adminViewer)
 	defer h.Unsubscribe(fresh)
-	if tick != subscriberBuffer+1 || snap[0].Pos.X != subscriberBuffer {
-		t.Fatalf("resync snapshot tick %d pos %v", tick, snap[0].Pos)
+	if snap.GetTick() != subscriberBuffer+1 || snap.GetEntities()[0].GetPosition().GetX() != subscriberBuffer {
+		t.Fatalf("resync snapshot = %v", snap)
 	}
 }

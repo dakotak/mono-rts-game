@@ -522,7 +522,7 @@ func (p *Plugin) execSet(ctx *sim.TickContext, cmd sim.Command) error {
 	}
 	id := sim.EntityID(m.GetUnitId())
 	if !units.Has(ctx.World, id) {
-		return sim.Fail(sim.CodeNotFound, "unit %d not found", m.GetUnitId())
+		return sim.Unavailable("unit", sim.EntityID(m.GetUnitId()))
 	}
 	i, ok := p.Index(m.GetAttribute())
 	if !ok {

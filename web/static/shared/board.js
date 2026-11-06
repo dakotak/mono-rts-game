@@ -35,6 +35,7 @@ window.RTS = (() => {
     if (v.boolValue !== undefined) return String(v.boolValue);
     if (v.stringValue !== undefined) return v.stringValue;
     if (v.positionValue) return fmtPos(v.positionValue);
+    if (v.rangeValue) return `≈${v.rangeValue.low || 0}–${v.rangeValue.high || 0}`;
     return JSON.stringify(v);
   }
 
@@ -221,7 +222,10 @@ window.RTS = (() => {
 
     // state: {entities: Map, selected: Set, colorFor(e), mine(e) -> bool,
     //         lines: [{from:{x,y}, to:{x,y}, color, cross}],
-    //         floaters: [{x, y, text, color, alpha}]}
+    //         floaters: [{x, y, text, color, alpha}],
+    //         fog: {visible: Set("x,y"), explored: Set("x,y")} | null,
+    //         ghosts: [{entity, seenTick}] (last-known foreign entities),
+    //         ranges: [{x, y, r, metric}] (vision overlay)}
     draw(state) {
       this.state = state;
       this.redraw();
@@ -280,6 +284,47 @@ window.RTS = (() => {
           ctx.arc(cx, cy, T * 0.36 + 3, 0, Math.PI * 2);
           ctx.stroke();
         }
+      }
+
+      // Fog of war: never explored (dark), explored but not visible (dim).
+      if (s.fog) {
+        for (let y = 0; y < this.height; y++) {
+          for (let x = 0; x < this.width; x++) {
+            const k = x + "," + y;
+            if (s.fog.visible.has(k)) continue;
+            ctx.fillStyle = s.fog.explored.has(k) ? "rgba(10,11,14,0.55)" : "rgba(5,6,8,0.92)";
+            ctx.fillRect(x * T, y * T, T, T);
+          }
+        }
+      }
+      // Last-known positions: faded dashed outlines, never mistaken for
+      // live entities.
+      for (const g of s.ghosts || []) {
+        const e = g.entity;
+        const cx = (e.position.x + 0.5) * T, cy = (e.position.y + 0.5) * T, r = T * 0.32;
+        ctx.save();
+        ctx.globalAlpha = 0.6;
+        ctx.setLineDash([2, 2]);
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = isWell(e) ? "#e8c23a" : isWreck(e) ? "#c9733a" : s.colorFor(e);
+        ctx.beginPath();
+        if (isWell(e)) { ctx.moveTo(cx, cy - r); ctx.lineTo(cx + r, cy); ctx.lineTo(cx, cy + r); ctx.lineTo(cx - r, cy); ctx.closePath(); }
+        else ctx.rect(cx - r, cy - r, 2 * r, 2 * r);
+        ctx.stroke();
+        ctx.restore();
+      }
+      // Vision coverage overlay (own units only).
+      for (const v of s.ranges || []) {
+        ctx.save();
+        ctx.strokeStyle = "rgba(120,180,255,0.35)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        const cx = (v.x + 0.5) * T, cy = (v.y + 0.5) * T, R = (v.r + 0.5) * T;
+        if (v.metric === "manhattan") { ctx.moveTo(cx, cy - R); ctx.lineTo(cx + R, cy); ctx.lineTo(cx, cy + R); ctx.lineTo(cx - R, cy); ctx.closePath(); }
+        else if (v.metric === "euclidean") ctx.arc(cx, cy, R, 0, Math.PI * 2);
+        else ctx.rect(cx - R, cy - R, 2 * R, 2 * R);
+        ctx.stroke();
+        ctx.restore();
       }
 
       // Floating labels (e.g. energy changes), drawn above units.

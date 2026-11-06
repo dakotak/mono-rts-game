@@ -139,7 +139,7 @@ func TestInvalidAndUnauthorizedUpgrades(t *testing.T) {
 		cmd  *upgradesv1.UpgradeCommand
 		code string
 	}{
-		{"not yours", target("armor", 1, theirs), sim.CodePermissionDenied},
+		{"not yours", target("armor", 1, theirs), sim.CodeNotFound},
 		{"unknown unit", target("armor", 1, 12345), sim.CodeNotFound},
 		{"unknown attribute", target("charisma", 1, mine), sim.CodeInvalidArgument},
 		{"not higher (irreversible)", target("propulsion", 1, mine), sim.CodeInvalidArgument},

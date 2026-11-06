@@ -109,6 +109,10 @@ type Plugin struct {
 	cfg    Config
 	attrs  *attributes.Plugin
 	combat *combat.Plugin
+
+	// CanSee, if set, restricts which wrecks a player may refer to in
+	// commands (fog of war). nil means every wreck.
+	CanSee func(w *sim.World, player sim.PlayerID, id sim.EntityID) bool
 }
 
 // New returns the salvage plugin. attrs may be nil (no upgrade investment
@@ -240,20 +244,25 @@ func (p *Plugin) rate(w *sim.World, id sim.EntityID) int64 {
 func ownedUnit(w *sim.World, issuer sim.Principal, id sim.EntityID) error {
 	e, ok := w.Entity(id)
 	if !ok || e.Kind != sim.KindUnit {
-		return sim.Fail(sim.CodeNotFound, "unit %d not found", id)
+		return sim.Unavailable("unit", sim.EntityID(id))
 	}
 	if _, hasStore := energy.GetStore(w, id); !hasStore {
-		return sim.Fail(sim.CodeNotFound, "unit %d has no energy store", id)
+		return sim.Unavailable("unit", id)
 	}
 	if !issuer.Admin && e.Owner != issuer.Player {
-		return sim.Fail(sim.CodePermissionDenied, "unit %d is not yours", id)
+		return sim.Unavailable("unit", sim.EntityID(id))
 	}
 	return nil
 }
 
-func checkWreck(w *sim.World, id sim.EntityID) error {
+// checkWreck validates a wreck reference. Missing and undetected wrecks
+// give players the same answer.
+func (p *Plugin) checkWreck(w *sim.World, issuer sim.Principal, id sim.EntityID) error {
 	if !wrecks.Has(w, id) {
-		return sim.Fail(sim.CodeNotFound, "wreck %d not found", id)
+		return sim.Unavailable("wreck", id)
+	}
+	if !issuer.Admin && p.CanSee != nil && !p.CanSee(w, issuer.Player, id) {
+		return sim.Unavailable("wreck", id)
 	}
 	return nil
 }
@@ -281,7 +290,7 @@ func (p *Plugin) execSalvage(ctx *sim.TickContext, cmd sim.Command) error {
 		return err
 	}
 	wreck := sim.EntityID(m.GetWreckId())
-	if err := checkWreck(ctx.World, wreck); err != nil {
+	if err := p.checkWreck(ctx.World, cmd.Issuer, wreck); err != nil {
 		return err
 	}
 	for _, id := range m.GetUnitIds() {
@@ -304,7 +313,7 @@ func (p *Plugin) applySalvage(ctx *sim.TickContext, cmd sim.Command, unit sim.En
 		return sim.Fail(sim.CodeInvalidArgument, "payload is %T, want SalvageCommand", cmd.Payload)
 	}
 	wreck := sim.EntityID(m.GetWreckId())
-	if err := checkWreck(ctx.World, wreck); err != nil {
+	if err := p.checkWreck(ctx.World, cmd.Issuer, wreck); err != nil {
 		return err
 	}
 	if err := ownedUnit(ctx.World, cmd.Issuer, unit); err != nil {

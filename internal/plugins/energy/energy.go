@@ -180,6 +180,22 @@ func GetStore(w *sim.World, id sim.EntityID) (Store, bool) { return stores.Get(w
 type Plugin struct {
 	cfg   Config
 	attrs *attributes.Plugin
+
+	// CanSee, if set, restricts which wells a player may refer to in
+	// commands (fog of war). nil means every well.
+	CanSee func(w *sim.World, player sim.PlayerID, id sim.EntityID) bool
+}
+
+// checkWell validates a well reference. Missing and undetected wells give
+// players the same answer.
+func (p *Plugin) checkWell(w *sim.World, issuer sim.Principal, well sim.EntityID) error {
+	if _, ok := wells.Get(w, well); !ok {
+		return sim.Unavailable("well", well)
+	}
+	if !issuer.Admin && p.CanSee != nil && !p.CanSee(w, issuer.Player, well) {
+		return sim.Unavailable("well", well)
+	}
+	return nil
 }
 
 // New returns the energy plugin without attribute bindings.
@@ -326,10 +342,10 @@ func (p *Plugin) Register(r *sim.Registrar) error {
 func ownedUnit(w *sim.World, issuer sim.Principal, id uint64) (sim.Entity, error) {
 	e, ok := w.Entity(sim.EntityID(id))
 	if !ok || e.Kind != sim.KindUnit || !stores.Has(w, e.ID) {
-		return e, sim.Fail(sim.CodeNotFound, "unit %d not found", id)
+		return e, sim.Unavailable("unit", sim.EntityID(id))
 	}
 	if !issuer.Admin && e.Owner != issuer.Player {
-		return e, sim.Fail(sim.CodePermissionDenied, "unit %d is not yours", id)
+		return e, sim.Unavailable("unit", sim.EntityID(id))
 	}
 	return e, nil
 }
@@ -361,8 +377,8 @@ func (p *Plugin) execMine(ctx *sim.TickContext, cmd sim.Command) error {
 		return err
 	}
 	well := sim.EntityID(m.GetWellId())
-	if _, ok := wells.Get(w, well); !ok {
-		return sim.Fail(sim.CodeNotFound, "well %d not found", m.GetWellId())
+	if err := p.checkWell(w, cmd.Issuer, well); err != nil {
+		return err
 	}
 	if err := ctx.Charge(cmd.Issuer, len(m.GetUnitIds())); err != nil {
 		return err
@@ -384,8 +400,8 @@ func (p *Plugin) applyMine(ctx *sim.TickContext, cmd sim.Command, unit sim.Entit
 		return err
 	}
 	well := sim.EntityID(m.GetWellId())
-	if _, ok := wells.Get(ctx.World, well); !ok {
-		return sim.Fail(sim.CodeNotFound, "well %d not found", m.GetWellId())
+	if err := p.checkWell(ctx.World, cmd.Issuer, well); err != nil {
+		return err
 	}
 	if err := ctx.Charge(cmd.Issuer, 1); err != nil {
 		return err
@@ -446,11 +462,15 @@ func (p *Plugin) execTransfer(ctx *sim.TickContext, cmd sim.Command) error {
 	}
 	to, ok := w.Entity(sim.EntityID(m.GetToUnitId()))
 	if !ok || to.Kind != sim.KindUnit || !stores.Has(w, to.ID) {
-		return sim.Fail(sim.CodeNotFound, "unit %d not found", m.GetToUnitId())
+		return sim.Unavailable("unit", sim.EntityID(m.GetToUnitId()))
 	}
 	// Friendly means same owner; an admin may only move energy between
 	// units of one owner as well.
 	if to.Owner != from.Owner {
+		if !cmd.Issuer.Admin {
+			// Same answer as for a missing unit: no probing of enemies.
+			return sim.Unavailable("unit", to.ID)
+		}
 		return sim.Fail(sim.CodePermissionDenied, "unit %d is not friendly", m.GetToUnitId())
 	}
 	if !adjacent(from.Pos, to.Pos) {
@@ -471,7 +491,7 @@ func (p *Plugin) execSetEnergy(ctx *sim.TickContext, cmd sim.Command) error {
 	id := sim.EntityID(m.GetUnitId())
 	s, ok := stores.Get(ctx.World, id)
 	if !ok {
-		return sim.Fail(sim.CodeNotFound, "unit %d not found", m.GetUnitId())
+		return sim.Unavailable("unit", sim.EntityID(m.GetUnitId()))
 	}
 	if m.Capacity != nil {
 		s.Capacity = m.GetCapacity()
@@ -537,6 +557,7 @@ func (p *Plugin) mine(ctx *sim.TickContext) {
 		cs := claims[wid]
 		grants := fairshare.Split(cs, avail)
 		var total int64
+		var miners []sim.PlayerID
 		for i, c := range cs {
 			g := grants[i]
 			if g == 0 {
@@ -548,6 +569,9 @@ func (p *Plugin) mine(ctx *sim.TickContext) {
 			stores.Set(w, unit, s)
 			total += g
 			e, _ := w.Entity(unit)
+			if !slices.Contains(miners, e.Owner) {
+				miners = append(miners, e.Owner)
+			}
 			ctx.Emit(sim.Event{Type: EventMined, Entity: unit, Audience: sim.ToPlayer(e.Owner), Fields: []sim.Field{
 				{Key: "amount", Value: sim.IntValue(g)},
 				{Key: "well", Value: idString(wid)},
@@ -559,7 +583,12 @@ func (p *Plugin) mine(ctx *sim.TickContext) {
 		wv.Energy -= total
 		wells.Set(w, wid, wv)
 		if wv.Energy == 0 {
-			ctx.Emit(sim.Event{Type: EventWellDepleted, Entity: wid, Audience: sim.ToAll()})
+			// Only players whose units just drained it learn of it; everyone
+			// else sees the well change only if they observe it.
+			slices.Sort(miners)
+			for _, o := range miners {
+				ctx.Emit(sim.Event{Type: EventWellDepleted, Entity: wid, Audience: sim.ToPlayer(o)})
+			}
 			for _, id := range mining.Entities(w) {
 				if o, _ := mining.Get(w, id); o.Well == wid {
 					p.stopMining(ctx, id, wid, "well_depleted")

@@ -450,20 +450,22 @@ func Distance(a, b sim.Pos) int64 {
 func (p *Plugin) checkAttack(w *sim.World, issuer sim.Principal, unit, target sim.EntityID) (sim.Entity, error) {
 	a, ok := w.Entity(unit)
 	if !ok || a.Kind != sim.KindUnit || !healths.Has(w, unit) {
-		return a, sim.Fail(sim.CodeNotFound, "unit %d not found", unit)
+		return a, sim.Unavailable("unit", sim.EntityID(unit))
 	}
 	if !issuer.Admin && a.Owner != issuer.Player {
-		return a, sim.Fail(sim.CodePermissionDenied, "unit %d is not yours", unit)
+		return a, sim.Unavailable("unit", sim.EntityID(unit))
 	}
+	// Missing, non-unit and undetected targets get one identical answer so
+	// attack commands cannot be used to probe for hidden units.
 	t, ok := w.Entity(target)
 	if !ok || t.Kind != sim.KindUnit || !healths.Has(w, target) {
-		return a, sim.Fail(sim.CodeNotFound, "target %d is not a unit", target)
+		return a, sim.Unavailable("target", target)
 	}
 	if t.Owner == a.Owner {
 		return a, sim.Fail(sim.CodePermissionDenied, "target %d is friendly", target)
 	}
 	if p.CanTarget != nil && !p.CanTarget(w, a.Owner, target) {
-		return a, sim.Fail(sim.CodeNotFound, "target %d is not visible", target)
+		return a, sim.Unavailable("target", target)
 	}
 	if p.stat(w, unit, p.cfg.Attack, 0) <= 0 {
 		return a, sim.Fail(sim.CodeFailedPrecondition, "unit %d cannot attack (attack strength 0)", unit)
@@ -527,10 +529,10 @@ func (p *Plugin) applyAttack(ctx *sim.TickContext, cmd sim.Command, unit sim.Ent
 func ownedUnit(w *sim.World, issuer sim.Principal, id sim.EntityID) error {
 	e, ok := w.Entity(id)
 	if !ok || e.Kind != sim.KindUnit {
-		return sim.Fail(sim.CodeNotFound, "unit %d not found", id)
+		return sim.Unavailable("unit", sim.EntityID(id))
 	}
 	if !issuer.Admin && e.Owner != issuer.Player {
-		return sim.Fail(sim.CodePermissionDenied, "unit %d is not yours", id)
+		return sim.Unavailable("unit", sim.EntityID(id))
 	}
 	return nil
 }
@@ -576,7 +578,7 @@ func (p *Plugin) execSetHealth(ctx *sim.TickContext, cmd sim.Command) error {
 	id := sim.EntityID(m.GetUnitId())
 	h, ok := healths.Get(ctx.World, id)
 	if !ok {
-		return sim.Fail(sim.CodeNotFound, "unit %d not found", m.GetUnitId())
+		return sim.Unavailable("unit", sim.EntityID(m.GetUnitId()))
 	}
 	h.HP = max(0, min(m.GetHealth(), h.Max))
 	healths.Set(ctx.World, id, h)
@@ -615,6 +617,14 @@ func (p *Plugin) resolve(ctx *sim.TickContext) {
 	for _, id := range orders.Entities(w) {
 		o, _ := orders.Get(w, id)
 		a, _ := w.Entity(id)
+		// Under fog of war an attacker's owner must still detect the target
+		// (as of the end of the last tick). A target that slipped out of
+		// detection and one that was destroyed unseen end the order the
+		// same way, so neither reveals anything.
+		if p.CanTarget != nil && !p.CanTarget(w, a.Owner, o.Target) {
+			p.endOrder(ctx, id, o, "target_unavailable")
+			continue
+		}
 		t, ok := w.Entity(o.Target)
 		switch {
 		case !ok || t.Kind != sim.KindUnit || !healths.Has(w, o.Target):

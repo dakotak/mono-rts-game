@@ -162,7 +162,7 @@ func TestInvalidCommands(t *testing.T) {
 	}{
 		{"empty", movement.CommandMove, &movementv1.MoveCommand{}, sim.CodeInvalidArgument},
 		{"unknown unit", movement.CommandMove, mv(999, 1, 1), sim.CodeNotFound},
-		{"not owner", movement.CommandMove, mv(uint64(theirs), 1, 1), sim.CodePermissionDenied},
+		{"not owner", movement.CommandMove, mv(uint64(theirs), 1, 1), sim.CodeNotFound},
 		{"out of bounds x", movement.CommandMove, mv(uint64(mine), 10, 0), sim.CodeInvalidArgument},
 		{"out of bounds y", movement.CommandMove, mv(uint64(mine), 0, -1), sim.CodeInvalidArgument},
 		{"missing destination", movement.CommandMove, &movementv1.MoveCommand{Orders: []*movementv1.UnitDestination{{UnitId: uint64(mine)}}}, sim.CodeInvalidArgument},
@@ -171,7 +171,7 @@ func TestInvalidCommands(t *testing.T) {
 			{UnitId: uint64(mine), Destination: &rtsv1.Position{X: 2}},
 		}}, sim.CodeInvalidArgument},
 		{"wrong payload type", movement.CommandMove, &movementv1.StopCommand{}, sim.CodeInvalidArgument},
-		{"stop not owner", movement.CommandStop, &movementv1.StopCommand{UnitIds: []uint64{uint64(theirs)}}, sim.CodePermissionDenied},
+		{"stop not owner", movement.CommandStop, &movementv1.StopCommand{UnitIds: []uint64{uint64(theirs)}}, sim.CodeNotFound},
 		{"stop empty", movement.CommandStop, &movementv1.StopCommand{}, sim.CodeInvalidArgument},
 	}
 	for _, c := range cases {

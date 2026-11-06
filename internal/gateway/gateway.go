@@ -28,6 +28,7 @@
 //	POST /api/command   SubmitAdminCommandRequest -> SubmitAdminCommandResponse
 //	POST /api/pause     SetPausedRequest          -> SetPausedResponse
 //	POST /api/step      StepRequest               -> StepResponse
+//	POST /api/playerview GetPlayerViewRequest     -> GetPlayerViewResponse
 //
 // Static files: the player handler serves web/static/player at "/", the
 // admin handler serves web/static/admin at "/"; both serve
@@ -87,6 +88,7 @@ func NewAdmin(conn grpc.ClientConnInterface, static fs.FS) http.Handler {
 	mux.HandleFunc("POST /api/command", unary(c.SubmitAdminCommand))
 	mux.HandleFunc("POST /api/pause", unary(c.SetPaused))
 	mux.HandleFunc("POST /api/step", unary(c.Step))
+	mux.HandleFunc("POST /api/playerview", unary(c.GetPlayerView))
 	serveStatic(mux, static, "admin")
 	return mux
 }
