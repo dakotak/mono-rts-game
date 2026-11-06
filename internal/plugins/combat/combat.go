@@ -776,3 +776,29 @@ func satAdd(a, b int64) int64 {
 	}
 	return 1<<63 - 1
 }
+
+// ---- API for other plugins (automation) -----------------------------------
+// These bypass command validation; callers enforce ownership and
+// detection.
+
+// SetTarget gives a unit an attack order (keeping it if unchanged).
+func SetTarget(w *sim.World, id, target sim.EntityID) {
+	if o, ok := orders.Get(w, id); ok && o.Target == target {
+		return
+	}
+	orders.Set(w, id, order{Target: target})
+}
+
+// ClearTarget cancels a unit's attack order.
+func ClearTarget(w *sim.World, id sim.EntityID) { orders.Remove(w, id) }
+
+// Target returns a unit's attack target.
+func Target(w *sim.World, id sim.EntityID) (sim.EntityID, bool) {
+	o, ok := orders.Get(w, id)
+	return o.Target, ok
+}
+
+// Capability returns a unit's attack strength and range.
+func (p *Plugin) Capability(w *sim.World, id sim.EntityID) (attack, rng int64) {
+	return p.stat(w, id, p.cfg.Attack, 0), p.stat(w, id, p.cfg.Range, 0)
+}

@@ -31,7 +31,23 @@ func (c Component[T]) ID() string { return c.id }
 func (c Component[T]) Def(vis Visibility, attributes func(T) []Field) ComponentDef {
 	def := ComponentDef{ID: c.id, Visibility: vis}
 	if attributes != nil {
-		def.attributes = func(v any) []Field { return attributes(v.(T)) }
+		// Attribute functions are pure functions of a comparable value, so
+		// their output can be memoized by value. Many entities share values
+		// (e.g. default attributes), which saves most view-building work.
+		// The memo is bounded; results never depend on it.
+		memo := map[T][]Field{}
+		def.attributes = func(v any) []Field {
+			t := v.(T)
+			if f, ok := memo[t]; ok {
+				return f
+			}
+			f := attributes(t)
+			if len(memo) >= memoLimit {
+				clear(memo)
+			}
+			memo[t] = f
+			return f
+		}
 	}
 	return def
 }
@@ -42,6 +58,13 @@ func (c Component[T]) store(w *World) map[EntityID]any {
 		panic(fmt.Sprintf("sim: component %q is not registered", c.id))
 	}
 	return s
+}
+
+// Registered reports whether the component exists in this world's ruleset
+// (for optional cross-plugin lookups).
+func (c Component[T]) Registered(w *World) bool {
+	_, ok := w.components[c.id]
+	return ok
 }
 
 // Get returns the component value for an entity.
@@ -66,8 +89,12 @@ func (c Component[T]) Set(w *World, id EntityID, v T) {
 	if _, ok := w.entities[id]; !ok {
 		panic(fmt.Sprintf("sim: set component %q on missing entity %d", c.id, id))
 	}
-	if old, ok := s[id]; ok && old.(T) == v {
+	old, had := s[id]
+	if had && old.(T) == v {
 		return
+	}
+	if !had {
+		w.keys[c.id] = nil
 	}
 	s[id] = v
 	w.dirty[id] = struct{}{}
@@ -78,20 +105,31 @@ func (c Component[T]) Remove(w *World, id EntityID) {
 	s := c.store(w)
 	if _, ok := s[id]; ok {
 		delete(s, id)
+		w.keys[c.id] = nil
 		w.dirty[id] = struct{}{}
 	}
 }
 
 // Entities returns the IDs of all entities with this component, ascending.
+// The result is cached until the set of entities changes; it must not be
+// modified, and remains valid (unchanged) even if the component is later
+// added to or removed from entities.
 func (c Component[T]) Entities(w *World) []EntityID {
+	if k := w.keys[c.id]; k != nil {
+		return k
+	}
 	s := c.store(w)
 	keys := make([]EntityID, 0, len(s))
 	for id := range s {
 		keys = append(keys, id)
 	}
 	slices.Sort(keys)
+	w.keys[c.id] = keys
 	return keys
 }
+
+// memoLimit bounds each component's attribute memo.
+const memoLimit = 4096
 
 // ComponentDef registers a component. Build it with Component.Def.
 type ComponentDef struct {

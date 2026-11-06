@@ -48,8 +48,11 @@ type World struct {
 	rules         *Ruleset
 
 	entities map[EntityID]Entity
-	ids      []EntityID // sorted ascending
-	occupied map[Pos]EntityID
+	ids      []EntityID            // sorted ascending
+	occupied []EntityID            // dense grid y*width+x; 0 = free (0 is never an ID)
+	passable map[Pos][]EntityID    // passable entities per tile, sorted
+	anyPass  []bool                // per tile: passable[p] is non-empty (fast negative lookups)
+	keys     map[string][]EntityID // cached sorted keys per component store (nil = stale)
 
 	// components[componentID][entity] = value
 	components map[string]map[EntityID]any
@@ -57,6 +60,7 @@ type World struct {
 	// Change tracking for the current tick.
 	dirty   map[EntityID]struct{}
 	removed []EntityID
+	viewBuf []Attr // scratch for building views
 }
 
 func newWorld(width, height int32, seed uint64, idKey []byte, rules *Ruleset) *World {
@@ -67,7 +71,10 @@ func newWorld(width, height int32, seed uint64, idKey []byte, rules *Ruleset) *W
 		rng:        NewRand(seed),
 		rules:      rules,
 		entities:   make(map[EntityID]Entity),
-		occupied:   make(map[Pos]EntityID),
+		occupied:   make([]EntityID, int(width)*int(height)),
+		passable:   make(map[Pos][]EntityID),
+		anyPass:    make([]bool, int(width)*int(height)),
+		keys:       make(map[string][]EntityID),
 		components: make(map[string]map[EntityID]any),
 		dirty:      make(map[EntityID]struct{}),
 	}
@@ -104,8 +111,11 @@ func (w *World) Entity(id EntityID) (Entity, bool) {
 // EntityAt returns the blocking entity occupying p, if any. Passable
 // entities are never returned.
 func (w *World) EntityAt(p Pos) (EntityID, bool) {
-	id, ok := w.occupied[p]
-	return id, ok
+	if !w.InBounds(p) {
+		return 0, false
+	}
+	id := w.occupied[w.cell(p)]
+	return id, id != 0
 }
 
 // EntityCount returns the number of live entities.
@@ -130,15 +140,17 @@ func (w *World) create(kind Kind, owner PlayerID, pos Pos, passable bool) (Entit
 	if !w.InBounds(pos) {
 		return 0, fmt.Errorf("create %v at %v: %w", kind, pos, ErrOutOfBounds)
 	}
-	if _, taken := w.occupied[pos]; taken && !passable {
+	if w.occupied[w.cell(pos)] != 0 && !passable {
 		return 0, fmt.Errorf("create %v at %v: %w", kind, pos, ErrOccupied)
 	}
 	id := w.newEntityID()
 	w.entities[id] = Entity{ID: id, Kind: kind, Owner: owner, Pos: pos, Passable: passable}
 	i, _ := slices.BinarySearch(w.ids, id)
 	w.ids = slices.Insert(w.ids, i, id)
-	if !passable {
-		w.occupied[pos] = id
+	if passable {
+		w.addPassable(pos, id)
+	} else {
+		w.occupied[w.cell(pos)] = id
 	}
 	w.dirty[id] = struct{}{}
 	for _, hook := range w.rules.onCreate {
@@ -167,14 +179,19 @@ func (w *World) RemoveEntity(id EntityID) error {
 		return fmt.Errorf("remove %d: %w", id, ErrNoSuchEntity)
 	}
 	delete(w.entities, id)
-	if !e.Passable {
-		delete(w.occupied, e.Pos)
+	if e.Passable {
+		w.removePassable(e.Pos, id)
+	} else {
+		w.occupied[w.cell(e.Pos)] = 0
 	}
 	if i, found := slices.BinarySearch(w.ids, id); found {
 		w.ids = slices.Delete(w.ids, i, i+1)
 	}
 	for _, cid := range w.rules.componentOrder {
-		delete(w.components[cid], id)
+		if _, had := w.components[cid][id]; had {
+			delete(w.components[cid], id)
+			w.keys[cid] = nil
+		}
 	}
 	delete(w.dirty, id)
 	w.removed = append(w.removed, id)
@@ -215,23 +232,27 @@ func (w *World) MoveEntities(moves []Move) error {
 		if w.entities[m.ID].Passable {
 			continue
 		}
-		if occ, ok := w.occupied[m.To]; ok {
+		if occ := w.occupied[w.cell(m.To)]; occ != 0 {
 			if _, leaving := moving[occ]; !leaving {
 				return fmt.Errorf("move %d to %v: %w by %d", m.ID, m.To, ErrOccupied, occ)
 			}
 		}
 	}
 	for _, m := range moves {
-		if e := w.entities[m.ID]; !e.Passable {
-			delete(w.occupied, e.Pos)
+		if e := w.entities[m.ID]; e.Passable {
+			w.removePassable(e.Pos, m.ID)
+		} else {
+			w.occupied[w.cell(e.Pos)] = 0
 		}
 	}
 	for _, m := range moves {
 		e := w.entities[m.ID]
 		e.Pos = m.To
 		w.entities[m.ID] = e
-		if !e.Passable {
-			w.occupied[m.To] = m.ID
+		if e.Passable {
+			w.addPassable(m.To, m.ID)
+		} else {
+			w.occupied[w.cell(m.To)] = m.ID
 		}
 		w.dirty[m.ID] = struct{}{}
 	}
@@ -249,8 +270,16 @@ func (w *World) Derived(name string, id EntityID) (int64, bool) {
 
 // view builds the observable representation of an entity.
 func (w *World) view(id EntityID) EntityView {
+	v := w.scratchView(id)
+	v.Attrs = slices.Clone(v.Attrs) // exact size: views are retained
+	return v
+}
+
+// scratchView builds a view whose Attrs alias a buffer reused by the next
+// call.
+func (w *World) scratchView(id EntityID) EntityView {
 	e := w.entities[id]
-	v := EntityView{ID: e.ID, Kind: e.Kind, Owner: e.Owner, Pos: e.Pos, Passable: e.Passable}
+	v := EntityView{ID: e.ID, Kind: e.Kind, Owner: e.Owner, Pos: e.Pos, Passable: e.Passable, Attrs: w.viewBuf[:0]}
 	for _, cid := range w.rules.componentOrder {
 		def := w.rules.components[cid]
 		if def.attributes == nil {
@@ -264,7 +293,43 @@ func (w *World) view(id EntityID) EntityView {
 			v.Attrs = append(v.Attrs, Attr{Key: f.Key, Value: f.Value, Visibility: def.Visibility})
 		}
 	}
+	w.viewBuf = v.Attrs[:0]
 	return v
+}
+
+func (w *World) cell(p Pos) int { return int(p.Y)*int(w.width) + int(p.X) }
+
+// PassableAt returns the passable entities on a tile, ascending. The slice
+// must not be modified.
+func (w *World) PassableAt(p Pos) []EntityID {
+	if !w.InBounds(p) || !w.anyPass[w.cell(p)] {
+		return nil
+	}
+	return w.passable[p]
+}
+
+func (w *World) addPassable(p Pos, id EntityID) {
+	l := w.passable[p]
+	i, _ := slices.BinarySearch(l, id)
+	w.passable[p] = slices.Insert(l, i, id)
+	if w.InBounds(p) {
+		w.anyPass[w.cell(p)] = true
+	}
+}
+
+func (w *World) removePassable(p Pos, id EntityID) {
+	l := w.passable[p]
+	if i, ok := slices.BinarySearch(l, id); ok {
+		l = slices.Delete(slices.Clone(l), i, i+1)
+	}
+	if len(l) == 0 {
+		delete(w.passable, p)
+		if w.InBounds(p) {
+			w.anyPass[w.cell(p)] = false
+		}
+	} else {
+		w.passable[p] = l
+	}
 }
 
 // View returns the full observable state of one entity.
@@ -273,6 +338,16 @@ func (w *World) View(id EntityID) (EntityView, bool) {
 		return EntityView{}, false
 	}
 	return w.view(id), true
+}
+
+// ScratchView is View without the copy: the returned Attrs slice is only
+// valid until the next ScratchView call and must not be retained or
+// modified. For callers that filter a view into their own copy.
+func (w *World) ScratchView(id EntityID) (EntityView, bool) {
+	if _, ok := w.entities[id]; !ok {
+		return EntityView{}, false
+	}
+	return w.scratchView(id), true
 }
 
 // Changed reports whether an entity was created or modified in the

@@ -222,8 +222,8 @@ compositions without attributes.
 
 Each tick, in phase `movement`, every unit with an order that is off
 cooldown proposes **one step**: one tile toward its destination on each
-axis (8-directional, no pathfinding). All proposals are then resolved
-together:
+axis toward the next waypoint of its route (8-directional; see
+*Pathfinding* below). All proposals are then resolved together:
 
 | Situation | Outcome |
 |---|---|
@@ -246,6 +246,101 @@ tiles. Validation is atomic: an unknown unit, someone else's unit, an
 out-of-bounds or missing destination, or a duplicate unit fails the whole
 command with a coded error. A destination attribute is exposed to the owner
 only.
+
+### Pathfinding and group movement (Milestone 6)
+
+Terrain (`internal/plugins/terrain`) places static features from config:
+impassable types are blocking entities; passable types multiply the
+per-step cooldown by their `cost` (1..20). Units are never permanent
+obstacles for planning.
+
+Route choice is hybrid (`pathfinding: "auto"`, the default): while the
+straight greedy step is enterable and the unit has not been blocked, it
+steps greedily exactly as in Milestone 1. Otherwise it plans an A* route
+(`internal/plugins/movement/path.go`) with octile costs × terrain cost, no
+corner cutting, and a fixed neighbour order (N, NE, E, SE, S, SW, W, NW).
+Ties on equal f are broken by h, then by squared Euclidean distance to the
+goal, then by tile index — so equal-cost routes always resolve the same way.
+`"always"` plans every route.
+
+Bounded work: at most `max_path_nodes` expansions per plan and
+`plans_per_tick` plans per tick (units over the limit keep waiting and plan
+on a later tick; the iteration start rotates by tick so no unit starves).
+A route stores at most 32 waypoints in the order (comparable, hashed,
+replayed) and is replanned only when exhausted or after
+`replan_after_blocked` consecutive blocked steps; that replan treats units
+within 3 tiles as obstacles, which routes around congestion. If the
+destination cannot be reached, the plan walks to the explored tile closest
+to it; if no step at all is possible the order is cancelled with reason
+`unreachable`. Conflict resolution (all-fail contention, chains, cycles)
+is unchanged.
+
+`GroupMoveCommand` assigns a group distinct reachable tiles around one
+destination: slots are found breadth-first from the target over enterable
+tiles (fixed neighbour order; tiles held by units outside the group are
+skipped; at most 64 tiles visited per unit), and units, sorted by distance
+to the destination then ID, take slots in that order — the closest unit
+gets the target tile. Each unit is charged
+against the budget individually and gets a per-unit result: the command
+partially succeeds when some units get no slot or the budget runs out.
+
+## Automation (Milestone 6)
+
+`internal/plugins/automation`: four typed behaviors (mine-and-deliver,
+auto-salvage, guard, follow), each a small state machine stored as a
+comparable component (hashed and replayed like any state). The phase runs
+first in the tick, so decisions use end-of-previous-tick state — the same
+state the owner observed. A unit is evaluated when
+`(id + tick) % eval_interval == 0` (immediately after assignment), at most
+`max_evaluations_per_tick` units per tick; the rest are deferred to their
+next slot, and admins get an `automation.work` event with the counts.
+
+Behaviors never issue commands. They set the same orders players can give
+(destination, mining, transfer, attack target, salvage target) through
+exported setters, and the normal mechanics execute them — so automation
+cannot do anything a player could not, cannot recurse, and its cost per
+evaluation is bounded (guard scans at most (2·16+1)² tiles; salvage scans
+the wreck index).
+
+Information: wells, wrecks and enemies must be currently detected by the
+owner (visibility plugin); receivers and leaders must be the owner's units.
+Command-time validation returns the same not-found error for hidden and
+non-existent targets. Blocked (temporary, e.g. `receiver_full`,
+`no_wreckage`) and failed (permanent, the behavior is removed:
+`well_unavailable`, `receiver_unavailable`, `well_depleted`,
+`leader_unavailable`) are reported to the owner as events and as the
+`automation.status`/`automation.reason` attributes.
+
+Manual orders on an automated unit are overwritten at its next
+evaluation; cancel automation to take manual control.
+
+## Logistics (Milestone 6)
+
+`internal/plugins/logistics`: persistent supply links between a player's
+own units (`SupplyCommand`: reserve, fill_to, resume_below; up to 4
+receivers per supplier). Range is a stat (`range.property` may bind it to
+an upgradable attribute, up to 16); rate is `energy.transfer_rate`.
+Links that would form a cycle are rejected at command time, so supply
+networks are DAGs and relay chains (well → miners → depot → relay → front)
+are explicit.
+
+Allocation per tick (phase `logistics`, after `energy`), all from the
+phase-start snapshot and applied at once:
+
+1. A link wants `fill − receiver energy` when in range and not resting.
+   It rests once the receiver reaches `fill_to` and resumes only below
+   `resume_below` (hysteresis: no top-up oscillation).
+2. A supplier offers `min(rate, energy − reserve)`, split max-min fairly
+   over its links (ties by receiver ID).
+3. A receiver accepts at most its free capacity, split max-min fairly over
+   incoming grants (ties by supplier ID).
+4. Grants are applied as per-unit deltas.
+
+Because a supplier sends at most `energy − reserve` and a receiver accepts
+at most `capacity − energy` (both at phase start), no store goes negative
+or over capacity, the global sum is unchanged, and energy advances at
+most one link per tick (no teleporting along a chain). Out-of-range links
+wait (`out_of_range`); a lost receiver ends the link (`logistics.ended`).
 
 ## Wells and energy plugins (rules)
 
@@ -725,7 +820,15 @@ Authentication uses `authorization: Bearer <session>` metadata.
 **Extensibility without core changes:**
 
 - Commands are `google.protobuf.Any`, owned and versioned by their plugin
-  (`rts.movement.v1.MoveCommand`).
+  (`rts.movement.v1.MoveCommand`). Milestone 6 adds
+  `rts.movement.v1.GroupMoveCommand`,
+  `rts.automation.v1.AutomateCommand` / `CancelAutomationCommand` and
+  `rts.logistics.v1.SupplyCommand` / `CancelSupplyCommand`. Automation and
+  supply commands also apply per unit, so they work as
+  `rts.metadata.v1.BatchCommand` templates over metadata selectors (group
+  assignment, evaluated at execution time). Status is visible to the owner
+  as `automation.*` and `logistics.*` attributes and events. Admins also
+  receive `automation.work` and `logistics.work` per-tick work reports.
 - Observable plugin state is an attribute map (`movement.destination`).
 - Events are typed by name, with a field map.
 
@@ -885,7 +988,85 @@ protobuf one.
   boundary designed for it.
 - TLS, real authentication, rate limiting, per-session command quotas.
 
+## Performance (Milestone 6)
+
+Measured with `make scale` (`internal/scale`, `cmd/rts-bench`); see the
+README for the full table. The harness builds a lattice world at 25%
+density with two interleaved players, issues each workload's standing
+orders in an unmeasured setup tick, then measures `Engine.Step` (all
+phases, including fog observation) over 30 ticks. Setups are seeded, and
+`TestScenariosAreDeterministic` checks that identical runs produce
+identical state hashes. `TestPerformanceRegression` fails on
+order-of-magnitude regressions in allocations per tick (always) and p95
+tick time (skipped under `-race`) at 1k units. `BenchmarkScale` gives
+ns/tick figures for benchstat comparisons.
+
+Optimizations, in order, each verified against the full suite:
+
+1. **Kernel indexes** (start of the milestone): a dense occupancy grid
+   instead of a position map, a per-tile passable index, cached sorted
+   component membership, and memoized attribute output per component value.
+   Fog with 4,000 units and dense vision went from 15.1 to 10.1 ms. The
+   movement step went from 3.4 to 2.1 ms at 5k units and from 7.7 to 5.1 ms
+   at 10k. Allocations roughly halved.
+2. **Fog observation pass:** formula variables memoized per unit per pass
+   (dense per-tile array); per-player scratch reused across ticks (no map
+   or bitset rebuilt per tick); visibility marked by row spans with word
+   operations; only occupied tiles are probed, with a fast empty-tile check
+   for passable entities; the best candidate per unit target kept in a
+   dense per-tile array. The output is byte-identical to the previous
+   implementation (observation digests compared over 40 ticks of the
+   4,000-unit fog scenario).
+3. **Views:** views are built in a reused buffer and copied at exact size
+   (they used to preallocate 32 attributes), and fog disclosure filters a
+   scratch view rather than allocating a full one. Bytes allocated per tick
+   fell 30–70% (sensors at 25k: 55 → 21 MB; mixed at 25k: 43 → 14 MB).
+
+Steps 2 and 3 moved tick *time* by less than run-to-run noise. The cost
+that remains is algorithmic, not allocation. One experiment was reverted:
+a single slab per tick for all changed views raised heap and tick time.
+
+**Remaining bottlenecks** (25k units, from profiles):
+
+- **Fog of war:** about 70% of the `sensors` tick. The work is
+  players × observers × tiles in vision (about 4.2M tile probes at
+  vision 6) plus two formula evaluations per (observer, target) pair
+  (about 1M). Every pass recomputes everything. Over budget at 25k (p50
+  112 ms); fine at 10k (41 ms).
+- **Change views:** every changed entity is re-serialized in full every
+  tick (about 20 attributes). `mining` changes all 25k units every tick:
+  about 40% of its tick, plus page-fault (`madvise`) cost from the
+  allocation churn. GC pacing (`GOGC=400`) made no difference.
+- **Event volume:** `energy.mined` fires per miner per tick (25k
+  events/tick = 250k/s at 10 Hz). Combat in lockstep emits 16k events in
+  one tick every cooldown, which causes the p95 spikes (`combat` p50 2.7 ms,
+  p95 65 ms).
+- **Entity lookups:** `World.Entity` is a hash-map lookup. It is about
+  13% of the fog pass.
+
+## Known limitations (Milestone 6)
+
+- **Fog at 25k units** exceeds the 10 Hz budget (see above).
+- **Automation latency:** behaviors are evaluated every `eval_interval`
+  ticks (default 5), so reactions (a guard spotting an enemy, a miner
+  noticing a full battery) take up to that many ticks. Manual orders on an
+  automated unit are overwritten at its next evaluation.
+- **Guard** never pursues outside its area and does not prioritize
+  threats beyond nearest-then-ID. **Follow** is to a single leader; there
+  are no formations (out of scope for this milestone).
+- **Logistics** splits are max-min fair per stage. Energy left unallocated
+  because a receiver was full is not redistributed to the supplier's other
+  links in the same tick (it is the next tick). Supply links only connect a
+  player's own units.
+- **Pathfinding** routes are at most 32 waypoints (longer routes replan
+  when exhausted). Plans ignore moving units except during congestion
+  replans, and there is no flow-field or hierarchical planning for very
+  large maps.
+- **Terrain** is static. Admins can delete features but not place new ones
+  at runtime.
+
 ## Known limitations (Milestone 3)
+
 
 - **Performance:** every unit now carries several components, and
   observing or pacing a unit evaluates its derived formulas. Per-tick cost
@@ -906,6 +1087,30 @@ protobuf one.
   attribute that nothing uses (armor) is accepted silently.
 
 ## Proposed next milestones
+
+Recommendations after Milestone 6 (earlier proposals below were largely
+delivered by Milestones 4–6):
+
+1. **Incremental fog of war.** Track observation-relevant changes
+   (position, kind, sensor and signature stats) and recompute only the
+   sectors within max vision of a change, reusing cached per-sector
+   results elsewhere. A complementary option is per-player observation in
+   parallel. That phase is derived, not authoritative, and players are
+   independent, but it first needs per-worker scratch and read-only access
+   to kernel memo caches.
+2. **Attribute-level deltas.** Send only changed attributes per entity
+   (with a per-subscriber baseline) instead of full views. This cuts
+   `takeChanges`, hub fan-out and network volume.
+3. **Event aggregation.** Opt-in per-tick summaries for high-frequency
+   events (mining, transfers, damage), and jittered combat cooldowns.
+4. **Dense entity storage.** A slot index per entity, so tile probes and
+   lookups avoid hash maps.
+5. **Operations.** Replay files and a replay CLI, save and load, runtime
+   rule changes, metrics (tick time, per-phase work, events) exported for
+   monitoring.
+
+### Earlier proposals (Milestone 3)
+
 
 1. **Visibility and sensors.** A per-player visibility plugin, a kernel
    hook for per-entity observation filtering, and sensor attributes (range

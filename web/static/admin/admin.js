@@ -232,6 +232,8 @@ function handleMessage(msg) {
       }
     }
     for (const ev of msg.update.events) {
+      if (ev.type === "automation.work" || ev.type === "logistics.work") { work[ev.type] = { tick, fields: ev.fields || {} }; continue; }
+      if (ev.type === "automation.state" || ev.type === "logistics.status") continue; // shown in the automation panel
       const fields = Object.entries(ev.fields || {}).filter(([k]) => k !== "command_id")
         .map(([k, v]) => `${k}=${fmtValue(v)}`).join(" ");
       say(`${ev.type} ${ev.entityId !== "0" ? tag(ev.entityId) : ""} ${fields}`, "info");
@@ -438,6 +440,16 @@ function renderInspector() {
     button("Reposition…", () => { document.querySelector('input[value="move"]').checked = true; say("Click a tile (or right-click) to reposition", "info"); }),
     button("Delete", deleteSelected, "danger"),
   );
+  // Automation and supply changes are scheduled commands like any other,
+  // so they are recorded and replayable.
+  if (sval(e, "automation.behavior")) {
+    actions.append(button("Cancel automation", () => mutate("/api/command", { payload: {
+      "@type": "type.googleapis.com/rts.automation.v1.CancelAutomationCommand", unitIds: [e.id] } }, `Cancel automation of ${tag(e.id)}`)));
+  }
+  if (supplyLinesOf(e).length) {
+    actions.append(button("Remove supply links", () => mutate("/api/command", { payload: {
+      "@type": "type.googleapis.com/rts.logistics.v1.CancelSupplyCommand", unitIds: [e.id] } }, `Remove supply links of ${tag(e.id)}`)));
+  }
   box.append(actions);
 }
 
@@ -454,6 +466,61 @@ function button(text, fn, cls) {
 
 let inspected = "";
 
+// ---- automation & logistics inspection ------------------------------------------
+
+const work = {}; // event type -> {tick, fields} of the latest per-tick work report
+const sval = (e, k) => { const v = e.attributes && e.attributes[k]; return v && v.stringValue; };
+
+function supplyLinesOf(e) {
+  const out = [];
+  for (let i = 0; i < 4; i++) {
+    const to = sval(e, `logistics.supply.${i}.to`);
+    if (!to) break;
+    out.push({ to, status: sval(e, `logistics.supply.${i}.status`) });
+  }
+  return out;
+}
+
+function renderAutomation() {
+  const byState = {}, blocked = [];
+  let links = 0, flowing = 0;
+  for (const e of entities.values()) {
+    const b = sval(e, "automation.behavior");
+    if (b) {
+      const k = `${b}/${sval(e, "automation.state")}`;
+      byState[k] = (byState[k] || 0) + 1;
+      if (sval(e, "automation.status") === "blocked") blocked.push(e);
+    }
+    for (const l of supplyLinesOf(e)) { links++; if (l.status === "supplying") flowing++; }
+  }
+  const box = $("automation");
+  box.replaceChildren();
+  const p = (text) => { const x = document.createElement("p"); x.className = "hint"; x.textContent = text; box.append(x); };
+  const num = (w, k) => (w && w.fields[k] ? Number(w.fields[k].intValue || 0) : 0);
+  const aw = work["automation.work"], lw = work["logistics.work"];
+  p(`Automation work (tick ${aw ? aw.tick : "–"}): ${num(aw, "evaluated")} evaluated, ${num(aw, "deferred")} deferred by the per-tick cap`);
+  p(`Logistics (tick ${lw ? lw.tick : "–"}): ${num(lw, "links")} active transfers moved ${num(lw, "moved")} energy; ${links} links, ${flowing} flowing`);
+  const t = document.createElement("table");
+  for (const [k, n] of Object.entries(byState).sort()) {
+    const tr = t.insertRow();
+    tr.insertCell().textContent = k;
+    tr.insertCell().textContent = n;
+  }
+  if (t.rows.length) box.append(t); else p("No automated units.");
+  if (blocked.length) {
+    p(`Blocked (${blocked.length}):`);
+    const ul = document.createElement("ul");
+    ul.className = "blocked";
+    for (const e of blocked.slice(0, 15)) {
+      const li = document.createElement("li");
+      li.append(button(tag(e.id), () => { selected.clear(); selected.add(e.id); render(); }, "link"),
+        ` ${playerName(e.ownerId)} ${sval(e, "automation.behavior")} — ${sval(e, "automation.reason")}`);
+      ul.append(li);
+    }
+    box.append(ul);
+  }
+}
+
 function render() {
   $("tick").textContent = tick;
   $("entity-count").textContent = entities.size;
@@ -461,7 +528,14 @@ function render() {
   for (const e of entities.values()) {
     const d = attrPos(e, "movement.destination");
     if (d) lines.push({ from: e.position, to: d, cross: true, color: "rgba(255,255,255,0.25)" });
+    for (const l of supplyLinesOf(e)) {
+      const r = entities.get(l.to);
+      if (r) lines.push({ from: e.position, to: r.position, color: l.status === "supplying" ? "rgba(80,220,230,0.9)" : "rgba(80,220,230,0.3)" });
+    }
+    const target = sval(e, "automation.target"), te = target && entities.get(target);
+    if (te) lines.push({ from: e.position, to: te.position, color: "rgba(255,160,60,0.6)" });
   }
+  renderAutomation();
   if (viewAs && preview) {
     // The selected player's view: their entities and what they detect,
     // with tiles they cannot see darkened, and detection lines.

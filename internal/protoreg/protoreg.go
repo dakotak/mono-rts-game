@@ -10,9 +10,11 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 
 	attributesv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/attributes/v1"
+	automationv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/automation/v1"
 	cloningv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/cloning/v1"
 	combatv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/combat/v1"
 	energyv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/energy/v1"
+	logisticsv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/logistics/v1"
 	metadatav1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/metadata/v1"
 	movementv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/movement/v1"
 	salvagev1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/salvage/v1"
@@ -23,6 +25,8 @@ import (
 // Files lists the plugin command proto files.
 var Files = []protoreflect.FileDescriptor{
 	attributesv1.File_rts_attributes_v1_attributes_proto,
+	automationv1.File_rts_automation_v1_automation_proto,
+	logisticsv1.File_rts_logistics_v1_logistics_proto,
 	cloningv1.File_rts_cloning_v1_cloning_proto,
 	combatv1.File_rts_combat_v1_combat_proto,
 	energyv1.File_rts_energy_v1_energy_proto,

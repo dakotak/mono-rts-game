@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package rts.logistics.v1;
+
+option go_package = "github.com/dakotaknutson/unit-strategy-game/gen/rts/logistics/v1;logisticsv1";
+
+// Persistent supply relationships between a player's own units. A supply
+// link moves energy from a supplier to a receiver every tick while they
+// are within the supplier's transfer range (logistics.range, which may be
+// bound to an upgradable attribute), at most the supplier's transfer rate
+// per tick in total, never taking the supplier below its reserve and never
+// filling the receiver past fill_to (0 = its capacity). Once the receiver
+// reaches fill_to the link rests until the receiver drops below
+// resume_below (0 = fill_to), which prevents oscillating top-ups.
+//
+// A unit may supply up to 4 receivers (its rate is split max-min fairly
+// among them) and may itself be a receiver, so links form relay chains
+// (well -> miners -> depot -> relay -> front line). Energy advances at most
+// one link per tick. Links that would form a cycle are rejected. A
+// receiver supplied by several units splits its free capacity among them
+// max-min fairly (ties by supplier ID). Energy is conserved exactly.
+//
+// Links persist while units move (status out_of_range while too far) and
+// end when the receiver is destroyed or lost (logistics.ended event).
+//
+// Atomic over unit_ids. In a rts.metadata.v1.BatchCommand template,
+// unit_ids is ignored.
+message SupplyCommand {
+  repeated uint64 unit_ids = 1;
+  uint64 receiver_id = 2;
+  int64 reserve = 3;
+  int64 fill_to = 4;
+  int64 resume_below = 5;
+}
+
+// CancelSupplyCommand removes the listed suppliers' link to receiver_id,
+// or all their links when receiver_id is 0.
+message CancelSupplyCommand {
+  repeated uint64 unit_ids = 1;
+  uint64 receiver_id = 2;
+}

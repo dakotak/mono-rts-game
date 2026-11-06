@@ -15,12 +15,15 @@ import (
 	"time"
 
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/attributes"
+	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/automation"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/cloning"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/combat"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/energy"
+	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/logistics"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/metadata"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/movement"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/salvage"
+	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/terrain"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/upgrades"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/visibility"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/wells"
@@ -152,7 +155,10 @@ func Plugins() []sim.Plugin {
 	fighting.CanTarget = vis.Detected
 	energyP.CanSee = vis.Detected
 	salvageP.CanSee = vis.Detected
+	auto := automation.New(fighting)
+	auto.Detected = vis.Detected
 	return []sim.Plugin{
+		terrain.New(),
 		wells.New(),
 		attrs,
 		energyP,
@@ -162,6 +168,8 @@ func Plugins() []sim.Plugin {
 		metadata.New(),
 		fighting,
 		salvageP,
+		auto,
+		logistics.New(attrs),
 		vis,
 	}
 }

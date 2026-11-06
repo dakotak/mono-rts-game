@@ -167,6 +167,63 @@ func (x *StopCommand) GetUnitIds() []uint64 {
 	return nil
 }
 
+// GroupMoveCommand moves a group toward one destination without sending
+// every unit to the same tile: each unit gets its own free tile, chosen
+// breadth-first around the destination and matched to units nearest-first
+// (ties by unit ID). Units are validated and charged individually; the
+// result lists per-unit outcomes (PARTIAL if some could not move).
+type GroupMoveCommand struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UnitIds       []uint64               `protobuf:"varint,1,rep,packed,name=unit_ids,json=unitIds,proto3" json:"unit_ids,omitempty"`
+	Destination   *v1.Position           `protobuf:"bytes,2,opt,name=destination,proto3" json:"destination,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GroupMoveCommand) Reset() {
+	*x = GroupMoveCommand{}
+	mi := &file_rts_movement_v1_movement_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GroupMoveCommand) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GroupMoveCommand) ProtoMessage() {}
+
+func (x *GroupMoveCommand) ProtoReflect() protoreflect.Message {
+	mi := &file_rts_movement_v1_movement_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GroupMoveCommand.ProtoReflect.Descriptor instead.
+func (*GroupMoveCommand) Descriptor() ([]byte, []int) {
+	return file_rts_movement_v1_movement_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *GroupMoveCommand) GetUnitIds() []uint64 {
+	if x != nil {
+		return x.UnitIds
+	}
+	return nil
+}
+
+func (x *GroupMoveCommand) GetDestination() *v1.Position {
+	if x != nil {
+		return x.Destination
+	}
+	return nil
+}
+
 var File_rts_movement_v1_movement_proto protoreflect.FileDescriptor
 
 const file_rts_movement_v1_movement_proto_rawDesc = "" +
@@ -178,7 +235,10 @@ const file_rts_movement_v1_movement_proto_rawDesc = "" +
 	"\aunit_id\x18\x01 \x01(\x04R\x06unitId\x122\n" +
 	"\vdestination\x18\x02 \x01(\v2\x10.rts.v1.PositionR\vdestination\"(\n" +
 	"\vStopCommand\x12\x19\n" +
-	"\bunit_ids\x18\x01 \x03(\x04R\aunitIdsBLZJgithub.com/dakotaknutson/unit-strategy-game/gen/rts/movement/v1;movementv1b\x06proto3"
+	"\bunit_ids\x18\x01 \x03(\x04R\aunitIds\"a\n" +
+	"\x10GroupMoveCommand\x12\x19\n" +
+	"\bunit_ids\x18\x01 \x03(\x04R\aunitIds\x122\n" +
+	"\vdestination\x18\x02 \x01(\v2\x10.rts.v1.PositionR\vdestinationBLZJgithub.com/dakotaknutson/unit-strategy-game/gen/rts/movement/v1;movementv1b\x06proto3"
 
 var (
 	file_rts_movement_v1_movement_proto_rawDescOnce sync.Once
@@ -192,21 +252,23 @@ func file_rts_movement_v1_movement_proto_rawDescGZIP() []byte {
 	return file_rts_movement_v1_movement_proto_rawDescData
 }
 
-var file_rts_movement_v1_movement_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_rts_movement_v1_movement_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_rts_movement_v1_movement_proto_goTypes = []any{
-	(*MoveCommand)(nil),     // 0: rts.movement.v1.MoveCommand
-	(*UnitDestination)(nil), // 1: rts.movement.v1.UnitDestination
-	(*StopCommand)(nil),     // 2: rts.movement.v1.StopCommand
-	(*v1.Position)(nil),     // 3: rts.v1.Position
+	(*MoveCommand)(nil),      // 0: rts.movement.v1.MoveCommand
+	(*UnitDestination)(nil),  // 1: rts.movement.v1.UnitDestination
+	(*StopCommand)(nil),      // 2: rts.movement.v1.StopCommand
+	(*GroupMoveCommand)(nil), // 3: rts.movement.v1.GroupMoveCommand
+	(*v1.Position)(nil),      // 4: rts.v1.Position
 }
 var file_rts_movement_v1_movement_proto_depIdxs = []int32{
 	1, // 0: rts.movement.v1.MoveCommand.orders:type_name -> rts.movement.v1.UnitDestination
-	3, // 1: rts.movement.v1.UnitDestination.destination:type_name -> rts.v1.Position
-	2, // [2:2] is the sub-list for method output_type
-	2, // [2:2] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	4, // 1: rts.movement.v1.UnitDestination.destination:type_name -> rts.v1.Position
+	4, // 2: rts.movement.v1.GroupMoveCommand.destination:type_name -> rts.v1.Position
+	3, // [3:3] is the sub-list for method output_type
+	3, // [3:3] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_rts_movement_v1_movement_proto_init() }
@@ -220,7 +282,7 @@ func file_rts_movement_v1_movement_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rts_movement_v1_movement_proto_rawDesc), len(file_rts_movement_v1_movement_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

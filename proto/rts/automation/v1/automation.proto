@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+package rts.automation.v1;
+
+import "rts/v1/types.proto";
+
+option go_package = "github.com/dakotaknutson/unit-strategy-game/gen/rts/automation/v1;automationv1";
+
+// Persistent automated behaviors. Each is a small, server-side state
+// machine with typed, bounded parameters (no scripting). It drives the
+// unit's ordinary orders (movement, mining, transfer, attack, salvage), is
+// re-evaluated every few ticks, and only ever uses information the owner
+// is allowed to observe. Status is visible to the owner as attributes
+// "automation.*"; transitions and failures arrive as automation.* events.
+//
+// Issuing a new AutomateCommand replaces a unit's behavior (and its
+// orders); manual orders on an automated unit are overridden at its next
+// evaluation, so cancel automation first to take manual control.
+//
+// Atomic over unit_ids. In a rts.metadata.v1.BatchCommand template (e.g.
+// to automate every unit tagged role=miner), unit_ids is ignored.
+message AutomateCommand {
+  repeated uint64 unit_ids = 1;
+  oneof behavior {
+    MineAndDeliver mine_and_deliver = 2;
+    AutoSalvage auto_salvage = 3;
+    Guard guard = 4;
+    Follow follow = 5;
+  }
+}
+
+// Repeatedly: go next to the well, mine until holding deliver_at energy
+// (0 = full), go next to the receiver (a friendly unit, which may move),
+// transfer everything above keep, repeat.
+message MineAndDeliver {
+  uint64 well_id = 1;
+  uint64 receiver_id = 2;
+  int64 deliver_at = 3;
+  int64 keep = 4;
+}
+
+// Repeatedly: pick the nearest observable wreck within radius (ties by
+// ID), go to it, salvage it until empty.
+message AutoSalvage {
+  int32 radius = 1;
+}
+
+// Hold position; attack the nearest detected hostile unit within radius
+// of position (ties by ID), moving toward it only while staying inside the
+// guarded area; return to position when no threat remains.
+message Guard {
+  rts.v1.Position position = 1;
+  int32 radius = 2;
+}
+
+// Stay within distance of a friendly leader.
+message Follow {
+  uint64 leader_id = 1;
+  int32 distance = 2;
+}
+
+// CancelAutomationCommand stops the listed units' automation and the
+// orders it was driving.
+message CancelAutomationCommand {
+  repeated uint64 unit_ids = 1;
+}

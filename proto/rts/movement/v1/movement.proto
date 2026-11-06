@@ -26,3 +26,13 @@ message UnitDestination {
 message StopCommand {
   repeated uint64 unit_ids = 1;
 }
+
+// GroupMoveCommand moves a group toward one destination without sending
+// every unit to the same tile: each unit gets its own free tile, chosen
+// breadth-first around the destination and matched to units nearest-first
+// (ties by unit ID). Units are validated and charged individually; the
+// result lists per-unit outcomes (PARTIAL if some could not move).
+message GroupMoveCommand {
+  repeated uint64 unit_ids = 1;
+  rts.v1.Position destination = 2;
+}

@@ -5,7 +5,30 @@ Go. One server process hosts one world; any number of players (humans or AI
 agents, indistinguishable to the server) connect over a public gRPC API.
 Game mechanics are compiled-in plugins.
 
-**Status: Milestone 5** — fog of war, sensors and intelligence:
+**Status: Milestone 6** — automation, logistics and scale:
+
+- **Pathfinding** (`internal/plugins/movement/path.go`): A* around
+  impassable terrain with per-type movement costs
+  (`internal/plugins/terrain`), deterministic tie-breaking, partial routes
+  toward unreachable goals, congestion-aware replanning, bounded planning
+  work per tick. `GroupMoveCommand` spreads a group over distinct reachable
+  tiles with per-unit results.
+- **Automation** (`internal/plugins/automation`): persistent typed
+  behaviors — mine-and-deliver, auto-salvage, guard, follow — as small
+  state machines that drive ordinary orders, use only owner-observable
+  information, report blocked/failed status, and are replayable.
+- **Logistics** (`internal/plugins/logistics`): persistent supply links
+  with reserves, fill thresholds with hysteresis, upgradable range, up to 4
+  receivers per supplier, relay chains, cycle rejection and exact energy
+  conservation under contention.
+- **Clients:** player automation and supply controls (selection or
+  metadata-filter groups, applied server-side), status panel and supply
+  lines; admin automation/logistics panel with per-tick work, blocked units,
+  supply lines and objectives.
+- **Scale harness** (`internal/scale`, `make scale`): 7 workloads × 1k–25k
+  units with tick p50/p95/max, allocations, memory and event volume.
+
+Milestone 5 added fog of war, sensors and intelligence:
 
 - **Visibility plugin** (`internal/plugins/visibility`): per-player
   visible tiles, detection and identification (basic / estimated /
@@ -185,6 +208,7 @@ make race       # all tests with the race detector
 make lint       # gofmt check, go vet, staticcheck, buf lint
 make generate   # regenerate gen/ from proto/
 make bench      # per-tick benchmark (1k/5k/10k units)
+make scale      # scale scenarios: 1k-25k units x 7 workloads (see Performance)
 make sim        # headless harness: 5000 units x 2000 ticks, no network
 make build      # binaries in bin/
 ```
@@ -200,6 +224,8 @@ proto/rts/attributes/v1/   admin attribute override
 proto/rts/upgrades/v1/     upgrade command
 proto/rts/cloning/v1/      clone command
 proto/rts/metadata/v1/     metadata, selectors, batch command
+proto/rts/automation/v1/   automation behaviors
+proto/rts/logistics/v1/    supply links
 gen/                       generated Go bindings (committed; `make generate`)
 internal/sim/              simulation kernel (no game logic, no protobuf)
 internal/expr/             deterministic integer formula language
@@ -210,6 +236,10 @@ internal/plugins/attributes/ attribute registry, derived properties, embodied in
 internal/plugins/upgrades/ upgrade orders
 internal/plugins/cloning/  reproduction
 internal/plugins/metadata/ unit metadata, selectors, batch commands
+internal/plugins/terrain/  impassable and costly terrain
+internal/plugins/automation/ persistent unit behaviors (state machines)
+internal/plugins/logistics/ supply links and relays
+internal/scale/            repeatable scale scenarios and measurements
 internal/protoreg/         registers every plugin's proto types (used by the gateway)
 internal/plugintest/       test harness over the real plugin composition
 internal/game/             config loading, plugin selection, world setup
@@ -221,6 +251,7 @@ web/static/shared/         rendering, input and stream code shared by both clien
 cmd/rts-server/            server binary
 cmd/rts-gateway/           gateway binary
 cmd/rts-sim/               headless simulation harness
+cmd/rts-bench/             scale scenario report (`make scale`)
 configs/dev.json           two-player development world
 docs/ARCHITECTURE.md       design, extension points, roadmap
 ```
@@ -309,17 +340,31 @@ exist. A slot number is only used inside the config file and never leaves
 the server. Set `id_key` only when runs must be reproducible, and keep it
 secret.
 
-## Performance (Apple M-series laptop, `make sim` / `make bench`)
+## Performance
 
-| Units  | World   | Mean tick | Notes                                   |
-|--------|---------|-----------|-----------------------------------------|
-| 1,000  | 200×200 | ~0.6 ms   | every unit has a move order             |
-| 5,000  | 200×200 | ~2.2 ms   | every unit has a move order             |
-| 10,000 | 200×200 | ~4.7 ms   | every unit has a move order             |
-| 5,000  | 200×200 | p50 3.8 ms, p99 6.9 ms | harness: 4 players, reorders every 20 ticks |
-| 4,000 → 6,000 | 200×200 | ~4.7 ms | 2,000 concurrent upgrades + 2,000 concurrent clones (`BenchmarkEvolutionTick`) |
+`make scale` (`cmd/rts-bench`) measures the authoritative tick
+(`Engine.Step`: commands, every phase, and fog observation) for seven
+workloads at 1k, 5k, 10k and 25k units. Units sit on a lattice at 25%
+density with two interleaved players. Networking and per-client
+serialization are not included. Figures below: Apple M-series laptop,
+Go 1.26, 30 measured ticks after 5 warm-up ticks, single run. Expect ±10–20%
+run-to-run noise on a laptop. Budget = 100 ms (10 Hz).
 
-These are Milestone 3 numbers. Every unit now carries an energy store,
-attributes, a clone quote and metadata, which roughly doubled the
-per-unit cost since Milestone 2. At 10 Hz the budget is 100 ms per tick.
-Nothing has been optimized yet.
+| Workload | 1k p50 / p95 | 5k p50 / p95 | 10k p50 / p95 | 25k p50 / p95 | 25k events/tick |
+|---|---|---|---|---|---|
+| idle | 0.00 / 0.00 ms | 0.00 / 0.00 | 0.00 / 0.01 | 0.00 / 0.01 | 0 |
+| movement (5% reorders/tick) | 1.1 / 2.2 | 4.0 / 6.2 | 7.6 / 11.4 | 22.0 / 37.4 | 246 |
+| mining (every unit) | 1.3 / 1.5 | 7.2 / 7.7 | 16.6 / 17.3 | 55.5 / 91.1 | 25,000 |
+| sensors (fog, vision 6, 5% reorders) | 3.7 / 4.2 | 20.2 / 27.2 | 41.3 / 45.8 | **112 / 135** | 2,388 |
+| logistics (mining + relays + automation) | 0.6 / 0.8 | 3.0 / 3.9 | 8.2 / 13.1 | 23.2 / 28.4 | 9,684 |
+| combat (every unit, synchronized cooldowns) | 0.1 / 1.9 | 0.5 / 9.7 | 0.9 / 21.7 | 2.7 / 65.5 | 16,614 |
+| mixed (fog + all of the above) | 6.8 / 12.2 | 38.0 / 46.4 | 60.8 / 76.4 | **141 / 181** | 2,829 |
+
+Everything fits the 10 Hz budget at 10k units. At 25k, fog of war
+(`sensors`, `mixed`) does not: observation is per player × observer ×
+tile in vision, with formula evaluation per (observer, target) pair. The
+other main costs are building a full view of every changed entity each
+tick (`mining` changes every unit every tick) and event volume (one
+`energy.mined` event per miner per tick). See
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#performance-milestone-6) for
+profiles and what changed.

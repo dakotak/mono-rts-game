@@ -204,6 +204,7 @@ const reasonText = {
 function handleEvent(ev) {
   if (typeof evolutionEvent === "function" && evolutionEvent(ev)) return;
   if (typeof combatEvent === "function" && combatEvent(ev)) return;
+  if (typeof autoEvent === "function" && autoEvent(ev)) return;
   const f = ev.fields || {};
   const int = (k) => Number((f[k] && f[k].intValue) || 0);
   const str = (k) => (f[k] && f[k].stringValue) || "";
@@ -332,6 +333,7 @@ function commandAt(t) {
 // ---- input --------------------------------------------------------------
 
 function clickTile(t, { shift }) {
+  if (typeof autoPick === "function" && autoPick(t)) return;
   const e = board.entityAt(t.x, t.y);
   if (e && isMine(e)) {
     if (shift) selected.has(e.id) ? selected.delete(e.id) : selected.add(e.id);
@@ -376,6 +378,7 @@ function render() {
     const to = entities.get(idAttr(e, "energy.transfer_to"));
     if (to) lines.push({ from: e.position, to: to.position, color: "rgba(123,216,143,0.8)" });
     if (typeof combatLines === "function") lines.push(...combatLines(e));
+    if (typeof autoLines === "function") lines.push(...autoLines(e));
   }
   const now = performance.now();
   floaters = floaters.filter((f) => now - f.born < FLOAT_MS);
@@ -384,6 +387,7 @@ function render() {
   board.draw({ entities, selected, lines, floaters: fl, colorFor: (e) => ownerInfo(e.ownerId).color, mine: isMine, ...fog });
   renderSelection();
   if (typeof renderFogPanel === "function") renderFogPanel();
+  if (typeof renderAutoStatus === "function") renderAutoStatus();
   if (typeof renderEvolution === "function") renderEvolution();
 }
 

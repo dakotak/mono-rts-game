@@ -158,3 +158,5 @@ body.admin aside { width: 320px; }
 
 /* ---- fog ---- */
 .viewas select { margin-left: 4px; padding: 3px 4px; }
+button.link { background: none; border: none; padding: 0; color: #8fc4ff; text-decoration: underline; cursor: pointer; font: inherit; }
+ul.blocked { margin: 0.25rem 0; padding-left: 1rem; font-size: 0.85em; }

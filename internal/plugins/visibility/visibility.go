@@ -136,6 +136,7 @@ var sensorStats = []string{"vision", "sensor", "signature", "identification"}
 type varRef struct {
 	side int // 0 observer, 1 target, 2 distance
 	name string
+	prop int // index into Plugin.propNames (sides 0 and 1)
 }
 
 type formula struct {
@@ -154,6 +155,12 @@ type known struct {
 type playerState struct {
 	visible []uint64 // bitset over tiles, index y*width+x
 	known   map[sim.EntityID]known
+
+	// per-tick scratch, reused
+	next  []uint64
+	best  map[sim.EntityID]candidate
+	units []sim.Entity
+	ids   []sim.EntityID
 }
 
 // sensorSummary is the owner-visible summary of a unit's sensors.
@@ -174,6 +181,59 @@ type Plugin struct {
 	players map[sim.PlayerID]*playerState
 	width   int32
 	height  int32
+
+	// Formula variables are memoized per unit for the duration of one
+	// observation pass (nothing changes during it). Units occupy unique
+	// tiles, so the memo is a dense per-tile array validated by entity ID
+	// and tick; non-units are not memoized.
+	propNames []string
+	memoTick  sim.Tick
+	memoID    []sim.EntityID // per tile: unit whose values are cached
+	memoMask  []uint32       // per tile: which props are cached
+	memoVals  []int64        // per tile * len(propNames)
+
+	// per-tile best candidate for unit targets (scratch; tileID 0 = none)
+	tileID   []sim.EntityID
+	tileBest []candidate
+	touched  []int
+	spans    [MaxVision + 1][]int64 // spans[r][|dy|] = max |dx| within r
+}
+
+// span returns the half-width of the vision shape of radius r at row
+// offset dy under the configured metric.
+func (p *Plugin) span(r, dy int64) int64 {
+	dy = max(dy, -dy)
+	if p.spans[r] == nil {
+		s := make([]int64, r+1)
+		for d := range r + 1 {
+			s[d] = -1
+			for dx := r; dx >= 0; dx-- {
+				if p.distance(dx, d) <= r {
+					s[d] = dx
+					break
+				}
+			}
+		}
+		p.spans[r] = s
+	}
+	return p.spans[r][dy]
+}
+
+// setBits sets bits [a, b] of a bitset.
+func setBits(bs []uint64, a, b int64) {
+	for a <= b {
+		wi := a / 64
+		lo := a % 64
+		hi := min(int64(63), lo+(b-a))
+		var m uint64
+		if hi-lo == 63 {
+			m = ^uint64(0)
+		} else {
+			m = ((uint64(1) << (hi - lo + 1)) - 1) << lo
+		}
+		bs[wi] |= m
+		a += hi - lo + 1
+	}
 }
 
 // New returns the visibility plugin. attrs may be nil (constant stats).
@@ -236,6 +296,13 @@ func (p *Plugin) compile(field, src string) (formula, error) {
 		}
 		if ref.side < 0 || (ref.side < 2 && !p.hasProperty(ref.name)) {
 			return 0, false
+		}
+		if ref.side < 2 {
+			ref.prop = slices.Index(p.propNames, ref.name)
+			if ref.prop < 0 {
+				ref.prop = len(p.propNames)
+				p.propNames = append(p.propNames, ref.name)
+			}
 		}
 		slot[name] = len(f.vars)
 		f.vars = append(f.vars, ref)
@@ -397,14 +464,43 @@ func (p *Plugin) eval(f formula, w *sim.World, obs, tgt sim.Entity, dist int64) 
 	for _, v := range f.vars {
 		switch v.side {
 		case 0:
-			env = append(env, p.property(w, obs, v.name))
+			env = append(env, p.memoProp(w, obs, v))
 		case 1:
-			env = append(env, p.property(w, tgt, v.name))
+			env = append(env, p.memoProp(w, tgt, v))
 		default:
 			env = append(env, dist)
 		}
 	}
 	return f.prog.Eval(env)
+}
+
+// resetMemo prepares the per-tick property memo.
+func (p *Plugin) resetMemo(tick sim.Tick, tiles int) {
+	p.memoTick = tick
+	if len(p.memoID) != tiles || len(p.propNames) > 32 {
+		p.memoID = make([]sim.EntityID, tiles)
+		p.memoMask = make([]uint32, tiles)
+		p.memoVals = make([]int64, tiles*len(p.propNames))
+		return
+	}
+	clear(p.memoID)
+}
+
+func (p *Plugin) memoProp(w *sim.World, e sim.Entity, v varRef) int64 {
+	if e.Kind != sim.KindUnit || len(p.memoID) == 0 || len(p.propNames) > 32 {
+		return p.property(w, e, v.name)
+	}
+	t := int(e.Pos.Y)*int(p.width) + int(e.Pos.X)
+	if p.memoID[t] != e.ID {
+		p.memoID[t], p.memoMask[t] = e.ID, 0
+	}
+	bit := uint32(1) << v.prop
+	i := t*len(p.propNames) + v.prop
+	if p.memoMask[t]&bit == 0 {
+		p.memoVals[i] = p.property(w, e, v.name)
+		p.memoMask[t] |= bit
+	}
+	return p.memoVals[i]
 }
 
 // distance returns the configured metric's distance and whether it is
@@ -524,35 +620,50 @@ func (p *Plugin) Observations(ctx *sim.TickContext) []sim.Observation {
 	p.width, p.height = w.Width(), w.Height()
 	words := (int(p.width)*int(p.height) + 63) / 64
 
-	// One pass over the world: units by owner, passable entities by tile.
-	unitsBy := map[sim.PlayerID][]sim.Entity{}
-	passableAt := map[sim.Pos][]sim.EntityID{}
+	p.resetMemo(ctx.Tick, int(p.width)*int(p.height))
+	if tiles := int(p.width) * int(p.height); len(p.tileID) != tiles {
+		p.tileID, p.tileBest = make([]sim.EntityID, tiles), make([]candidate, tiles)
+	}
+	stateOf := func(pl sim.PlayerID) *playerState {
+		ps := p.players[pl]
+		if ps == nil {
+			ps = &playerState{visible: make([]uint64, words), known: map[sim.EntityID]known{}, best: map[sim.EntityID]candidate{}}
+			p.players[pl] = ps
+		}
+		return ps
+	}
+	// One pass over the world: units by owner. Passable entities come from
+	// the kernel's per-tile index.
+	for _, ps := range p.players {
+		ps.units = ps.units[:0]
+	}
 	for _, id := range w.EntityIDs() {
 		e, _ := w.Entity(id)
 		if e.Kind == sim.KindUnit && e.Owner != 0 {
-			unitsBy[e.Owner] = append(unitsBy[e.Owner], e)
-		}
-		if e.Passable {
-			passableAt[e.Pos] = append(passableAt[e.Pos], id)
+			ps := stateOf(e.Owner)
+			ps.units = append(ps.units, e)
 		}
 	}
-	var players []sim.PlayerID
-	for pl := range unitsBy {
-		players = append(players, pl)
-	}
+	players := make([]sim.PlayerID, 0, len(p.players))
 	for pl := range p.players {
-		if _, ok := unitsBy[pl]; !ok {
-			players = append(players, pl)
-		}
+		players = append(players, pl)
 	}
 	slices.Sort(players)
 
 	var out []sim.Observation
 	for _, pl := range players {
-		visible := make([]uint64, words)
-		best := map[sim.EntityID]candidate{}
-		consider := func(o sim.Entity, tid sim.EntityID, dist int64) {
-			t, _ := w.Entity(tid)
+		ps := p.players[pl]
+		if len(ps.next) != words {
+			ps.next = make([]uint64, words)
+		}
+		visible := ps.next
+		clear(visible)
+		// Best candidate per observed entity: units (one per tile) in dense
+		// per-tile arrays, passable entities in a map.
+		best := ps.best
+		clear(best)
+		touched := p.touched[:0]
+		consider := func(o sim.Entity, t sim.Entity, dist int64) {
 			if t.Owner == pl && pl != 0 {
 				return
 			}
@@ -567,35 +678,64 @@ func (p *Plugin) Observations(ctx *sim.TickContext) []sim.Observation {
 			} else if id >= p.cfg.EstimatedThreshold {
 				c.level = sim.LevelEstimated
 			}
-			if prev, ok := best[tid]; !ok || better(c, prev) {
-				best[tid] = c
+			if t.Passable {
+				if prev, ok := best[t.ID]; !ok || better(c, prev) {
+					best[t.ID] = c
+				}
+				return
+			}
+			ti := int(t.Pos.Y)*int(p.width) + int(t.Pos.X)
+			if p.tileID[ti] != t.ID {
+				p.tileID[ti], p.tileBest[ti] = t.ID, c
+				touched = append(touched, ti)
+			} else if better(c, p.tileBest[ti]) {
+				p.tileBest[ti] = c
 			}
 		}
-		for _, o := range unitsBy[pl] {
+		for _, o := range ps.units {
 			r := p.vision(w, o.ID)
-			for y := max(0, int64(o.Pos.Y)-r); y <= min(int64(p.height)-1, int64(o.Pos.Y)+r); y++ {
-				for x := max(0, int64(o.Pos.X)-r); x <= min(int64(p.width)-1, int64(o.Pos.X)+r); x++ {
-					dist := p.distance(x-int64(o.Pos.X), y-int64(o.Pos.Y))
-					if dist > r {
+			ox, oy := int64(o.Pos.X), int64(o.Pos.Y)
+			for y := max(0, oy-r); y <= min(int64(p.height)-1, oy+r); y++ {
+				half := p.span(r, y-oy)
+				x0, x1 := max(0, ox-half), min(int64(p.width)-1, ox+half)
+				if x0 > x1 {
+					continue
+				}
+				row := y * int64(p.width)
+				setBits(visible, row+x0, row+x1)
+				for x := x0; x <= x1; x++ {
+					pos := sim.Pos{X: int32(x), Y: int32(y)}
+					tid, occ := w.EntityAt(pos)
+					pass := w.PassableAt(pos)
+					if !occ && len(pass) == 0 {
 						continue
 					}
-					i := y*int64(p.width) + x
-					visible[i/64] |= 1 << (i % 64)
-					pos := sim.Pos{X: int32(x), Y: int32(y)}
-					if tid, ok := w.EntityAt(pos); ok {
-						consider(o, tid, dist)
+					dist := p.distance(x-ox, y-oy)
+					if occ {
+						t, _ := w.Entity(tid)
+						consider(o, t, dist)
 					}
-					for _, tid := range passableAt[pos] {
-						consider(o, tid, dist)
+					for _, tid := range pass {
+						t, _ := w.Entity(tid)
+						consider(o, t, dist)
 					}
 				}
 			}
 		}
+		observed := func(id sim.EntityID) (candidate, bool) {
+			if c, ok := best[id]; ok {
+				return c, true
+			}
+			e, ok := w.Entity(id)
+			if !ok || e.Passable {
+				return candidate{}, false
+			}
+			ti := int(e.Pos.Y)*int(p.width) + int(e.Pos.X)
+			return p.tileBest[ti], p.tileID[ti] == id
+		}
 
-		ps := p.players[pl]
-		if ps == nil {
-			ps = &playerState{visible: make([]uint64, words), known: map[sim.EntityID]known{}}
-			p.players[pl] = ps
+		if len(ps.visible) != words {
+			ps.visible = make([]uint64, words)
 		}
 		obs := sim.Observation{Player: pl}
 		// Tile deltas, row-major order.
@@ -614,30 +754,33 @@ func (p *Plugin) Observations(ctx *sim.TickContext) []sim.Observation {
 			}
 		}
 		// Lost entities.
-		var oldIDs []sim.EntityID
+		oldIDs := ps.ids[:0]
 		for id := range ps.known {
-			oldIDs = append(oldIDs, id)
+			if _, still := observed(id); !still {
+				oldIDs = append(oldIDs, id)
+			}
 		}
 		slices.Sort(oldIDs)
 		for _, id := range oldIDs {
-			if _, still := best[id]; !still {
-				obs.Lost = append(obs.Lost, id)
-				delete(ps.known, id)
-				ctx.Emit(sim.Event{Type: EventLost, Entity: id, Audience: sim.ToPlayer(pl)})
-			}
+			obs.Lost = append(obs.Lost, id)
+			delete(ps.known, id)
+			ctx.Emit(sim.Event{Type: EventLost, Entity: id, Audience: sim.ToPlayer(pl)})
 		}
 		// Discovered and changed entities.
-		var ids []sim.EntityID
+		ids := oldIDs[:0]
 		for id := range best {
 			ids = append(ids, id)
 		}
+		for _, ti := range touched {
+			ids = append(ids, p.tileID[ti])
+		}
 		slices.Sort(ids)
 		for _, id := range ids {
-			c := best[id]
+			c, _ := observed(id)
 			prev, had := ps.known[id]
 			k := known{level: c.level, observer: c.observer, detect: c.detect, ident: c.ident, view: prev.view}
 			if !had || prev.level != c.level || w.Changed(id) {
-				full, _ := w.View(id)
+				full, _ := w.ScratchView(id)
 				k.view = p.Disclose(full, c.level)
 			}
 			ps.known[id] = k
@@ -662,7 +805,12 @@ func (p *Plugin) Observations(ctx *sim.TickContext) []sim.Observation {
 				obs.Diagnostics = append(obs.Diagnostics, oe) // admins only
 			}
 		}
-		ps.visible = visible
+		ps.ids = ids[:0]
+		for _, ti := range touched {
+			p.tileID[ti] = 0
+		}
+		p.touched = touched[:0]
+		ps.visible, ps.next = visible, ps.visible
 		if len(obs.TilesEntered)+len(obs.TilesExited)+len(obs.Upserts)+len(obs.Lost)+len(obs.Diagnostics) > 0 {
 			out = append(out, obs)
 		}

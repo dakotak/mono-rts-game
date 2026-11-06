@@ -35,10 +35,12 @@ package movement
 
 import (
 	"fmt"
+	"slices"
 
 	movementv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/movement/v1"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/attributes"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/energy"
+	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/terrain"
 	"github.com/dakotaknutson/unit-strategy-game/internal/sim"
 )
 
@@ -58,8 +60,9 @@ const (
 
 // Command types (fully-qualified protobuf names of the payloads).
 var (
-	CommandMove = string((&movementv1.MoveCommand{}).ProtoReflect().Descriptor().FullName())
-	CommandStop = string((&movementv1.StopCommand{}).ProtoReflect().Descriptor().FullName())
+	CommandMove  = string((&movementv1.MoveCommand{}).ProtoReflect().Descriptor().FullName())
+	CommandStop  = string((&movementv1.StopCommand{}).ProtoReflect().Descriptor().FullName())
+	CommandGroup = string((&movementv1.GroupMoveCommand{}).ProtoReflect().Descriptor().FullName())
 )
 
 // MaxOrdersPerCommand bounds the work a single command can request.
@@ -82,11 +85,25 @@ type Config struct {
 	// (attributes plugin) giving each unit's ticks per move (clamped to at
 	// least 1), replacing TicksPerMove.
 	PaceAttribute string `json:"pace_attribute,omitempty"`
+	// Pathfinding: "auto" (default) steps greedily toward the destination
+	// and plans an A* route only when the greedy step meets a static
+	// obstacle or the unit keeps being blocked; "always" follows planned
+	// routes, which also avoid costly terrain.
+	Pathfinding string `json:"pathfinding"`
+	// MaxPathNodes bounds one route search (A* expansions).
+	MaxPathNodes int `json:"max_path_nodes"`
+	// PlansPerTick bounds route searches per tick; units beyond it wait a
+	// tick (planning priority rotates every tick).
+	PlansPerTick int `json:"plans_per_tick"`
+	// ReplanAfterBlocked replans around blocking units after this many
+	// consecutive failed steps.
+	ReplanAfterBlocked int `json:"replan_after_blocked"`
 }
 
 // DefaultConfig returns the default configuration.
 func DefaultConfig() Config {
-	return Config{TicksPerMove: 1, MaxBlockedTicks: 20, ContentionBackoff: 2}
+	return Config{TicksPerMove: 1, MaxBlockedTicks: 20, ContentionBackoff: 2,
+		Pathfinding: "auto", MaxPathNodes: 4096, PlansPerTick: 128, ReplanAfterBlocked: 3}
 }
 
 func (c Config) validate() error {
@@ -102,6 +119,12 @@ func (c Config) validate() error {
 	if c.EnergyPerStep < 0 {
 		return fmt.Errorf("energy_per_step must be >= 0, got %d", c.EnergyPerStep)
 	}
+	if c.Pathfinding != "auto" && c.Pathfinding != "always" {
+		return fmt.Errorf("pathfinding must be auto or always, got %q", c.Pathfinding)
+	}
+	if c.MaxPathNodes < 16 || c.PlansPerTick < 1 || c.ReplanAfterBlocked < 1 {
+		return fmt.Errorf("max_path_nodes >= 16, plans_per_tick >= 1 and replan_after_blocked >= 1 required")
+	}
 	return nil
 }
 
@@ -110,6 +133,13 @@ type order struct {
 	Dest    sim.Pos
 	Blocked int32 // consecutive failed steps
 	Stalled bool  // waiting for energy
+	// Planned route: Path[PathI:PathN] are the next steps. Empty when the
+	// unit steps greedily.
+	Path         [PathLen]sim.Pos
+	PathN, PathI uint8
+	// Avoid makes the next route search avoid nearby units (set after the
+	// unit kept being blocked).
+	Avoid bool
 }
 
 var (
@@ -121,6 +151,7 @@ var (
 type Plugin struct {
 	cfg   Config
 	attrs *attributes.Plugin
+	pl    planner
 }
 
 // New returns the movement plugin without attribute bindings.
@@ -186,6 +217,9 @@ func (p *Plugin) Register(r *sim.Registrar) error {
 		return err
 	}
 	if err := r.Command(sim.CommandDef{Type: CommandMove, Execute: p.execMove}); err != nil {
+		return err
+	}
+	if err := r.Command(sim.CommandDef{Type: CommandGroup, Execute: p.execGroup}); err != nil {
 		return err
 	}
 	return r.Command(sim.CommandDef{Type: CommandStop, Execute: p.execStop, ApplyToUnit: p.applyStop})
@@ -292,7 +326,15 @@ type intent struct {
 func (p *Plugin) step(ctx *sim.TickContext) {
 	w := ctx.World
 	tick := ctx.Tick
-	ids := orders.Entities(w) // sorted: all iteration below is deterministic
+	sorted := orders.Entities(w) // sorted: all iteration below is deterministic
+	// Visit units starting at a tick-dependent offset so the per-tick
+	// planning budget rotates fairly; everything else is order-independent.
+	ids := make([]sim.EntityID, 0, len(sorted))
+	if n := len(sorted); n > 0 {
+		off := int(uint64(tick) % uint64(n))
+		ids = append(append(ids, sorted[off:]...), sorted[:off]...)
+	}
+	plans := 0
 
 	// 1. Collect proposed steps.
 	intents := make(map[sim.EntityID]*intent, len(ids))
@@ -325,11 +367,15 @@ func (p *Plugin) step(ctx *sim.TickContext) {
 				continue
 			}
 		}
-		to := sim.Pos{X: e.Pos.X + sign(o.Dest.X-e.Pos.X), Y: e.Pos.Y + sign(o.Dest.Y-e.Pos.Y)}
+		to, ok := p.nextStep(ctx, e, &o, &plans)
+		if !ok {
+			continue
+		}
 		intents[id] = &intent{to: to}
 		claims[to]++
 		proposers = append(proposers, id)
 	}
+	slices.Sort(proposers) // rotation above must not affect resolution order
 
 	// 2. Resolve. The outcome of each step is a pure function of the intent
 	// graph, so it does not depend on visiting order.
@@ -376,8 +422,14 @@ func (p *Plugin) step(ctx *sim.TickContext) {
 				// Checked before proposing, and nothing spends in between.
 				panic(fmt.Sprintf("movement: unit %d cannot pay for a resolved step", id))
 			}
+			if o.PathI < o.PathN && o.Path[o.PathI] == in.to {
+				o.PathI++
+			}
+			o.Avoid = false
+			// Costly terrain slows the unit down: pace x tile cost.
 			pace, _ := w.Derived(DerivedPace, id)
-			readyAt.Set(w, id, tick+sim.Tick(pace))
+			cost, _ := terrain.StepCost(w, in.to)
+			readyAt.Set(w, id, tick+sim.Tick(pace*max(cost, 1)))
 			if e.Pos == o.Dest {
 				p.complete(ctx, e)
 				continue
@@ -387,6 +439,10 @@ func (p *Plugin) step(ctx *sim.TickContext) {
 			continue
 		}
 		o.Blocked++
+		if int(o.Blocked)%p.cfg.ReplanAfterBlocked == 0 {
+			// Persistently blocked: drop the route and plan around units.
+			o.PathN, o.PathI, o.Avoid = 0, 0, true
+		}
 		if p.cfg.MaxBlockedTicks > 0 && int(o.Blocked) >= p.cfg.MaxBlockedTicks {
 			orders.Remove(w, id)
 			ctx.Emit(sim.Event{Type: EventCancelled, Entity: id, Audience: sim.ToPlayer(e.Owner), Fields: []sim.Field{
@@ -418,5 +474,163 @@ func (p *Plugin) applyStop(ctx *sim.TickContext, cmd sim.Command, unit sim.Entit
 		return err
 	}
 	orders.Remove(ctx.World, unit)
+	return nil
+}
+
+// nextStep picks a unit's next tile: the next planned step, the greedy step
+// toward the destination, or a newly planned route. ok=false means the unit
+// does not step this tick (planning budget used up, or the order ended).
+func (p *Plugin) nextStep(ctx *sim.TickContext, e sim.Entity, o *order, plans *int) (sim.Pos, bool) {
+	w := ctx.World
+	if o.PathI < o.PathN {
+		if next := o.Path[o.PathI]; cheb(next, e.Pos) == 1 {
+			return next, true
+		}
+		o.PathN, o.PathI = 0, 0 // displaced (e.g. teleported): replan
+	}
+	if p.cfg.Pathfinding == "auto" && !o.Avoid {
+		greedy := sim.Pos{X: e.Pos.X + sign(o.Dest.X-e.Pos.X), Y: e.Pos.Y + sign(o.Dest.Y-e.Pos.Y)}
+		if _, ok := terrain.StepCost(w, greedy); ok {
+			return greedy, true
+		}
+	}
+	if *plans >= p.cfg.PlansPerTick {
+		return sim.Pos{}, false
+	}
+	*plans++
+	var avoid func(sim.Pos) bool
+	if o.Avoid {
+		avoid = func(q sim.Pos) bool {
+			if cheb(q, e.Pos) > 3 {
+				return false
+			}
+			id, taken := w.EntityAt(q)
+			return taken && id != e.ID
+		}
+	}
+	steps, _ := p.pl.plan(w, e.Pos, o.Dest, avoid, p.cfg.MaxPathNodes)
+	if len(steps) == 0 {
+		// Nowhere closer to go: the destination is unreachable from here.
+		orders.Remove(w, e.ID)
+		ctx.Emit(sim.Event{Type: EventCancelled, Entity: e.ID, Audience: sim.ToPlayer(e.Owner), Fields: []sim.Field{
+			{Key: "reason", Value: sim.StringValue("unreachable")},
+			{Key: "destination", Value: sim.PosValue(o.Dest)},
+		}})
+		return sim.Pos{}, false
+	}
+	o.Path = [PathLen]sim.Pos{}
+	copy(o.Path[:], steps)
+	o.PathN, o.PathI = uint8(len(steps)), 0
+	orders.Set(w, e.ID, *o)
+	return steps[0], true
+}
+
+// SetDestination gives a unit a movement order (replacing any other). It
+// is the API automation uses; callers enforce ownership.
+func SetDestination(w *sim.World, id sim.EntityID, dest sim.Pos) {
+	if o, ok := orders.Get(w, id); ok && o.Dest == dest {
+		return // keep the planned route
+	}
+	orders.Set(w, id, order{Dest: dest})
+}
+
+// Destination returns a unit's current destination.
+func Destination(w *sim.World, id sim.EntityID) (sim.Pos, bool) {
+	o, ok := orders.Get(w, id)
+	return o.Dest, ok
+}
+
+// ClearDestination cancels a unit's movement order.
+func ClearDestination(w *sim.World, id sim.EntityID) { orders.Remove(w, id) }
+
+// FreeTileNear returns a free, enterable tile within 1 tile of center
+// (center first when free), choosing the one closest to from (ties: row,
+// then column). It is how automation picks where to stand next to a well,
+// wreck or friend.
+func FreeTileNear(w *sim.World, center, from sim.Pos, self sim.EntityID) (sim.Pos, bool) {
+	best, found := sim.Pos{}, false
+	var bd int64
+	for dy := int32(-1); dy <= 1; dy++ {
+		for dx := int32(-1); dx <= 1; dx++ {
+			q := sim.Pos{X: center.X + dx, Y: center.Y + dy}
+			if _, ok := terrain.StepCost(w, q); !ok {
+				continue
+			}
+			if id, taken := w.EntityAt(q); taken && id != self {
+				continue
+			}
+			d := cheb(q, from)
+			if !found || d < bd || (d == bd && (q.Y < best.Y || (q.Y == best.Y && q.X < best.X))) {
+				best, bd, found = q, d, true
+			}
+		}
+	}
+	return best, found
+}
+
+// execGroup moves a group toward one destination, giving each unit its own
+// free tile around it (breadth-first from the destination, so nearest
+// tiles first). Units are matched to tiles in order of their distance to
+// the destination (ties by ID). Each unit is validated, charged and
+// reported separately: a group move can partly succeed.
+func (p *Plugin) execGroup(ctx *sim.TickContext, cmd sim.Command) error {
+	m, ok := cmd.Payload.(*movementv1.GroupMoveCommand)
+	if !ok {
+		return sim.Fail(sim.CodeInvalidArgument, "payload is %T, want GroupMoveCommand", cmd.Payload)
+	}
+	w := ctx.World
+	n := len(m.GetUnitIds())
+	if n == 0 || n > MaxOrdersPerCommand {
+		return sim.Fail(sim.CodeInvalidArgument, "need 1..%d units, got %d", MaxOrdersPerCommand, n)
+	}
+	if m.GetDestination() == nil {
+		return sim.Fail(sim.CodeInvalidArgument, "destination required")
+	}
+	dest := sim.Pos{X: m.GetDestination().GetX(), Y: m.GetDestination().GetY()}
+	if !w.InBounds(dest) {
+		return sim.Fail(sim.CodeInvalidArgument, "destination %v outside the world", dest)
+	}
+	seen := map[sim.EntityID]bool{}
+	var valid []sim.Entity
+	for _, raw := range m.GetUnitIds() {
+		id := sim.EntityID(raw)
+		if err := checkUnit(w, cmd.Issuer, raw, seen); err != nil {
+			ctx.ReportUnit(id, err)
+			continue
+		}
+		e, _ := w.Entity(id)
+		valid = append(valid, e)
+	}
+	slices.SortFunc(valid, func(a, b sim.Entity) int {
+		if da, db := cheb(a.Pos, dest), cheb(b.Pos, dest); da != db {
+			return int(da - db)
+		}
+		if a.ID < b.ID {
+			return -1
+		}
+		return 1
+	})
+	inGroup := map[sim.EntityID]bool{}
+	for _, e := range valid {
+		inGroup[e.ID] = true
+	}
+	slots := p.pl.slots(w, dest, len(valid), func(id sim.EntityID) bool { return inGroup[id] }, 64*len(valid)+256)
+	succeeded := 0
+	for i, e := range valid {
+		if i >= len(slots) {
+			ctx.ReportUnit(e.ID, sim.Fail(sim.CodeFailedPrecondition, "no free tile near %v for unit %d", dest, e.ID))
+			continue
+		}
+		if err := ctx.Charge(cmd.Issuer, 1); err != nil {
+			ctx.ReportUnit(e.ID, err)
+			continue
+		}
+		orders.Set(w, e.ID, order{Dest: slots[i]})
+		ctx.ReportUnit(e.ID, nil)
+		succeeded++
+	}
+	if succeeded == 0 {
+		return sim.Fail(sim.CodeFailedPrecondition, "no unit could be moved")
+	}
 	return nil
 }

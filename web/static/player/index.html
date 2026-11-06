@@ -41,12 +41,43 @@
           <li><b>Right-click</b> own unit — send energy to it from adjacent selected units</li>
           <li><b>Right-click</b> enemy — attack (no pursuit: get in range yourself)</li>
           <li><b>Right-click</b> wreckage — salvage (units walk next to it)</li>
+          <li><b>Automation / Supply</b> — pick a behavior, press Assign, then click the targets it asks for</li>
           <li><b>S</b> — stop moving, mining, attacking, salvaging &nbsp; <b>Esc</b> — deselect</li>
         </ul>
         <h2>Selection</h2>
         <div id="selection" class="selection"><p class="hint">Nothing selected.</p></div>
         <label class="amount">Transfer amount <input id="transfer-amount" type="number" min="1" value="20"></label>
         <div id="unit-detail" class="unit-detail"></div>
+        <h2>Automation</h2>
+        <div class="form">
+          <label>Behavior <select id="auto-kind">
+            <option value="mine">Mine &amp; deliver (well → receiver)</option>
+            <option value="salvage">Auto-salvage nearby wreckage</option>
+            <option value="guard">Guard a position</option>
+            <option value="follow">Follow a unit</option>
+          </select></label>
+          <label>Radius / follow distance <input id="auto-radius" type="number" min="1" max="16" value="6"></label>
+          <label>Deliver at (0 = full) <input id="auto-deliver" type="number" min="0" value="0"></label>
+          <label>Keep after delivery <input id="auto-keep" type="number" min="0" value="0"></label>
+          <label><span><input id="auto-group" type="checkbox"> Apply to units matching the filter (server-side)</span></label>
+          <div class="actions">
+            <button id="auto-start" type="button">Assign…</button>
+            <button id="auto-cancel" type="button">Cancel automation</button>
+          </div>
+          <p id="auto-hint" class="hint"></p>
+        </div>
+        <h2>Supply</h2>
+        <div class="form">
+          <label>Keep in reserve <input id="sup-reserve" type="number" min="0" value="20"></label>
+          <label>Fill receiver to (0 = full) <input id="sup-fill" type="number" min="0" value="0"></label>
+          <label>Resume below (0 = fill level) <input id="sup-resume" type="number" min="0" value="0"></label>
+          <div class="actions">
+            <button id="sup-start" type="button">Supply a unit…</button>
+            <button id="sup-cancel" type="button">Stop supplying</button>
+          </div>
+        </div>
+        <h2>Automation status</h2>
+        <div id="auto-status"></div>
         <h2>Batch actions</h2>
         <div class="form batch">
           <label>Attribute <select id="batch-attr"></select></label>
@@ -92,5 +123,6 @@
   <script src="evolution.js"></script>
   <script src="combat.js"></script>
   <script src="fog.js"></script>
+  <script src="automation.js"></script>
 </body>
 </html>

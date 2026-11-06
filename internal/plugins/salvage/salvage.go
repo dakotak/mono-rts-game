@@ -482,3 +482,20 @@ func (p *Plugin) collect(ctx *sim.TickContext) {
 		}
 	}
 }
+
+// ---- API for other plugins (automation) -----------------------------------
+
+// Wrecks returns all wrecks, ascending. Callers filter by visibility.
+func Wrecks(w *sim.World) []sim.EntityID { return wrecks.Entities(w) }
+
+// SetSalvage gives a unit a salvage order.
+func SetSalvage(w *sim.World, id, wreck sim.EntityID) { orders.Set(w, id, order{Wreck: wreck}) }
+
+// StopSalvage cancels a unit's salvage order.
+func StopSalvage(w *sim.World, id sim.EntityID) { orders.Remove(w, id) }
+
+// SalvageTarget returns the wreck a unit is salvaging.
+func SalvageTarget(w *sim.World, id sim.EntityID) (sim.EntityID, bool) {
+	o, ok := orders.Get(w, id)
+	return o.Wreck, ok
+}

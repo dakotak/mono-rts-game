@@ -649,3 +649,27 @@ func (p *Plugin) transfer(ctx *sim.TickContext) {
 		}
 	}
 }
+
+// ---- API for other plugins (automation, logistics) ------------------------
+// These bypass command validation; callers enforce ownership, visibility
+// and adjacency.
+
+// SetMining gives a unit a mining order on a well.
+func SetMining(w *sim.World, id, well sim.EntityID) { mining.Set(w, id, miningOrder{Well: well}) }
+
+// StopMining cancels a unit's mining order.
+func StopMining(w *sim.World, id sim.EntityID) { mining.Remove(w, id) }
+
+// MiningWell returns the well a unit is mining.
+func MiningWell(w *sim.World, id sim.EntityID) (sim.EntityID, bool) {
+	o, ok := mining.Get(w, id)
+	return o.Well, ok
+}
+
+// SetTransfer gives a unit a transfer order (replacing any other).
+func SetTransfer(w *sim.World, from, to sim.EntityID, amount int64) {
+	transfers.Set(w, from, transferOrder{To: to, Remaining: amount})
+}
+
+// Transferring reports whether a unit has an active transfer order.
+func Transferring(w *sim.World, id sim.EntityID) bool { return transfers.Has(w, id) }

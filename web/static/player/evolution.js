@@ -238,6 +238,7 @@ function renderUnitDetail() {
 
   if (typeof combatDetail === "function") combatDetail(e, box);
   if (typeof fogDetail === "function") fogDetail(e, box);
+  if (typeof autoDetail === "function") autoDetail(e, box);
 
   // Metadata chips.
   const chips = el("div");
