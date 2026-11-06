@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package rts.salvage.v1;
+
+import "rts/v1/types.proto";
+
+option go_package = "github.com/dakotaknutson/unit-strategy-game/gen/rts/salvage/v1;salvagev1";
+
+// Commands owned by the salvage plugin. Wreckage is a passable resource
+// entity (Entity.passable = true) left where a unit was destroyed; it holds
+// energy (public attributes salvage.energy, salvage.initial) and is
+// removed when emptied. Wreckage is not an energy well: MineCommand does
+// not accept it and SalvageCommand does not accept wells. Rules (recovery
+// fractions, salvage rate) are in WorldInfo.rules_json "salvage".
+
+// SalvageCommand gives each listed unit a persistent order to collect
+// energy from a wreck — friendly or enemy — while within distance 1 of it
+// (adjacent, or standing on it). The order waits while out of reach and
+// ends when the wreck is emptied or removed.
+//
+// Atomic over unit_ids. In a rts.metadata.v1.BatchCommand template,
+// unit_ids is ignored.
+message SalvageCommand {
+  repeated uint64 unit_ids = 1;
+  uint64 wreck_id = 2;
+}
+
+// StopSalvageCommand cancels the salvage orders of the listed units.
+message StopSalvageCommand {
+  repeated uint64 unit_ids = 1;
+}
+
+// CreateWreckCommand (admin only) places a wreck holding `energy` (> 0).
+message CreateWreckCommand {
+  rts.v1.Position position = 1;
+  int64 energy = 2;
+}
+
+// SetWreckEnergyCommand (admin only) sets a wreck's energy; 0 removes it.
+message SetWreckEnergyCommand {
+  uint64 wreck_id = 1;
+  int64 energy = 2;
+}

@@ -504,6 +504,82 @@ commands in the same tick.
 - Admin-only templates, nested batches and commands without per-unit
   support are rejected.
 
+## Combat, destruction and salvage (Milestone 4)
+
+**Tick order:** commands → energy (mine, transfer) → salvage → movement →
+combat → upgrades → cloning. `PhaseDef.Before` lets combat and salvage
+place themselves without other plugins knowing about them.
+
+**Combat** (`internal/plugins/combat`):
+
+- **Stats.** `max_health`, `attack`, `range` and `cooldown` are each an
+  attributes property or a constant.
+- **Formulas.** `damage` uses `attacker_<p>`, `target_<p>` and `distance`.
+  `energy_cost` uses only `attacker_<p>` (static properties), so each unit
+  carries an exact quote.
+- **Range** is Chebyshev distance. Attacks hit instantly: no projectiles and
+  no attack duration.
+- **Resolution.** Every eligible attack's cost and damage is computed from
+  the start-of-phase state. Damage is summed per target, then all energy,
+  cooldowns and damage are applied, and destruction comes last. A unit
+  destroyed this tick therefore still fires, and visiting order (including
+  ID order) cannot change outcomes.
+- **Order lifecycle.** An order persists until the target is gone
+  (`target_lost`), the attacker's attack drops to 0 (`incapable`), it is
+  replaced, or it is stopped. Out of range or short of energy, the order
+  waits and emits one event per episode. Friendly targets are rejected.
+- **Visibility hook.** `Plugin.CanTarget` is where Milestone 5 visibility
+  plugs in.
+- **Destruction** removes the entity, which drops all of its
+  components, orders and activities (unfinished upgrade or clone energy is
+  lost). `combat.destroyed` goes to the owner and the attacking owners.
+- **Event scoping.** Health is public; stats and orders are owner-only;
+  `combat.attack` goes to the attacker's owner and `combat.damaged` to the
+  target's owner.
+
+**Wreckage** is a passable resource entity, made possible by a kernel
+addition: passable entities are excluded from the occupancy index, so units
+walk over wreckage and several wrecks can share a tile.
+
+- **Energy:** `floor(min(embodied, invested) × e‰) + floor(stored × s‰)`,
+  in integer thousandths with floor rounding. Using `min(embodied, invested)`
+  means admin attribute grants are never recovered.
+- **No wreck** is left when that amount is 0.
+- **Distinct from wells:** a wreck has its own component, and mining it is
+  rejected.
+
+**Salvage** (phase `salvage`):
+
+- Orders collect while the unit is within distance 1 (adjacent or on the
+  wreck), up to `min(rate, free battery)` per tick.
+- When several units collect from one wreck, the shared `fairshare.Split`
+  (also used by mining) divides it. The wreck loses exactly what collectors
+  gain.
+- An emptied wreck is removed and its orders end.
+
+**Admin:** set integrity (0 destroys, leaving wreckage), create wrecks, set
+wreck energy (0 removes), and attribute edits. All are scheduled commands,
+so replays are exact (tested at scale).
+
+**Known limitations:**
+
+- No pursuit or pathfinding.
+- No area damage, projectiles or status effects.
+- Health is public and destruction events reach only the involved players,
+  but the entity itself disappears for everyone; Milestone 5 visibility
+  should filter both.
+- Wrecks never decay.
+- One damage formula for all attacks.
+- Per-attack events can be numerous in large battles.
+
+**Recommended Milestone 5:**
+
+- Per-player visibility through a kernel observation filter and sensor
+  attributes.
+- Wire `CanTarget` to it.
+- Filter entities, events and snapshots by what each player sees.
+- Then pursuit with simple pathfinding.
+
 ## Public API
 
 Protobuf files live in `proto/`, are linted by `buf` (STANDARD rules) and

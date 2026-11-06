@@ -29,6 +29,7 @@ func (v viewer) entity(e sim.EntityView) *rtsv1.Entity {
 		Kind:     kindToProto(e.Kind),
 		OwnerId:  uint32(e.Owner),
 		Position: posToProto(e.Pos),
+		Passable: e.Passable,
 	}
 	for _, a := range e.Attrs {
 		if !v.canSee(a, e.Owner) {

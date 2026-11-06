@@ -16,9 +16,11 @@ import (
 
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/attributes"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/cloning"
+	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/combat"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/energy"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/metadata"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/movement"
+	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/salvage"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/upgrades"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/wells"
 	"github.com/dakotaknutson/unit-strategy-game/internal/sim"
@@ -140,6 +142,7 @@ func LoadConfig(path string) (*Config, error) {
 // registry instance (explicit composition rather than global lookup).
 func Plugins() []sim.Plugin {
 	attrs := attributes.New()
+	fighting := combat.New(attrs)
 	return []sim.Plugin{
 		wells.New(),
 		attrs,
@@ -148,6 +151,8 @@ func Plugins() []sim.Plugin {
 		cloning.New(attrs),
 		movement.NewWithAttributes(attrs),
 		metadata.New(),
+		fighting,
+		salvage.New(attrs, fighting),
 	}
 }
 

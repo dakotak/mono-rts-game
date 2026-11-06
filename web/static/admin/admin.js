@@ -7,6 +7,9 @@ const { Board, stream, applyMessage, attrPos, isUnit, isWell, tag, fmtPos, fmtVa
 const CREATE_WELL = "type.googleapis.com/rts.wells.v1.CreateWellCommand";
 const CONFIGURE_WELL = "type.googleapis.com/rts.wells.v1.ConfigureWellCommand";
 const SET_ENERGY = "type.googleapis.com/rts.energy.v1.SetUnitEnergyCommand";
+const SET_HEALTH = "type.googleapis.com/rts.combat.v1.SetHealthCommand";
+const CREATE_WRECK = "type.googleapis.com/rts.salvage.v1.CreateWreckCommand";
+const SET_WRECK = "type.googleapis.com/rts.salvage.v1.SetWreckEnergyCommand";
 // Players are coloured in configuration order.
 const PALETTE = ["#e05252", "#4a7fe0", "#43b36b", "#e0a43a", "#a46be0", "#3abfc4", "#d96fb0"];
 
@@ -217,6 +220,11 @@ function clickTile(t, { shift }) {
     }
     case "move":
       return reposition(t);
+    case "wreck": {
+      // Wreckage is passable: it may be placed under a unit.
+      const energy = Math.max(1, Math.floor(Number($("nwreck-energy").value) || 0));
+      return mutate("/api/command", { payload: { "@type": CREATE_WRECK, position: t, energy: String(energy) } }, `Create wreck (${energy} energy) at ${fmtPos(t)}`);
+    }
     default:
       if (e) {
         if (shift) selected.has(e.id) ? selected.delete(e.id) : selected.add(e.id);
@@ -323,6 +331,27 @@ function renderInspector() {
       <label>Rate/tick <input id="cw-rate" type="number" min="0" value="${a("extraction_rate")}"></label>
       <label><input id="cw-unlimited" type="checkbox" ${a("unlimited") === "true" ? "checked" : ""}> Unlimited</label>`;
     fs.append(button("Apply", () => configureWell(e.id)));
+    box.append(fs);
+  }
+  if (isUnit(e) && e.attributes && e.attributes["combat.health"]) {
+    const a = (k) => fmtValue(e.attributes["combat." + k]);
+    const fs = document.createElement("fieldset");
+    fs.className = "form";
+    fs.innerHTML = `<legend>Integrity (0 destroys)</legend>
+      <label>Health (max ${a("max_health")}) <input id="cw-unit-health" type="number" min="0" value="${a("health")}"></label>`;
+    fs.append(button("Apply", () => mutate("/api/command", { payload: {
+      "@type": SET_HEALTH, unitId: e.id, health: String(Number($("cw-unit-health").value)),
+    } }, `Set integrity of ${tag(e.id)}`)));
+    box.append(fs);
+  }
+  if (RTS.isWreck(e)) {
+    const fs = document.createElement("fieldset");
+    fs.className = "form";
+    fs.innerHTML = `<legend>Wreckage energy (0 removes)</legend>
+      <label>Energy <input id="cw-wreck-energy" type="number" min="0" value="${fmtValue(e.attributes["salvage.energy"])}"></label>`;
+    fs.append(button("Apply", () => mutate("/api/command", { payload: {
+      "@type": SET_WRECK, wreckId: e.id, energy: String(Number($("cw-wreck-energy").value)),
+    } }, `Set wreck ${tag(e.id)} energy`)));
     box.append(fs);
   }
   if (isUnit(e) && e.attributes && e.attributes["energy.stored"]) {

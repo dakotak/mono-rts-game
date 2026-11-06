@@ -39,7 +39,9 @@
           <li><b>Right-click</b> empty tile — move selection</li>
           <li><b>Right-click</b> well — mine (units walk next to it)</li>
           <li><b>Right-click</b> own unit — send energy to it from adjacent selected units</li>
-          <li><b>S</b> — stop moving &amp; mining &nbsp; <b>Esc</b> — deselect</li>
+          <li><b>Right-click</b> enemy — attack (no pursuit: get in range yourself)</li>
+          <li><b>Right-click</b> wreckage — salvage (units walk next to it)</li>
+          <li><b>S</b> — stop moving, mining, attacking, salvaging &nbsp; <b>Esc</b> — deselect</li>
         </ul>
         <h2>Selection</h2>
         <div id="selection" class="selection"><p class="hint">Nothing selected.</p></div>
@@ -85,5 +87,6 @@
   <script src="/shared/board.js"></script>
   <script src="app.js"></script>
   <script src="evolution.js"></script>
+  <script src="combat.js"></script>
 </body>
 </html>

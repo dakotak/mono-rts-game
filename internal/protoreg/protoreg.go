@@ -11,9 +11,11 @@ import (
 
 	attributesv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/attributes/v1"
 	cloningv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/cloning/v1"
+	combatv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/combat/v1"
 	energyv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/energy/v1"
 	metadatav1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/metadata/v1"
 	movementv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/movement/v1"
+	salvagev1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/salvage/v1"
 	upgradesv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/upgrades/v1"
 	wellsv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/wells/v1"
 )
@@ -22,9 +24,11 @@ import (
 var Files = []protoreflect.FileDescriptor{
 	attributesv1.File_rts_attributes_v1_attributes_proto,
 	cloningv1.File_rts_cloning_v1_cloning_proto,
+	combatv1.File_rts_combat_v1_combat_proto,
 	energyv1.File_rts_energy_v1_energy_proto,
 	metadatav1.File_rts_metadata_v1_metadata_proto,
 	movementv1.File_rts_movement_v1_movement_proto,
+	salvagev1.File_rts_salvage_v1_salvage_proto,
 	upgradesv1.File_rts_upgrades_v1_upgrades_proto,
 	wellsv1.File_rts_wells_v1_wells_proto,
 }

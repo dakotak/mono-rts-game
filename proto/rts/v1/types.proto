@@ -49,6 +49,9 @@ message Entity {
   // Plugin-defined attributes keyed by "<plugin>.<name>", e.g.
   // "movement.destination".
   map<string, Value> attributes = 5;
+  // Passable entities (e.g. wreckage) do not block their tile; units can
+  // stand on them and several may share a tile.
+  bool passable = 6;
 }
 
 // Event is a plugin-defined occurrence during a tick, e.g. "movement.arrived".

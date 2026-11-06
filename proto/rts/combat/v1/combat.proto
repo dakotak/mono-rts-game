@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package rts.combat.v1;
+
+option go_package = "github.com/dakotaknutson/unit-strategy-game/gen/rts/combat/v1;combatv1";
+
+// Commands owned by the combat plugin. Rules (stat bindings, damage and
+// energy-cost formulas) are published in WorldInfo.rules_json "combat".
+//
+// Observable state:
+//   combat.health, combat.max_health        public
+//   combat.attack, combat.range, combat.cooldown, combat.attack_cost,
+//   combat.target, combat.ready_at, combat.out_of_range, combat.stalled
+//                                           owner only
+
+// AttackCommand gives each listed unit a persistent order to attack an
+// enemy unit. Units never move to reach their target: an attacker fires
+// whenever the target is within range, its cooldown has elapsed and it can
+// pay the attack's energy cost, until the target is destroyed or gone, the
+// order is replaced or cancelled, or the attacker loses its ability to
+// attack. Attacking your own units is rejected.
+//
+// Atomic over unit_ids. In a rts.metadata.v1.BatchCommand template,
+// unit_ids is ignored.
+message AttackCommand {
+  repeated uint64 unit_ids = 1;
+  uint64 target_id = 2;
+}
+
+// StopAttackCommand cancels the attack orders of the listed units.
+message StopAttackCommand {
+  repeated uint64 unit_ids = 1;
+}
+
+// SetHealthCommand (admin only) sets a unit's structural integrity, clamped
+// to [0, max_health]. Setting 0 destroys the unit at once, exactly as if
+// it had been destroyed in combat (wreckage included).
+message SetHealthCommand {
+  uint64 unit_id = 1;
+  int64 health = 2;
+}

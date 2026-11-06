@@ -31,12 +31,12 @@
 package energy
 
 import (
-	"cmp"
 	"fmt"
 	"slices"
 	"strconv"
 
 	energyv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/energy/v1"
+	"github.com/dakotaknutson/unit-strategy-game/internal/fairshare"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/attributes"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/wells"
 	"github.com/dakotaknutson/unit-strategy-game/internal/sim"
@@ -486,31 +486,6 @@ func (p *Plugin) execSetEnergy(ctx *sim.TickContext, cmd sim.Command) error {
 
 // ---- systems ----------------------------------------------------------------
 
-type claim struct {
-	unit sim.EntityID
-	want int64
-}
-
-// share splits avail among claims max-min fairly and deterministically.
-// The result is indexed like claims; its sum never exceeds avail.
-func share(claims []claim, avail int64) []int64 {
-	order := make([]int, len(claims))
-	for i := range order {
-		order[i] = i
-	}
-	slices.SortFunc(order, func(a, b int) int {
-		return cmp.Or(cmp.Compare(claims[a].want, claims[b].want), cmp.Compare(claims[a].unit, claims[b].unit))
-	})
-	grants := make([]int64, len(claims))
-	remaining := avail
-	for k, i := range order {
-		g := min(claims[i].want, remaining/int64(len(order)-k))
-		grants[i] = g
-		remaining -= g
-	}
-	return grants
-}
-
 func (p *Plugin) stopMining(ctx *sim.TickContext, unit sim.EntityID, well sim.EntityID, reason string) {
 	mining.Remove(ctx.World, unit)
 	e, _ := ctx.World.Entity(unit)
@@ -522,7 +497,7 @@ func (p *Plugin) stopMining(ctx *sim.TickContext, unit sim.EntityID, well sim.En
 
 func (p *Plugin) mine(ctx *sim.TickContext) {
 	w := ctx.World
-	claims := map[sim.EntityID][]claim{}
+	claims := map[sim.EntityID][]fairshare.Claim{}
 	var wellOrder []sim.EntityID
 	for _, id := range mining.Entities(w) {
 		o, _ := mining.Get(w, id)
@@ -549,7 +524,7 @@ func (p *Plugin) mine(ctx *sim.TickContext) {
 		if claims[o.Well] == nil {
 			wellOrder = append(wellOrder, o.Well)
 		}
-		claims[o.Well] = append(claims[o.Well], claim{unit: id, want: want})
+		claims[o.Well] = append(claims[o.Well], fairshare.Claim{ID: uint64(id), Want: want})
 	}
 	slices.Sort(wellOrder)
 
@@ -560,19 +535,20 @@ func (p *Plugin) mine(ctx *sim.TickContext) {
 			avail = min(avail, wv.Energy)
 		}
 		cs := claims[wid]
-		grants := share(cs, avail)
+		grants := fairshare.Split(cs, avail)
 		var total int64
 		for i, c := range cs {
 			g := grants[i]
 			if g == 0 {
 				continue
 			}
-			s, _ := stores.Get(w, c.unit)
+			unit := sim.EntityID(c.ID)
+			s, _ := stores.Get(w, unit)
 			s.Energy += g
-			stores.Set(w, c.unit, s)
+			stores.Set(w, unit, s)
 			total += g
-			e, _ := w.Entity(c.unit)
-			ctx.Emit(sim.Event{Type: EventMined, Entity: c.unit, Audience: sim.ToPlayer(e.Owner), Fields: []sim.Field{
+			e, _ := w.Entity(unit)
+			ctx.Emit(sim.Event{Type: EventMined, Entity: unit, Audience: sim.ToPlayer(e.Owner), Fields: []sim.Field{
 				{Key: "amount", Value: sim.IntValue(g)},
 				{Key: "well", Value: idString(wid)},
 			}})

@@ -152,3 +152,6 @@ body.admin aside { width: 320px; }
 #rules-content td, #rules-content th { border-bottom: 1px solid var(--border); padding: 3px 6px; text-align: left; vertical-align: top; }
 #rules-content code { font-size: 12px; }
 .inspector tr.group td { color: var(--text); font-weight: 600; padding-top: 8px; border-bottom: 0; }
+
+/* ---- combat ---- */
+.tools input[type=number] { width: 64px; padding: 2px 4px; }

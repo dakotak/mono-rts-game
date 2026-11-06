@@ -14,6 +14,10 @@ type Entity struct {
 	Kind  Kind
 	Owner PlayerID
 	Pos   Pos
+	// Passable entities (e.g. wreckage) do not occupy their tile: they are
+	// not in the occupancy index, other entities may share or enter their
+	// tile, and several may lie on one tile.
+	Passable bool
 }
 
 // Move relocates one entity; see World.MoveEntities.
@@ -32,8 +36,9 @@ var (
 // World is the authoritative simulation state. It must only be accessed from
 // the simulation goroutine (or before the engine starts running).
 //
-// Milestone 1 invariant: every entity occupies exactly one tile and a tile
-// holds at most one entity.
+// Occupancy invariant: every entity is on exactly one tile, and a tile holds
+// at most one blocking (non-passable) entity. Passable entities may share a
+// tile with each other and with one blocking entity.
 type World struct {
 	width, height int32
 	tick          Tick
@@ -96,7 +101,8 @@ func (w *World) Entity(id EntityID) (Entity, bool) {
 	return e, ok
 }
 
-// EntityAt returns the entity occupying p, if any.
+// EntityAt returns the blocking entity occupying p, if any. Passable
+// entities are never returned.
 func (w *World) EntityAt(p Pos) (EntityID, bool) {
 	id, ok := w.occupied[p]
 	return id, ok
@@ -109,19 +115,31 @@ func (w *World) EntityCount() int { return len(w.ids) }
 // slice must not be modified.
 func (w *World) EntityIDs() []EntityID { return w.ids }
 
-// CreateEntity adds a new entity at pos.
+// CreateEntity adds a new blocking entity at an unoccupied pos.
 func (w *World) CreateEntity(kind Kind, owner PlayerID, pos Pos) (EntityID, error) {
+	return w.create(kind, owner, pos, false)
+}
+
+// CreatePassable adds a new passable entity at pos, which may already be
+// occupied (see Entity.Passable).
+func (w *World) CreatePassable(kind Kind, owner PlayerID, pos Pos) (EntityID, error) {
+	return w.create(kind, owner, pos, true)
+}
+
+func (w *World) create(kind Kind, owner PlayerID, pos Pos, passable bool) (EntityID, error) {
 	if !w.InBounds(pos) {
 		return 0, fmt.Errorf("create %v at %v: %w", kind, pos, ErrOutOfBounds)
 	}
-	if _, taken := w.occupied[pos]; taken {
+	if _, taken := w.occupied[pos]; taken && !passable {
 		return 0, fmt.Errorf("create %v at %v: %w", kind, pos, ErrOccupied)
 	}
 	id := w.newEntityID()
-	w.entities[id] = Entity{ID: id, Kind: kind, Owner: owner, Pos: pos}
+	w.entities[id] = Entity{ID: id, Kind: kind, Owner: owner, Pos: pos, Passable: passable}
 	i, _ := slices.BinarySearch(w.ids, id)
 	w.ids = slices.Insert(w.ids, i, id)
-	w.occupied[pos] = id
+	if !passable {
+		w.occupied[pos] = id
+	}
 	w.dirty[id] = struct{}{}
 	for _, hook := range w.rules.onCreate {
 		hook(w, w.entities[id])
@@ -149,7 +167,9 @@ func (w *World) RemoveEntity(id EntityID) error {
 		return fmt.Errorf("remove %d: %w", id, ErrNoSuchEntity)
 	}
 	delete(w.entities, id)
-	delete(w.occupied, e.Pos)
+	if !e.Passable {
+		delete(w.occupied, e.Pos)
+	}
 	if i, found := slices.BinarySearch(w.ids, id); found {
 		w.ids = slices.Delete(w.ids, i, i+1)
 	}
@@ -172,7 +192,8 @@ func (w *World) MoveEntities(moves []Move) error {
 	moving := make(map[EntityID]struct{}, len(moves))
 	targets := make(map[Pos]EntityID, len(moves))
 	for _, m := range moves {
-		if _, ok := w.entities[m.ID]; !ok {
+		e, ok := w.entities[m.ID]
+		if !ok {
 			return fmt.Errorf("move %d: %w", m.ID, ErrNoSuchEntity)
 		}
 		if _, dup := moving[m.ID]; dup {
@@ -182,12 +203,18 @@ func (w *World) MoveEntities(moves []Move) error {
 		if !w.InBounds(m.To) {
 			return fmt.Errorf("move %d to %v: %w", m.ID, m.To, ErrOutOfBounds)
 		}
+		if e.Passable {
+			continue // passable entities never conflict
+		}
 		if other, dup := targets[m.To]; dup {
 			return fmt.Errorf("move %d and %d to %v: %w", other, m.ID, m.To, ErrOccupied)
 		}
 		targets[m.To] = m.ID
 	}
 	for _, m := range moves {
+		if w.entities[m.ID].Passable {
+			continue
+		}
 		if occ, ok := w.occupied[m.To]; ok {
 			if _, leaving := moving[occ]; !leaving {
 				return fmt.Errorf("move %d to %v: %w by %d", m.ID, m.To, ErrOccupied, occ)
@@ -195,13 +222,17 @@ func (w *World) MoveEntities(moves []Move) error {
 		}
 	}
 	for _, m := range moves {
-		delete(w.occupied, w.entities[m.ID].Pos)
+		if e := w.entities[m.ID]; !e.Passable {
+			delete(w.occupied, e.Pos)
+		}
 	}
 	for _, m := range moves {
 		e := w.entities[m.ID]
 		e.Pos = m.To
 		w.entities[m.ID] = e
-		w.occupied[m.To] = m.ID
+		if !e.Passable {
+			w.occupied[m.To] = m.ID
+		}
 		w.dirty[m.ID] = struct{}{}
 	}
 	return nil
@@ -219,7 +250,7 @@ func (w *World) Derived(name string, id EntityID) (int64, bool) {
 // view builds the observable representation of an entity.
 func (w *World) view(id EntityID) EntityView {
 	e := w.entities[id]
-	v := EntityView{ID: e.ID, Kind: e.Kind, Owner: e.Owner, Pos: e.Pos}
+	v := EntityView{ID: e.ID, Kind: e.Kind, Owner: e.Owner, Pos: e.Pos, Passable: e.Passable}
 	for _, cid := range w.rules.componentOrder {
 		def := w.rules.components[cid]
 		if def.attributes == nil {
@@ -273,7 +304,7 @@ func (w *World) StateHash() uint64 {
 	fmt.Fprintf(h, "t%d n%d r%d w%dx%d|", w.tick, w.idCounter, w.rng.State(), w.width, w.height)
 	for _, id := range w.ids {
 		e := w.entities[id]
-		fmt.Fprintf(h, "e%d:%d:%d:%d,%d|", e.ID, e.Kind, e.Owner, e.Pos.X, e.Pos.Y)
+		fmt.Fprintf(h, "e%d:%d:%d:%d,%d:%t|", e.ID, e.Kind, e.Owner, e.Pos.X, e.Pos.Y, e.Passable)
 	}
 	for _, cid := range w.rules.componentOrder {
 		store := w.components[cid]

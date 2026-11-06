@@ -21,6 +21,7 @@ window.RTS = (() => {
   };
 
   const isWell = (e) => e.kind === "ENTITY_KIND_RESOURCE" && attr(e, "wells.capacity") !== undefined;
+  const isWreck = (e) => e.kind === "ENTITY_KIND_RESOURCE" && attr(e, "salvage.energy") !== undefined;
   const isUnit = (e) => e.kind === "ENTITY_KIND_UNIT";
 
   // Entity IDs are large opaque numbers; show a short tag.
@@ -205,10 +206,17 @@ window.RTS = (() => {
       });
     }
 
+    // entityAt returns the entity at a tile, preferring units over
+    // passable entities (wreckage) lying on the same tile.
     entityAt(x, y) {
       if (!this.state) return null;
-      for (const e of this.state.entities.values()) if (e.position.x === x && e.position.y === y) return e;
-      return null;
+      let passable = null;
+      for (const e of this.state.entities.values()) {
+        if (e.position.x !== x || e.position.y !== y) continue;
+        if (!e.passable) return e;
+        passable = passable || e;
+      }
+      return passable;
     }
 
     // state: {entities: Map, selected: Set, colorFor(e), mine(e) -> bool,
@@ -257,9 +265,13 @@ window.RTS = (() => {
       }
       ctx.setLineDash([]);
 
-      for (const e of s.entities.values()) {
+      // Passable entities (wreckage) first, so units standing on them stay
+      // visible.
+      const ordered = [...s.entities.values()].sort((a, b) => (b.passable ? 1 : 0) - (a.passable ? 1 : 0));
+      for (const e of ordered) {
         const cx = (e.position.x + 0.5) * T, cy = (e.position.y + 0.5) * T;
         if (isWell(e)) this._drawWell(e, cx, cy);
+        else if (isWreck(e)) this._drawWreck(e, cx, cy);
         else this._drawUnit(e, cx, cy, s);
         if (s.selected && s.selected.has(e.id)) {
           ctx.lineWidth = 2;
@@ -306,6 +318,12 @@ window.RTS = (() => {
       ctx.stroke();
       const energy = attrInt(e, "energy.stored"), cap = attrInt(e, "energy.capacity");
       if (energy !== undefined && cap) this._bar(cx, cy + r + 2, energy / cap, "#f2d24b");
+      // Integrity (public): only drawn once damaged, green -> red.
+      const hp = attrInt(e, "combat.health"), maxHp = attrInt(e, "combat.max_health");
+      if (hp !== undefined && maxHp && hp < maxHp) {
+        const f = hp / maxHp;
+        this._bar(cx, cy - r - 2 - Math.max(2, this.tile * 0.08), f, f > 0.5 ? "#7bd88f" : f > 0.25 ? "#e0a43a" : "#e05252");
+      }
       // Progress rings: upgrades (cyan) and cloning (magenta, dashed when
       // waiting for a free tile).
       const ring = (done, total, color, dashed) => {
@@ -344,6 +362,25 @@ window.RTS = (() => {
       ctx.stroke();
     }
 
+    // Wreckage: a dark crossed square whose orange fill shows the energy
+    // left to salvage.
+    _drawWreck(e, cx, cy) {
+      const ctx = this.ctx, r = this.tile * 0.3;
+      const left = attrInt(e, "salvage.energy") || 0, initial = attrInt(e, "salvage.initial") || left || 1;
+      ctx.fillStyle = "#2a2522";
+      ctx.fillRect(cx - r, cy - r, 2 * r, 2 * r);
+      const f = Math.max(0, Math.min(1, left / initial));
+      ctx.fillStyle = "#c9733a";
+      ctx.fillRect(cx - r, cy + r - 2 * r * f, 2 * r, 2 * r * f);
+      ctx.strokeStyle = "#8a8078";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(cx - r, cy - r); ctx.lineTo(cx + r, cy + r);
+      ctx.moveTo(cx + r, cy - r); ctx.lineTo(cx - r, cy + r);
+      ctx.rect(cx - r, cy - r, 2 * r, 2 * r);
+      ctx.stroke();
+    }
+
     _bar(cx, y, frac, color) {
       const ctx = this.ctx, w = this.tile * 0.7, h = Math.max(2, this.tile * 0.08);
       const f = Math.max(0, Math.min(1, frac));
@@ -366,5 +403,5 @@ window.RTS = (() => {
     while (ol.children.length > 50) ol.lastChild.remove();
   }
 
-  return { attr, attrInt, attrBool, attrPos, isWell, isUnit, tag, fmtPos, fmtValue, stream, applyMessage, Board, log };
+  return { attr, attrInt, attrBool, attrPos, isWell, isWreck, isUnit, tag, fmtPos, fmtValue, stream, applyMessage, Board, log };
 })();

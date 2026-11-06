@@ -5,8 +5,22 @@ Go. One server process hosts one world; any number of players (humans or AI
 agents, indistinguishable to the server) connect over a public gRPC API.
 Game mechanics are compiled-in plugins.
 
-**Status: Milestone 3** — unit evolution. On top of the earlier milestones,
-Milestone 3 adds:
+**Status: Milestone 4** — combat, destruction and salvage:
+
+- **Combat** (`internal/plugins/combat`): persistent attack orders against
+  enemy units. Health, attack, range and cooldown are bound to attributes or
+  constants, and damage and energy-cost formulas are configurable. Damage is
+  resolved simultaneously, so mutual destruction is possible. There is no
+  pursuit.
+- **Wreckage and salvage** (`internal/plugins/salvage`): a destroyed unit
+  leaves passable wreckage holding a configured fraction of its paid
+  investment and its stored energy. Salvage orders collect it under a
+  fair, conserving split.
+- **Clients:** health bars, attack and salvage lines, damage and destruction
+  feedback, right-click to attack or salvage, a combat section in unit
+  details. Admins can set integrity, create wrecks and edit wreck energy.
+
+Milestone 3 added:
 
 - **Data-driven attributes:** a configurable attribute registry (armor,
   propulsion, energy capacity, mining efficiency, ...) with mass

@@ -236,6 +236,8 @@ function renderUnitDetail() {
     box.append(el("h3", { textContent: "Reproduction" }), b);
   }
 
+  if (typeof combatDetail === "function") combatDetail(e, box);
+
   // Metadata chips.
   const chips = el("div");
   for (const k of Object.keys(e.attributes || {}).filter((k) => k.startsWith("metadata.")).sort()) {

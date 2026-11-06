@@ -525,3 +525,85 @@ func TestRequestSteps(t *testing.T) {
 		t.Fatalf("next tick = %d", e.NextTick())
 	}
 }
+
+func TestPassableEntities(t *testing.T) {
+	e := mustEngine(t, mustRules(t))
+	w := e.World()
+	u, _ := w.CreateEntity(KindUnit, 1, Pos{1, 1})
+	// A passable entity can be created under a unit and next to it.
+	p1, err := w.CreatePassable(KindResource, 0, Pos{1, 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p2, _ := w.CreatePassable(KindResource, 0, Pos{2, 1})
+	p3, _ := w.CreatePassable(KindResource, 0, Pos{2, 1}) // two on one tile
+	if at, _ := w.EntityAt(Pos{1, 1}); at != u {
+		t.Fatal("EntityAt returned a passable entity")
+	}
+	if _, ok := w.EntityAt(Pos{2, 1}); ok {
+		t.Fatal("passable entity occupies its tile")
+	}
+	// Units can enter passable tiles; passable entities can move anywhere.
+	if err := w.MoveEntities([]Move{{u, Pos{2, 1}}, {p1, Pos{2, 1}}}); err != nil {
+		t.Fatal(err)
+	}
+	if at, _ := w.EntityAt(Pos{2, 1}); at != u {
+		t.Fatal("unit not indexed after moving onto passable tile")
+	}
+	if _, ok := w.EntityAt(Pos{1, 1}); ok {
+		t.Fatal("vacated tile still occupied")
+	}
+	// Removing a passable entity never clears a unit's occupancy.
+	for _, id := range []EntityID{p1, p2, p3} {
+		if err := w.RemoveEntity(id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if at, _ := w.EntityAt(Pos{2, 1}); at != u {
+		t.Fatal("removing passable entities cleared the unit's tile")
+	}
+	if ent, _ := w.Entity(u); ent.Passable {
+		t.Fatal("unit marked passable")
+	}
+}
+
+func TestPhaseBefore(t *testing.T) {
+	var order []string
+	sys := func(r *Registrar, name, phase string) {
+		_ = r.System(SystemDef{Name: name, Phase: phase, Run: func(*TickContext) { order = append(order, name) }})
+	}
+	a := testPlugin{name: "a", register: func(r *Registrar) error {
+		_ = r.Phase(PhaseDef{Name: "early"})
+		_ = r.Phase(PhaseDef{Name: "zzz_late", After: []string{"early"}})
+		sys(r, "a.early", "early")
+		sys(r, "a.late", "zzz_late")
+		return nil
+	}}
+	// "b" knows nothing about it but must run between early and zzz_late.
+	b := testPlugin{name: "b", deps: []string{"a"}, register: func(r *Registrar) error {
+		_ = r.Phase(PhaseDef{Name: "middle", After: []string{"early"}, Before: []string{"zzz_late"}})
+		sys(r, "b.mid", "middle")
+		return nil
+	}}
+	e := mustEngine(t, mustRules(t, a, b))
+	e.Step()
+	// Without Before, name order would put "middle" first among ready
+	// phases anyway, so also check a case where it matters: zzz_late
+	// sorts last alphabetically but must wait for middle regardless.
+	if strings.Join(order, ",") != "a.early,b.mid,a.late" {
+		t.Fatalf("order = %v", order)
+	}
+	bad := testPlugin{name: "c", register: func(r *Registrar) error {
+		return r.Phase(PhaseDef{Name: "x", Before: []string{"nope"}})
+	}}
+	if _, err := NewRuleset([]Plugin{bad}, nil); err == nil {
+		t.Fatal("Before unknown phase accepted")
+	}
+	cyc := testPlugin{name: "c", register: func(r *Registrar) error {
+		_ = r.Phase(PhaseDef{Name: "x", After: []string{"y"}})
+		return r.Phase(PhaseDef{Name: "y", Before: []string{"x"}, After: []string{"x"}})
+	}}
+	if _, err := NewRuleset([]Plugin{cyc}, nil); err == nil {
+		t.Fatal("Before/After cycle accepted")
+	}
+}

@@ -202,6 +202,7 @@ const reasonText = {
 
 function handleEvent(ev) {
   if (typeof evolutionEvent === "function" && evolutionEvent(ev)) return;
+  if (typeof combatEvent === "function" && combatEvent(ev)) return;
   const f = ev.fields || {};
   const int = (k) => Number((f[k] && f[k].intValue) || 0);
   const str = (k) => (f[k] && f[k].stringValue) || "";
@@ -283,6 +284,7 @@ function stopSelection() {
   submit({ "@type": STOP_TYPE, unitIds: ids }, `Stop ${ids.length} unit(s)`);
   const miners = ids.filter((id) => attr(entities.get(id), "energy.mining_well"));
   if (miners.length) submit({ "@type": STOP_MINING_TYPE, unitIds: miners }, `Stop mining (${miners.length})`);
+  if (typeof combatStop === "function") combatStop(ids);
 }
 
 // mineWell sends the selection to the free tiles around a well and gives
@@ -320,6 +322,7 @@ function transferTo(target) {
 // tile (right click, or left click on a non-selectable tile).
 function commandAt(t) {
   const e = board.entityAt(t.x, t.y);
+  if (typeof combatCommandAt === "function" && combatCommandAt(e)) return;
   if (e && isWell(e)) mineWell(e);
   else if (e && isMine(e)) transferTo(e);
   else if (!e) moveSelection(t.x, t.y);
@@ -332,7 +335,7 @@ function clickTile(t, { shift }) {
   if (e && isMine(e)) {
     if (shift) selected.has(e.id) ? selected.delete(e.id) : selected.add(e.id);
     else { selected.clear(); selected.add(e.id); }
-  } else if (selected.size && (!e || isWell(e))) {
+  } else if (selected.size && (!e || isWell(e) || (RTS.isWreck && RTS.isWreck(e)))) {
     commandAt(t);
   } else if (!shift) {
     selected.clear();
@@ -371,6 +374,7 @@ function render() {
     if (well) lines.push({ from: e.position, to: well.position, color: "rgba(232,194,58,0.55)" });
     const to = entities.get(idAttr(e, "energy.transfer_to"));
     if (to) lines.push({ from: e.position, to: to.position, color: "rgba(123,216,143,0.8)" });
+    if (typeof combatLines === "function") lines.push(...combatLines(e));
   }
   const now = performance.now();
   floaters = floaters.filter((f) => now - f.born < FLOAT_MS);
@@ -422,7 +426,9 @@ function renderSelection() {
 function showHover(t) {
   const el = $("hover-info");
   const e = t && board.entityAt(t.x, t.y);
+  const extra = e && typeof combatHover === "function" ? combatHover(e) : null;
   if (!t) el.textContent = "–";
+  else if (extra) el.textContent = extra;
   else if (!e) el.textContent = `Empty tile ${fmtPos(t)}`;
   else if (isWell(e)) {
     const unlimited = attrBool(e, "wells.unlimited");

@@ -90,11 +90,12 @@ func (c *TickContext) ApplyToUnit(cmd Command, unit EntityID) error {
 // tagged with their visibility. Filtering per observer happens outside the
 // kernel.
 type EntityView struct {
-	ID    EntityID
-	Kind  Kind
-	Owner PlayerID
-	Pos   Pos
-	Attrs []Attr
+	ID       EntityID
+	Kind     Kind
+	Owner    PlayerID
+	Pos      Pos
+	Passable bool
+	Attrs    []Attr
 }
 
 // Frame is everything that changed during one tick. Frames are immutable

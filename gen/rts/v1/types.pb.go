@@ -309,7 +309,10 @@ type Entity struct {
 	Position *Position `protobuf:"bytes,4,opt,name=position,proto3" json:"position,omitempty"`
 	// Plugin-defined attributes keyed by "<plugin>.<name>", e.g.
 	// "movement.destination".
-	Attributes    map[string]*Value `protobuf:"bytes,5,rep,name=attributes,proto3" json:"attributes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Attributes map[string]*Value `protobuf:"bytes,5,rep,name=attributes,proto3" json:"attributes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// Passable entities (e.g. wreckage) do not block their tile; units can
+	// stand on them and several may share a tile.
+	Passable      bool `protobuf:"varint,6,opt,name=passable,proto3" json:"passable,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -377,6 +380,13 @@ func (x *Entity) GetAttributes() map[string]*Value {
 		return x.Attributes
 	}
 	return nil
+}
+
+func (x *Entity) GetPassable() bool {
+	if x != nil {
+		return x.Passable
+	}
+	return false
 }
 
 // Event is a plugin-defined occurrence during a tick, e.g. "movement.arrived".
@@ -909,7 +919,7 @@ const file_rts_v1_types_proto_rawDesc = "" +
 	"bool_value\x18\x02 \x01(\bH\x00R\tboolValue\x12#\n" +
 	"\fstring_value\x18\x03 \x01(\tH\x00R\vstringValue\x129\n" +
 	"\x0eposition_value\x18\x04 \x01(\v2\x10.rts.v1.PositionH\x00R\rpositionValueB\x06\n" +
-	"\x04kind\"\x97\x02\n" +
+	"\x04kind\"\xb3\x02\n" +
 	"\x06Entity\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12&\n" +
 	"\x04kind\x18\x02 \x01(\x0e2\x12.rts.v1.EntityKindR\x04kind\x12\x19\n" +
@@ -917,7 +927,8 @@ const file_rts_v1_types_proto_rawDesc = "" +
 	"\bposition\x18\x04 \x01(\v2\x10.rts.v1.PositionR\bposition\x12>\n" +
 	"\n" +
 	"attributes\x18\x05 \x03(\v2\x1e.rts.v1.Entity.AttributesEntryR\n" +
-	"attributes\x1aL\n" +
+	"attributes\x12\x1a\n" +
+	"\bpassable\x18\x06 \x01(\bR\bpassable\x1aL\n" +
 	"\x0fAttributesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12#\n" +
 	"\x05value\x18\x02 \x01(\v2\r.rts.v1.ValueR\x05value:\x028\x01\"\xb5\x01\n" +

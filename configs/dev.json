@@ -82,7 +82,7 @@
           "mass": "v * 3",
           "cost": "v * v * 5 + v * 10",
           "duration": "v * 8",
-          "description": "Protection (no combat yet). Heavy: +3 mass per level."
+          "description": "Mitigates damage: dmg = attack * 10 / (10 + armor). Heavy."
         },
         "propulsion": {
           "default": 1,
@@ -110,10 +110,38 @@
           "cost": "pow(v, 3) * 2",
           "duration": "v * 10",
           "description": "Energy extracted per tick from an adjacent well."
+        },
+        "attack": {
+          "default": 1,
+          "min": 0,
+          "max": 40,
+          "mass": "v",
+          "cost": "v * v * 3",
+          "duration": "v * 4",
+          "description": "Damage per hit before armor."
+        },
+        "attack_range": {
+          "default": 1,
+          "min": 1,
+          "max": 6,
+          "mass": "v * 2",
+          "cost": "(v - 1) * (v - 1) * 40",
+          "duration": "(v - 1) * 15",
+          "description": "Reach in tiles (Chebyshev)."
+        },
+        "structure": {
+          "default": 50,
+          "min": 50,
+          "max": 400,
+          "mass": "v / 25",
+          "cost": "(v - 50) * (v - 50) / 50 + (v - 50)",
+          "duration": "(v - 50) / 5",
+          "description": "Structural integrity (max health)."
         }
       },
       "derived": {
-        "ticks_per_move": "clamp(mass / (propulsion * 6), 1, 20)"
+        "ticks_per_move": "clamp(mass / (propulsion * 8), 1, 20)",
+        "attack_cooldown": "clamp(mass / 6, 2, 20)"
       }
     },
     "energy": {
@@ -146,6 +174,34 @@
       "contention_backoff_ticks": 2,
       "energy_per_step": 1,
       "pace_attribute": "ticks_per_move"
+    },
+    "combat": {
+      "max_health": {
+        "property": "structure",
+        "default": 50
+      },
+      "attack": {
+        "property": "attack",
+        "default": 1
+      },
+      "range": {
+        "property": "attack_range",
+        "default": 1
+      },
+      "cooldown": {
+        "property": "attack_cooldown",
+        "default": 3
+      },
+      "damage": "max(1, attacker_attack * 10 / (10 + target_armor))",
+      "energy_cost": "1 + attacker_attack / 4"
+    },
+    "salvage": {
+      "embodied_recovery_permille": 500,
+      "stored_recovery_permille": 500,
+      "salvage_rate": {
+        "property": "mining_efficiency",
+        "default": 2
+      }
     }
   }
 }

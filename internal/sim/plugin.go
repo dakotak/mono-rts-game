@@ -25,11 +25,13 @@ type Plugin interface {
 }
 
 // PhaseDef declares a simulation phase. Phases run every tick after
-// commands execute, in an order satisfying every After constraint (ties
-// broken by name).
+// commands execute, in an order satisfying every After and Before
+// constraint (ties broken by name). Before lets a plugin place its phase
+// ahead of another plugin's phase without that plugin knowing about it.
 type PhaseDef struct {
-	Name  string
-	After []string
+	Name   string
+	After  []string
+	Before []string
 }
 
 // SystemDef declares a system: a function run once per tick within a phase.
@@ -324,7 +326,15 @@ func NewRuleset(plugins []Plugin, config map[string]json.RawMessage) (*Ruleset, 
 				return nil, fmt.Errorf("phase %q must run after unknown phase %q", name, a)
 			}
 		}
-		phaseDeps[name] = p.After
+		phaseDeps[name] = append(phaseDeps[name], p.After...)
+	}
+	for name, p := range b.phases {
+		for _, before := range p.Before {
+			if _, ok := b.phases[before]; !ok {
+				return nil, fmt.Errorf("phase %q must run before unknown phase %q", name, before)
+			}
+			phaseDeps[before] = append(phaseDeps[before], name)
+		}
 	}
 	phaseOrder, err := topoSort(phaseDeps)
 	if err != nil {
