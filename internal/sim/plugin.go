@@ -165,6 +165,31 @@ func (r *Registrar) Describe(v any) error {
 	return nil
 }
 
+// Global declares a world-scoped value (build it with Global.Def). The ID
+// must be prefixed with the plugin name.
+func (r *Registrar) Global(g GlobalDef) error {
+	if err := r.requirePrefix("global", g.ID); err != nil {
+		return err
+	}
+	for _, o := range r.b.globals {
+		if o.ID == g.ID {
+			return fmt.Errorf("plugin %q: global %q already declared", r.plugin, g.ID)
+		}
+	}
+	r.b.globals = append(r.b.globals, g)
+	return nil
+}
+
+// Gate makes the plugin the single authority on whether commands execute
+// and systems run each tick (see Gate).
+func (r *Registrar) Gate(g Gate) error {
+	if r.b.gate != nil {
+		return fmt.Errorf("plugin %q: a gate is already registered", r.plugin)
+	}
+	r.b.gate = g
+	return nil
+}
+
 // ObservationAuthority makes the plugin the single authority on what
 // players observe of entities they do not own (see Frame.Observations).
 func (r *Registrar) ObservationAuthority(a ObservationAuthority) error {
@@ -203,7 +228,12 @@ type Ruleset struct {
 	onCreate       []func(w *World, e Entity)
 	rules          map[string]json.RawMessage
 	observer       ObservationAuthority
+	gate           Gate
+	globals        []GlobalDef // sorted by ID
 }
+
+// HasGate reports whether a plugin gates commands and systems.
+func (rs *Ruleset) HasGate() bool { return rs.gate != nil }
 
 // HasObservationAuthority reports whether a plugin decides what players
 // observe (fog of war).
@@ -262,6 +292,8 @@ type rulesetBuilder struct {
 	onCreate   []func(w *World, e Entity)
 	rules      map[string]json.RawMessage
 	observer   ObservationAuthority
+	gate       Gate
+	globals    []GlobalDef
 }
 
 // NewRuleset validates and registers plugins. config maps plugin names to
@@ -329,6 +361,8 @@ func NewRuleset(plugins []Plugin, config map[string]json.RawMessage) (*Ruleset, 
 		onCreate:   b.onCreate,
 		rules:      b.rules,
 		observer:   b.observer,
+		gate:       b.gate,
+		globals:    slices.SortedFunc(slices.Values(b.globals), func(a, c GlobalDef) int { return strings.Compare(a.ID, c.ID) }),
 	}
 	for id := range b.components {
 		rs.componentOrder = append(rs.componentOrder, id)

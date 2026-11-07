@@ -20,6 +20,8 @@ message CreateWellCommand {
   optional int64 capacity = 3;
   optional int64 extraction_rate = 4;
   optional bool unlimited = 5;
+  // Energy a finite well regains per tick, up to capacity.
+  optional int64 regeneration = 6;
 }
 
 // ConfigureWellCommand changes a well's parameters. Only set fields change.
@@ -30,4 +32,6 @@ message ConfigureWellCommand {
   optional int64 capacity = 3;
   optional int64 extraction_rate = 4;
   optional bool unlimited = 5;
+  // Energy a finite well regains per tick, up to capacity.
+  optional int64 regeneration = 6;
 }

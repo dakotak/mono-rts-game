@@ -21,6 +21,7 @@
   <section id="game" hidden>
     <header>
       <span id="player-badge" class="badge"></span>
+      <span>Match <strong id="match-state" class="badge">–</strong></span>
       <span>Tick <strong id="tick">–</strong></span>
       <span id="conn" class="conn">connecting…</span>
       <span>Units <strong id="unit-count">0</strong></span>
@@ -32,6 +33,8 @@
     <main>
       <div id="board"><canvas id="canvas"></canvas></div>
       <aside>
+        <h2>Match</h2>
+        <div id="match-panel" class="match-panel"></div>
         <h2>Controls</h2>
         <ul class="controls">
           <li><b>Click</b> own unit — select (Shift adds)</li>
@@ -118,11 +121,18 @@
       </aside>
     </main>
   </section>
+  <section id="results" class="overlay" hidden>
+    <div class="overlay-body">
+      <header><strong>Match results</strong><span class="spacer"></span><button id="results-close" type="button">Close</button></header>
+      <div id="results-content" class="results"></div>
+    </div>
+  </section>
   <script src="/shared/board.js"></script>
   <script src="app.js"></script>
   <script src="evolution.js"></script>
   <script src="combat.js"></script>
   <script src="fog.js"></script>
   <script src="automation.js"></script>
+  <script src="match.js"></script>
 </body>
 </html>

@@ -11,16 +11,21 @@ Per-tick order with every built-in plugin (`Ruleset.Schedule()`, also
 
 | # | Phase | Systems | Declared by and constraints |
 |---|---|---|---|
-| 0 | *(commands)* | every queued command, in (admin, player ID, seq) order | kernel |
+| 0 | *(commands)* | every queued command, in (admin, player ID, seq) order; each passes the match gate first | kernel |
 | 1 | `automation` | `automation.evaluate` | automation (`Before: energy`) |
-| 2 | `energy` | `energy.mine`, `energy.transfer` | energy |
+| 1b | `wells` | `wells.regenerate` | wells (energy declares `After: wells`) |
+| 2 | `energy` | `energy.mine`, `energy.transfer` | energy (`After: wells`) |
 | 3 | `logistics` | `logistics.supply` | logistics (`After: energy`) |
 | 4 | `salvage` | `salvage.collect` | salvage (`After: energy`, `Before: movement`) |
 | 5 | `movement` | `movement.step` | movement (`After: energy`) |
 | 6 | `combat` | `combat.resolve` | combat (`After: movement`, `Before: upgrades, cloning`) |
 | 7 | `upgrades` | `upgrades.progress` | upgrades (`After: energy`) |
 | 8 | `cloning` | `cloning.progress` | cloning (`After: upgrades`) |
+| 8b | `match` | `match.evaluate` (stats, elimination, victory, scores) | match (`After: combat, cloning, salvage, logistics`) |
 | 9 | *(observation)* | `visibility` `Observations` | kernel calls the observation authority |
+
+Phases run only while the match is RUNNING (the match plugin is the
+kernel's gate). Commands and observation run every tick.
 
 Ties between unconstrained phases are broken by name, which is how
 `logistics` lands before `salvage`.
@@ -100,8 +105,24 @@ Ties between unconstrained phases are broken by name, which is how
 | `logistics.ended` | Supplier's owner | `receiver`, `reason` (`receiver_lost`) |
 | `logistics.work` | Admins | `links`, `moved` (per tick, when links were active) |
 
-## Example plugin (not in the default build)
+## Match
+
+| Event | Audience | Fields |
+|---|---|---|
+| `match.state` | Everyone | `state`, `previous`, `reason` (`all_ready`, `admin_start`, `admin_pause`, `admin_resume`, `last_player_standing`, `simultaneous_elimination`, `time_limit`, `admin`, custom) |
+| `match.ready` | Everyone | `ready_count`, `expected` (no identities) |
+| `match.eliminated` | Everyone | `player`, `reason` (`no_units`, `admin`) |
+| `match.finished` | Everyone | `winner`, `draw`, `reason`, `run_ticks` |
+| `match.score` | The player (everyone if scores are public) | `player`, `score` (every `scoring.interval_ticks`) |
+
+Match state also travels as `MatchInfo` in snapshots and updates (see
+[GameService](../api/game-service.md#getmatch)).
+
+## Example plugins (not in the default build)
 
 | Event | Audience | Fields |
 |---|---|---|
 | `regeneration.regenerated` | Owner | `amount`, `stored` |
+
+`examples/plugins/koth` emits no events; its outcome appears as the match
+result reason `king_of_the_hill`.

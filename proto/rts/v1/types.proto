@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package rts.v1;
 
+import "rts/v1/match.proto";
+
 option go_package = "github.com/dakotaknutson/unit-strategy-game/gen/rts/v1;rtsv1";
 
 // Shared types used by both the player-facing GameService and the
@@ -168,6 +170,9 @@ message WorldSnapshot {
   bool fog_of_war = 3;
   // Tiles currently visible to the player (fog of war only).
   repeated TileRun visible_tiles = 4;
+  // The current match. A snapshot with a different match_id than before
+  // means the world was reset: discard everything from the old match.
+  MatchInfo match = 5;
 }
 
 // TickUpdate is the batched set of changes produced by one simulation tick,
@@ -189,4 +194,7 @@ message TickUpdate {
   // war only), sorted by row then column.
   repeated Position tiles_entered = 6;
   repeated Position tiles_exited = 7;
+  // Present when the match status changed this tick (state, clock,
+  // readiness, scores).
+  MatchInfo match = 8;
 }

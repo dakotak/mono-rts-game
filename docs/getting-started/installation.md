@@ -39,6 +39,7 @@ GOTOOLCHAIN=local go build -o bin/ ./cmd/rts-server
 | `rts-gateway` | [`cmd/rts-gateway`](../../cmd/rts-gateway/main.go) | Browser bridge: serves the web clients and translates HTTP/JSON to gRPC. One process, two listeners: player and admin. |
 | `rts-sim` | [`cmd/rts-sim`](../../cmd/rts-sim/main.go) | Headless harness: many units, random orders, no network. Prints throughput and the final state hash. |
 | `rts-bench` | [`cmd/rts-bench`](../../cmd/rts-bench/main.go) | Scale scenarios (1k–25k units × 7 workloads) and the tick-time report. |
+| `rts-replay` | [`cmd/rts-replay`](../../cmd/rts-replay/main.go) | `info` / `verify` for exported match replays. |
 
 ### `rts-server` flags
 
@@ -46,6 +47,8 @@ GOTOOLCHAIN=local go build -o bin/ ./cmd/rts-server
 |---|---|---|
 | `-config` | `configs/dev.json` | Game configuration file ([reference](../reference/configuration.md)). |
 | `-addr` | `127.0.0.1:50051` | gRPC listen address. |
+| `-check` | false | Validate the configuration (world generation included), print a summary, and exit. |
+| `-replay-hash-interval` | 100 | Ticks between full state hashes in recorded replays. |
 
 ### `rts-gateway` flags
 

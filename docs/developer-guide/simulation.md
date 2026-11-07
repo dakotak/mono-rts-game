@@ -39,17 +39,20 @@ allowed. Source: [`internal/sim/engine.go`](../../internal/sim/engine.go),
    sequence** (`Command.Seq`). Network arrival order between issuers never
    matters. Player IDs are opaque and derived from the ID key, so the
    player order is fixed per world but favors no config slot.
-3. **Execute commands.** For each command, run `CommandDef.Execute(ctx,
-   cmd)`. The returned error becomes a `CommandResult` (`OK` or a code from
+3. **Execute commands.** If a plugin registered a **gate** (the match
+   plugin does), it decides first (`Gate.AllowCommand`); a refusal becomes
+   the command's result. Otherwise run `CommandDef.Execute(ctx, cmd)`. The returned error becomes a `CommandResult` (`OK` or a code from
    a `*sim.CommandError`; other errors become `internal`). Per-unit
    outcomes from `ctx.ReportUnit` are attached.
 4. **Run phases.** In resolved order, and the systems within each phase in
-   resolved order.
+   resolved order. If a gate is registered and `Gate.RunSystems` returns
+   false (the match isn't RUNNING), every phase is skipped this tick.
 5. **Observe.** If a plugin registered an `ObservationAuthority`
    (visibility), call `Observations(ctx)` **after all systems**, so players
    only see settled end-of-tick state. Its events join the tick's events.
 6. **Collect.** `World.takeChanges()` returns full views of entities
-   created or modified this tick (sorted by ID) and removed IDs.
+   created or modified this tick (sorted by ID) and removed IDs. Changed
+   world **globals** are reported in `Frame.Globals`.
 7. **Publish.** Build the immutable `sim.Frame` and hand it to the frame
    sink (`Hub.Publish`).
 
@@ -122,6 +125,23 @@ rule**:
 | Supply links competing for a receiver or a supplier | Two-stage max-min split from a phase-start snapshot, applied as deltas | `logistics` |
 | Equal-cost paths | A* tie-break: h, then squared Euclidean distance, then tile index | `movement/path.go` |
 | Guard / auto-salvage target choice | Nearest by distance, ties by ID | `automation` |
+
+## Match lifecycle and resets
+
+The match lifecycle is not a kernel concept; the `match` plugin implements
+it with two small kernel facilities:
+
+- a **global**: the `match.status` world-scoped value, hashed and replayed
+- the **gate**: commands and systems allowed only in permitted states
+
+So lifecycle changes are ordinary commands executed in order inside ticks,
+and they replay exactly. Ticks keep advancing in every state; only systems
+are skipped. The match clock (`RunTicks`) counts running ticks.
+
+A **reset** is outside the simulation. The server builds a new `game.Game`
+(world, engine, plugins, RNG, hub, recorder) and swaps it in; the old
+engine's `Run` is cancelled and the run loop (`Server.Run`) continues with
+the new one. See [operations/matches.md](../operations/matches.md).
 
 ## Bounded work
 

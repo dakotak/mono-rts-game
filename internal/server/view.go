@@ -123,6 +123,9 @@ func (v viewer) update(pub *published) *rtsv1.TickUpdate {
 			u.Removed = append(u.Removed, uint64(id))
 		}
 	}
+	if pub.status != nil && pub.static != nil {
+		u.Match = matchInfo(pub.static, *pub.status, f.Tick, v)
+	}
 	for _, ev := range f.Events {
 		if !v.admin && !ev.Audience.All && ev.Audience.Player != v.player {
 			continue

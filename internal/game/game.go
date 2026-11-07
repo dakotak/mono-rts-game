@@ -7,10 +7,12 @@ package game
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"os"
 	"time"
 
@@ -20,6 +22,7 @@ import (
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/combat"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/energy"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/logistics"
+	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/match"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/metadata"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/movement"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/salvage"
@@ -27,6 +30,7 @@ import (
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/upgrades"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/visibility"
 	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/wells"
+	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/worldgen"
 	"github.com/dakotaknutson/unit-strategy-game/internal/sim"
 )
 
@@ -53,6 +57,9 @@ type WorldConfig struct {
 	// UnitCommandBudget is how many unit-commands (one per unit a command
 	// affects) each player may execute per tick. 0 means unlimited.
 	UnitCommandBudget int `json:"unit_command_budget"`
+	// RandomSeed draws a fresh random seed for every match instead of using
+	// Seed. The chosen seed is recorded (Game.Seed, match info, replays).
+	RandomSeed bool `json:"random_seed"`
 }
 
 // PlayerConfig declares a player slot. Whoever presents JoinToken plays as
@@ -157,9 +164,12 @@ func Plugins() []sim.Plugin {
 	salvageP.CanSee = vis.Detected
 	auto := automation.New(fighting)
 	auto.Detected = vis.Detected
+	terrainP, wellsP := terrain.New(), wells.New()
 	return []sim.Plugin{
-		terrain.New(),
-		wells.New(),
+		match.New(attrs, fighting),
+		worldgen.New(terrainP, wellsP),
+		terrainP,
+		wellsP,
 		attrs,
 		energyP,
 		upgrades.New(attrs),
@@ -174,6 +184,13 @@ func Plugins() []sim.Plugin {
 	}
 }
 
+// PlayerAware is implemented by plugins that need the match's players (in
+// configuration order) before the world initializes: world generation
+// spawns them, the match plugin tracks readiness and elimination.
+type PlayerAware interface {
+	SetPlayers(ids []sim.PlayerID)
+}
+
 // Player is a resolved player slot.
 type Player struct {
 	ID        sim.PlayerID
@@ -182,11 +199,47 @@ type Player struct {
 	JoinToken string
 }
 
+// EngineVersion identifies the simulation code for replay compatibility.
+// Bump it whenever a change can alter simulation results.
+const EngineVersion = "mono-m7"
+
 // Game is an assembled, ready-to-run game.
 type Game struct {
 	Engine  *sim.Engine
 	Players []Player // in configuration order
-	plugins []sim.Plugin
+	// Seed and IDKey are the values actually used (resolved when the config
+	// asked for random ones).
+	Seed  uint64
+	IDKey []byte
+	// Resolved is the configuration with the seed and ID key filled in and
+	// random_seed off: building a game from it reproduces this one.
+	Resolved *Config
+	plugins  []sim.Plugin
+}
+
+// RulesetHash fingerprints the ruleset: plugins, schedule, command types
+// and every plugin's published rules (effective configuration).
+func RulesetHash(rs *sim.Ruleset) string {
+	h := fnv.New64a()
+	fmt.Fprintf(h, "%v|%v|%v|", rs.Plugins(), rs.Schedule(), rs.CommandTypes(true))
+	b, _ := json.Marshal(rs.Rules()) // map keys are sorted
+	h.Write(b)
+	return fmt.Sprintf("%016x", h.Sum64())
+}
+
+// Plugin returns the game's plugin instance of type T.
+func Plugin[T sim.Plugin](g *Game) (T, bool) { return Find[T](g.plugins) }
+
+// Find returns the plugin of type T in a plugin set (e.g. the shared
+// *match.Plugin in Plugins(), to register conditions with it).
+func Find[T sim.Plugin](plugins []sim.Plugin) (T, bool) {
+	for _, p := range plugins {
+		if t, ok := p.(T); ok {
+			return t, true
+		}
+	}
+	var zero T
+	return zero, false
 }
 
 // PluginsOf returns the plugin instances a game was built with.
@@ -202,9 +255,15 @@ func (g *Game) PlayerBySlot(slot int) (Player, bool) {
 	return Player{}, false
 }
 
-// New builds the ruleset and engine, derives player IDs and places the
-// initial units.
-func New(c *Config) (*Game, error) {
+// New builds the ruleset and engine from the compiled-in plugins
+// (Plugins), derives player IDs and places the initial units.
+func New(c *Config) (*Game, error) { return NewWithPlugins(c, Plugins()) }
+
+// NewWithPlugins is New with an explicit plugin set, e.g. Plugins() plus a
+// plugin under development (tests and tools; the server uses Plugins()).
+// The plugins must be freshly constructed: a plugin instance belongs to one
+// game.
+func NewWithPlugins(c *Config, plugins []sim.Plugin) (*Game, error) {
 	if err := c.Validate(); err != nil {
 		return nil, err
 	}
@@ -212,16 +271,34 @@ func New(c *Config) (*Game, error) {
 	if err != nil {
 		return nil, err
 	}
-	plugins := Plugins()
+	seed := c.World.Seed
+	if c.World.RandomSeed {
+		var b [8]byte
+		if _, err := rand.Read(b[:]); err != nil {
+			return nil, fmt.Errorf("random seed: %w", err)
+		}
+		seed = binary.LittleEndian.Uint64(b[:])
+	}
+	resolved := *c
+	resolved.World.Seed, resolved.World.RandomSeed, resolved.World.IDKey = seed, false, hex.EncodeToString(key)
 	rules, err := sim.NewRuleset(plugins, c.Plugins)
 	if err != nil {
 		return nil, err
 	}
-	e, err := sim.NewEngine(sim.Config{Width: c.World.Width, Height: c.World.Height, Seed: c.World.Seed, IDKey: key, UnitCommandBudget: c.World.UnitCommandBudget}, rules)
+	e, err := sim.NewEngine(sim.Config{Width: c.World.Width, Height: c.World.Height, Seed: seed, IDKey: key, UnitCommandBudget: c.World.UnitCommandBudget}, rules)
 	if err != nil {
 		return nil, err
 	}
-	g := &Game{Engine: e, Players: derivePlayers(key, c.Players), plugins: plugins}
+	g := &Game{Engine: e, Players: derivePlayers(key, c.Players), Seed: seed, IDKey: key, Resolved: &resolved, plugins: plugins}
+	ids := make([]sim.PlayerID, len(g.Players))
+	for i, p := range g.Players {
+		ids[i] = p.ID
+	}
+	for _, p := range plugins {
+		if pa, ok := p.(PlayerAware); ok {
+			pa.SetPlayers(ids)
+		}
+	}
 
 	w := e.World()
 	for i, b := range c.Units {

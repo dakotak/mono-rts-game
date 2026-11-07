@@ -18,8 +18,10 @@ func Plugins() []sim.Plugin {
     salvageP.CanSee = vis.Detected
     auto := automation.New(fighting)
     auto.Detected = vis.Detected
+    terrainP, wellsP := terrain.New(), wells.New()
     return []sim.Plugin{
-        terrain.New(), wells.New(), attrs, energyP, upgrades.New(attrs), cloning.New(attrs),
+        match.New(attrs, fighting), worldgen.New(terrainP, wellsP), terrainP, wellsP,
+        attrs, energyP, upgrades.New(attrs), cloning.New(attrs),
         movement.NewWithAttributes(attrs), metadata.New(), fighting, salvageP, auto,
         logistics.New(attrs), vis,
     }
@@ -57,6 +59,19 @@ server and gateway can decode its `Any` payloads.
 The [tutorial](getting-started.md#12-register-the-plugin-with-the-server)
 has the complete, verified diff for the example plugin.
 
+### Sub-registrations: generators, victory conditions, metrics
+
+Some plugins accept extensions registered on their instance before the
+ruleset is built:
+
+| Instance | Method | Guide |
+|---|---|---|
+| `*worldgen.Plugin` | `AddGenerator(g)` | [worldgen.md](worldgen.md) |
+| `*match.Plugin` | `AddCondition(c)`, `AddMetric(m)` | [match-extensions.md](match-extensions.md) |
+
+`game.New` also hands the configured players to every plugin implementing
+`game.PlayerAware`, before `Init`.
+
 ### Tests and tools can compose differently
 
 `sim.NewRuleset` takes any `[]sim.Plugin`, so tests can build minimal or
@@ -71,6 +86,8 @@ rules, err := sim.NewRuleset([]sim.Plugin{
 ```
 
 `game.New` (and therefore `rts-server`) always uses `game.Plugins()`.
+`game.NewWithPlugins(cfg, plugins)` does everything `game.New` does
+(players, units, `Init`, seed resolution) with your plugin set.
 
 ## What `sim.NewRuleset` does
 

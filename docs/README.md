@@ -1,7 +1,7 @@
 # Mono documentation
 
 Everything here describes the code as it is in this repository (through
-Milestone 6). Where something is planned but not built, the page says so.
+Milestone 7). Where something is planned but not built, the page says so.
 [Design notes](developer-guide/design-notes.md#not-implemented) keeps the
 list of what isn't implemented.
 
@@ -26,6 +26,7 @@ list of what isn't implemented.
 - [Combat and salvage](user-guide/combat.md)
 - [Visibility, sensors and intelligence](user-guide/visibility.md)
 - [Automation and logistics](user-guide/automation.md)
+- [Matches: lobby, victory, scoring and results](user-guide/matches.md)
 
 ## API and bots
 
@@ -50,6 +51,7 @@ list of what isn't implemented.
 - [Contributing](developer-guide/contributing.md)
 - [Mechanics rules reference](developer-guide/mechanics.md): the exact rules
   of every built-in mechanic.
+- [Replay format and reproducibility](developer-guide/replay.md)
 - [Design notes, limitations and roadmap](developer-guide/design-notes.md)
 
 ### Plugin development
@@ -62,6 +64,7 @@ list of what isn't implemented.
 - [Commands and events](developer-guide/plugins/commands-and-events.md) · [Attributes and formulas](developer-guide/plugins/attributes-and-formulas.md)
 - [State and determinism rules](developer-guide/plugins/state-and-determinism.md)
 - [Testing plugins](developer-guide/plugins/testing.md) · [Examples](developer-guide/plugins/examples.md)
+- [World generators](developer-guide/plugins/worldgen.md) · [Victory conditions and scoring rules](developer-guide/plugins/match-extensions.md)
 
 ## Operations
 
@@ -69,6 +72,8 @@ list of what isn't implemented.
   hardening, limits.
 - [Administration](operations/administration.md): the admin client and
   API, pause/step, world edits.
+- [Running matches](operations/matches.md): presets, starting and
+  resetting, bot matches, replays.
 - [Troubleshooting](operations/troubleshooting.md)
 
 ## Reference

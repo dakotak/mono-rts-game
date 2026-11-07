@@ -24,6 +24,8 @@ const (
 	AttrCapacity       = "wells.capacity"
 	AttrExtractionRate = "wells.extraction_rate"
 	AttrUnlimited      = "wells.unlimited"
+	AttrRegeneration   = "wells.regeneration"
+	Phase              = "wells"
 )
 
 // Command types (admin only).
@@ -41,6 +43,9 @@ type Well struct {
 	ExtractionRate int64 `json:"extraction_rate"`
 	// Unlimited wells never deplete; Energy is not decremented.
 	Unlimited bool `json:"unlimited"`
+	// Regeneration is energy a finite well regains per tick, up to its
+	// capacity (0 = none). It creates energy.
+	Regeneration int64 `json:"regeneration"`
 }
 
 // Validate checks the well invariants.
@@ -52,6 +57,8 @@ func (w Well) Validate() error {
 		return fmt.Errorf("energy must be in 0..capacity (%d), got %d", w.Capacity, w.Energy)
 	case w.ExtractionRate < 0:
 		return fmt.Errorf("extraction_rate must be >= 0, got %d", w.ExtractionRate)
+	case w.Regeneration < 0:
+		return fmt.Errorf("regeneration must be >= 0, got %d", w.Regeneration)
 	}
 	return nil
 }
@@ -73,6 +80,7 @@ type WellSpec struct {
 	Capacity       *int64 `json:"capacity,omitempty"`
 	ExtractionRate *int64 `json:"extraction_rate,omitempty"`
 	Unlimited      *bool  `json:"unlimited,omitempty"`
+	Regeneration   *int64 `json:"regeneration,omitempty"`
 }
 
 // PlacedWell is an initial well from configuration.
@@ -122,6 +130,9 @@ func (p *Plugin) apply(base Well, s WellSpec) Well {
 	if s.Unlimited != nil {
 		base.Unlimited = *s.Unlimited
 	}
+	if s.Regeneration != nil {
+		base.Regeneration = *s.Regeneration
+	}
 	return base
 }
 
@@ -149,6 +160,7 @@ func (p *Plugin) Register(r *sim.Registrar) error {
 			{Key: AttrCapacity, Value: sim.IntValue(v.Capacity)},
 			{Key: AttrExtractionRate, Value: sim.IntValue(v.ExtractionRate)},
 			{Key: AttrUnlimited, Value: sim.BoolValue(v.Unlimited)},
+			{Key: AttrRegeneration, Value: sim.IntValue(v.Regeneration)},
 		}
 	})); err != nil {
 		return err
@@ -161,6 +173,12 @@ func (p *Plugin) Register(r *sim.Registrar) error {
 		}
 		return nil
 	})
+	if err := r.Phase(sim.PhaseDef{Name: Phase}); err != nil {
+		return err
+	}
+	if err := r.System(sim.SystemDef{Name: "wells.regenerate", Phase: Phase, Run: regenerate}); err != nil {
+		return err
+	}
 	if err := r.Command(sim.CommandDef{Type: CommandCreate, AdminOnly: true, Execute: p.execCreate}); err != nil {
 		return err
 	}
@@ -168,6 +186,28 @@ func (p *Plugin) Register(r *sim.Registrar) error {
 }
 
 func (p *Plugin) create(w *sim.World, pos sim.Pos, v Well) (sim.EntityID, error) {
+	return Create(w, pos, v)
+}
+
+func specFrom(energy, capacity, rate *int64, unlimited *bool, regen *int64) WellSpec {
+	return WellSpec{Energy: energy, Capacity: capacity, ExtractionRate: rate, Unlimited: unlimited, Regeneration: regen}
+}
+
+// regenerate refills finite wells with regeneration, in ID order.
+func regenerate(ctx *sim.TickContext) {
+	for _, id := range component.Entities(ctx.World) {
+		v, _ := component.Get(ctx.World, id)
+		if v.Unlimited || v.Regeneration == 0 || v.Energy >= v.Capacity {
+			continue
+		}
+		v.Energy = min(v.Capacity, v.Energy+v.Regeneration)
+		component.Set(ctx.World, id, v)
+	}
+}
+
+// Create places a well (used by world generation). The well is validated
+// and its tile must be free.
+func Create(w *sim.World, pos sim.Pos, v Well) (sim.EntityID, error) {
 	if err := v.Validate(); err != nil {
 		return 0, err
 	}
@@ -179,9 +219,8 @@ func (p *Plugin) create(w *sim.World, pos sim.Pos, v Well) (sim.EntityID, error)
 	return id, nil
 }
 
-func specFrom(energy, capacity, rate *int64, unlimited *bool) WellSpec {
-	return WellSpec{Energy: energy, Capacity: capacity, ExtractionRate: rate, Unlimited: unlimited}
-}
+// Defaults returns the configured well defaults.
+func (p *Plugin) Defaults() Well { return p.cfg.Defaults }
 
 func (p *Plugin) execCreate(ctx *sim.TickContext, cmd sim.Command) error {
 	m, ok := cmd.Payload.(*wellsv1.CreateWellCommand)
@@ -192,7 +231,7 @@ func (p *Plugin) execCreate(ctx *sim.TickContext, cmd sim.Command) error {
 		return sim.Fail(sim.CodeInvalidArgument, "position required")
 	}
 	pos := sim.Pos{X: m.GetPosition().GetX(), Y: m.GetPosition().GetY()}
-	v := p.apply(p.cfg.Defaults, specFrom(m.Energy, m.Capacity, m.ExtractionRate, m.Unlimited))
+	v := p.apply(p.cfg.Defaults, specFrom(m.Energy, m.Capacity, m.ExtractionRate, m.Unlimited, m.Regeneration))
 	if err := v.Validate(); err != nil {
 		return sim.Fail(sim.CodeInvalidArgument, "%v", err)
 	}
@@ -221,7 +260,7 @@ func (p *Plugin) execConfigure(ctx *sim.TickContext, cmd sim.Command) error {
 	if !ok {
 		return sim.Fail(sim.CodeNotFound, "well %d not found", m.GetWellId())
 	}
-	v := p.apply(cur, specFrom(m.Energy, m.Capacity, m.ExtractionRate, m.Unlimited))
+	v := p.apply(cur, specFrom(m.Energy, m.Capacity, m.ExtractionRate, m.Unlimited, m.Regeneration))
 	if err := v.Validate(); err != nil {
 		return sim.Fail(sim.CodeInvalidArgument, "%v", err)
 	}

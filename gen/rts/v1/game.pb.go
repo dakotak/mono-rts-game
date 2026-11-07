@@ -22,6 +22,95 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type GetMatchRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetMatchRequest) Reset() {
+	*x = GetMatchRequest{}
+	mi := &file_rts_v1_game_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetMatchRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetMatchRequest) ProtoMessage() {}
+
+func (x *GetMatchRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rts_v1_game_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetMatchRequest.ProtoReflect.Descriptor instead.
+func (*GetMatchRequest) Descriptor() ([]byte, []int) {
+	return file_rts_v1_game_proto_rawDescGZIP(), []int{0}
+}
+
+type GetMatchResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Match *MatchInfo             `protobuf:"bytes,1,opt,name=match,proto3" json:"match,omitempty"`
+	// Most recent first; at most 16.
+	History       []*MatchResult `protobuf:"bytes,2,rep,name=history,proto3" json:"history,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetMatchResponse) Reset() {
+	*x = GetMatchResponse{}
+	mi := &file_rts_v1_game_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetMatchResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetMatchResponse) ProtoMessage() {}
+
+func (x *GetMatchResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_rts_v1_game_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetMatchResponse.ProtoReflect.Descriptor instead.
+func (*GetMatchResponse) Descriptor() ([]byte, []int) {
+	return file_rts_v1_game_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *GetMatchResponse) GetMatch() *MatchInfo {
+	if x != nil {
+		return x.Match
+	}
+	return nil
+}
+
+func (x *GetMatchResponse) GetHistory() []*MatchResult {
+	if x != nil {
+		return x.History
+	}
+	return nil
+}
+
 type ConnectRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	JoinToken     string                 `protobuf:"bytes,1,opt,name=join_token,json=joinToken,proto3" json:"join_token,omitempty"`
@@ -31,7 +120,7 @@ type ConnectRequest struct {
 
 func (x *ConnectRequest) Reset() {
 	*x = ConnectRequest{}
-	mi := &file_rts_v1_game_proto_msgTypes[0]
+	mi := &file_rts_v1_game_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -43,7 +132,7 @@ func (x *ConnectRequest) String() string {
 func (*ConnectRequest) ProtoMessage() {}
 
 func (x *ConnectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_game_proto_msgTypes[0]
+	mi := &file_rts_v1_game_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -56,7 +145,7 @@ func (x *ConnectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConnectRequest.ProtoReflect.Descriptor instead.
 func (*ConnectRequest) Descriptor() ([]byte, []int) {
-	return file_rts_v1_game_proto_rawDescGZIP(), []int{0}
+	return file_rts_v1_game_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *ConnectRequest) GetJoinToken() string {
@@ -73,13 +162,14 @@ type ConnectResponse struct {
 	SessionToken  string     `protobuf:"bytes,2,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
 	World         *WorldInfo `protobuf:"bytes,3,opt,name=world,proto3" json:"world,omitempty"`
 	PlayerName    string     `protobuf:"bytes,4,opt,name=player_name,json=playerName,proto3" json:"player_name,omitempty"`
+	Match         *MatchInfo `protobuf:"bytes,5,opt,name=match,proto3" json:"match,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ConnectResponse) Reset() {
 	*x = ConnectResponse{}
-	mi := &file_rts_v1_game_proto_msgTypes[1]
+	mi := &file_rts_v1_game_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -91,7 +181,7 @@ func (x *ConnectResponse) String() string {
 func (*ConnectResponse) ProtoMessage() {}
 
 func (x *ConnectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_game_proto_msgTypes[1]
+	mi := &file_rts_v1_game_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -104,7 +194,7 @@ func (x *ConnectResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConnectResponse.ProtoReflect.Descriptor instead.
 func (*ConnectResponse) Descriptor() ([]byte, []int) {
-	return file_rts_v1_game_proto_rawDescGZIP(), []int{1}
+	return file_rts_v1_game_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *ConnectResponse) GetPlayerId() uint32 {
@@ -135,6 +225,13 @@ func (x *ConnectResponse) GetPlayerName() string {
 	return ""
 }
 
+func (x *ConnectResponse) GetMatch() *MatchInfo {
+	if x != nil {
+		return x.Match
+	}
+	return nil
+}
+
 type SubmitCommandRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Client-chosen unique identifier (per player). Resubmitting the same id
@@ -148,7 +245,7 @@ type SubmitCommandRequest struct {
 
 func (x *SubmitCommandRequest) Reset() {
 	*x = SubmitCommandRequest{}
-	mi := &file_rts_v1_game_proto_msgTypes[2]
+	mi := &file_rts_v1_game_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -160,7 +257,7 @@ func (x *SubmitCommandRequest) String() string {
 func (*SubmitCommandRequest) ProtoMessage() {}
 
 func (x *SubmitCommandRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_game_proto_msgTypes[2]
+	mi := &file_rts_v1_game_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -173,7 +270,7 @@ func (x *SubmitCommandRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubmitCommandRequest.ProtoReflect.Descriptor instead.
 func (*SubmitCommandRequest) Descriptor() ([]byte, []int) {
-	return file_rts_v1_game_proto_rawDescGZIP(), []int{2}
+	return file_rts_v1_game_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *SubmitCommandRequest) GetCommandId() string {
@@ -204,7 +301,7 @@ type SubmitCommandResponse struct {
 
 func (x *SubmitCommandResponse) Reset() {
 	*x = SubmitCommandResponse{}
-	mi := &file_rts_v1_game_proto_msgTypes[3]
+	mi := &file_rts_v1_game_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -216,7 +313,7 @@ func (x *SubmitCommandResponse) String() string {
 func (*SubmitCommandResponse) ProtoMessage() {}
 
 func (x *SubmitCommandResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_game_proto_msgTypes[3]
+	mi := &file_rts_v1_game_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -229,7 +326,7 @@ func (x *SubmitCommandResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubmitCommandResponse.ProtoReflect.Descriptor instead.
 func (*SubmitCommandResponse) Descriptor() ([]byte, []int) {
-	return file_rts_v1_game_proto_rawDescGZIP(), []int{3}
+	return file_rts_v1_game_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *SubmitCommandResponse) GetCommandId() string {
@@ -268,7 +365,7 @@ type GetSnapshotRequest struct {
 
 func (x *GetSnapshotRequest) Reset() {
 	*x = GetSnapshotRequest{}
-	mi := &file_rts_v1_game_proto_msgTypes[4]
+	mi := &file_rts_v1_game_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -280,7 +377,7 @@ func (x *GetSnapshotRequest) String() string {
 func (*GetSnapshotRequest) ProtoMessage() {}
 
 func (x *GetSnapshotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_game_proto_msgTypes[4]
+	mi := &file_rts_v1_game_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -293,7 +390,7 @@ func (x *GetSnapshotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSnapshotRequest.ProtoReflect.Descriptor instead.
 func (*GetSnapshotRequest) Descriptor() ([]byte, []int) {
-	return file_rts_v1_game_proto_rawDescGZIP(), []int{4}
+	return file_rts_v1_game_proto_rawDescGZIP(), []int{6}
 }
 
 type GetSnapshotResponse struct {
@@ -305,7 +402,7 @@ type GetSnapshotResponse struct {
 
 func (x *GetSnapshotResponse) Reset() {
 	*x = GetSnapshotResponse{}
-	mi := &file_rts_v1_game_proto_msgTypes[5]
+	mi := &file_rts_v1_game_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -317,7 +414,7 @@ func (x *GetSnapshotResponse) String() string {
 func (*GetSnapshotResponse) ProtoMessage() {}
 
 func (x *GetSnapshotResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_game_proto_msgTypes[5]
+	mi := &file_rts_v1_game_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -330,7 +427,7 @@ func (x *GetSnapshotResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSnapshotResponse.ProtoReflect.Descriptor instead.
 func (*GetSnapshotResponse) Descriptor() ([]byte, []int) {
-	return file_rts_v1_game_proto_rawDescGZIP(), []int{5}
+	return file_rts_v1_game_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *GetSnapshotResponse) GetSnapshot() *WorldSnapshot {
@@ -348,7 +445,7 @@ type ObserveRequest struct {
 
 func (x *ObserveRequest) Reset() {
 	*x = ObserveRequest{}
-	mi := &file_rts_v1_game_proto_msgTypes[6]
+	mi := &file_rts_v1_game_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -360,7 +457,7 @@ func (x *ObserveRequest) String() string {
 func (*ObserveRequest) ProtoMessage() {}
 
 func (x *ObserveRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_game_proto_msgTypes[6]
+	mi := &file_rts_v1_game_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -373,7 +470,7 @@ func (x *ObserveRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ObserveRequest.ProtoReflect.Descriptor instead.
 func (*ObserveRequest) Descriptor() ([]byte, []int) {
-	return file_rts_v1_game_proto_rawDescGZIP(), []int{6}
+	return file_rts_v1_game_proto_rawDescGZIP(), []int{8}
 }
 
 type ObserveResponse struct {
@@ -389,7 +486,7 @@ type ObserveResponse struct {
 
 func (x *ObserveResponse) Reset() {
 	*x = ObserveResponse{}
-	mi := &file_rts_v1_game_proto_msgTypes[7]
+	mi := &file_rts_v1_game_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -401,7 +498,7 @@ func (x *ObserveResponse) String() string {
 func (*ObserveResponse) ProtoMessage() {}
 
 func (x *ObserveResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_game_proto_msgTypes[7]
+	mi := &file_rts_v1_game_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -414,7 +511,7 @@ func (x *ObserveResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ObserveResponse.ProtoReflect.Descriptor instead.
 func (*ObserveResponse) Descriptor() ([]byte, []int) {
-	return file_rts_v1_game_proto_rawDescGZIP(), []int{7}
+	return file_rts_v1_game_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ObserveResponse) GetKind() isObserveResponse_Kind {
@@ -462,16 +559,21 @@ var File_rts_v1_game_proto protoreflect.FileDescriptor
 
 const file_rts_v1_game_proto_rawDesc = "" +
 	"\n" +
-	"\x11rts/v1/game.proto\x12\x06rts.v1\x1a\x19google/protobuf/any.proto\x1a\x12rts/v1/types.proto\"/\n" +
+	"\x11rts/v1/game.proto\x12\x06rts.v1\x1a\x19google/protobuf/any.proto\x1a\x12rts/v1/match.proto\x1a\x12rts/v1/types.proto\"\x11\n" +
+	"\x0fGetMatchRequest\"j\n" +
+	"\x10GetMatchResponse\x12'\n" +
+	"\x05match\x18\x01 \x01(\v2\x11.rts.v1.MatchInfoR\x05match\x12-\n" +
+	"\ahistory\x18\x02 \x03(\v2\x13.rts.v1.MatchResultR\ahistory\"/\n" +
 	"\x0eConnectRequest\x12\x1d\n" +
 	"\n" +
-	"join_token\x18\x01 \x01(\tR\tjoinToken\"\x9d\x01\n" +
+	"join_token\x18\x01 \x01(\tR\tjoinToken\"\xc6\x01\n" +
 	"\x0fConnectResponse\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\rR\bplayerId\x12#\n" +
 	"\rsession_token\x18\x02 \x01(\tR\fsessionToken\x12'\n" +
 	"\x05world\x18\x03 \x01(\v2\x11.rts.v1.WorldInfoR\x05world\x12\x1f\n" +
 	"\vplayer_name\x18\x04 \x01(\tR\n" +
-	"playerName\"e\n" +
+	"playerName\x12'\n" +
+	"\x05match\x18\x05 \x01(\v2\x11.rts.v1.MatchInfoR\x05match\"e\n" +
 	"\x14SubmitCommandRequest\x12\x1d\n" +
 	"\n" +
 	"command_id\x18\x01 \x01(\tR\tcommandId\x12.\n" +
@@ -489,12 +591,13 @@ const file_rts_v1_game_proto_rawDesc = "" +
 	"\x0fObserveResponse\x123\n" +
 	"\bsnapshot\x18\x01 \x01(\v2\x15.rts.v1.WorldSnapshotH\x00R\bsnapshot\x12,\n" +
 	"\x06update\x18\x02 \x01(\v2\x12.rts.v1.TickUpdateH\x00R\x06updateB\x06\n" +
-	"\x04kind2\x9d\x02\n" +
+	"\x04kind2\xdc\x02\n" +
 	"\vGameService\x12:\n" +
 	"\aConnect\x12\x16.rts.v1.ConnectRequest\x1a\x17.rts.v1.ConnectResponse\x12L\n" +
 	"\rSubmitCommand\x12\x1c.rts.v1.SubmitCommandRequest\x1a\x1d.rts.v1.SubmitCommandResponse\x12F\n" +
 	"\vGetSnapshot\x12\x1a.rts.v1.GetSnapshotRequest\x1a\x1b.rts.v1.GetSnapshotResponse\x12<\n" +
-	"\aObserve\x12\x16.rts.v1.ObserveRequest\x1a\x17.rts.v1.ObserveResponse0\x01B>Z<github.com/dakotaknutson/unit-strategy-game/gen/rts/v1;rtsv1b\x06proto3"
+	"\aObserve\x12\x16.rts.v1.ObserveRequest\x1a\x17.rts.v1.ObserveResponse0\x01\x12=\n" +
+	"\bGetMatch\x12\x17.rts.v1.GetMatchRequest\x1a\x18.rts.v1.GetMatchResponseB>Z<github.com/dakotaknutson/unit-strategy-game/gen/rts/v1;rtsv1b\x06proto3"
 
 var (
 	file_rts_v1_game_proto_rawDescOnce sync.Once
@@ -508,40 +611,49 @@ func file_rts_v1_game_proto_rawDescGZIP() []byte {
 	return file_rts_v1_game_proto_rawDescData
 }
 
-var file_rts_v1_game_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_rts_v1_game_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_rts_v1_game_proto_goTypes = []any{
-	(*ConnectRequest)(nil),        // 0: rts.v1.ConnectRequest
-	(*ConnectResponse)(nil),       // 1: rts.v1.ConnectResponse
-	(*SubmitCommandRequest)(nil),  // 2: rts.v1.SubmitCommandRequest
-	(*SubmitCommandResponse)(nil), // 3: rts.v1.SubmitCommandResponse
-	(*GetSnapshotRequest)(nil),    // 4: rts.v1.GetSnapshotRequest
-	(*GetSnapshotResponse)(nil),   // 5: rts.v1.GetSnapshotResponse
-	(*ObserveRequest)(nil),        // 6: rts.v1.ObserveRequest
-	(*ObserveResponse)(nil),       // 7: rts.v1.ObserveResponse
-	(*WorldInfo)(nil),             // 8: rts.v1.WorldInfo
-	(*anypb.Any)(nil),             // 9: google.protobuf.Any
-	(*WorldSnapshot)(nil),         // 10: rts.v1.WorldSnapshot
-	(*TickUpdate)(nil),            // 11: rts.v1.TickUpdate
+	(*GetMatchRequest)(nil),       // 0: rts.v1.GetMatchRequest
+	(*GetMatchResponse)(nil),      // 1: rts.v1.GetMatchResponse
+	(*ConnectRequest)(nil),        // 2: rts.v1.ConnectRequest
+	(*ConnectResponse)(nil),       // 3: rts.v1.ConnectResponse
+	(*SubmitCommandRequest)(nil),  // 4: rts.v1.SubmitCommandRequest
+	(*SubmitCommandResponse)(nil), // 5: rts.v1.SubmitCommandResponse
+	(*GetSnapshotRequest)(nil),    // 6: rts.v1.GetSnapshotRequest
+	(*GetSnapshotResponse)(nil),   // 7: rts.v1.GetSnapshotResponse
+	(*ObserveRequest)(nil),        // 8: rts.v1.ObserveRequest
+	(*ObserveResponse)(nil),       // 9: rts.v1.ObserveResponse
+	(*MatchInfo)(nil),             // 10: rts.v1.MatchInfo
+	(*MatchResult)(nil),           // 11: rts.v1.MatchResult
+	(*WorldInfo)(nil),             // 12: rts.v1.WorldInfo
+	(*anypb.Any)(nil),             // 13: google.protobuf.Any
+	(*WorldSnapshot)(nil),         // 14: rts.v1.WorldSnapshot
+	(*TickUpdate)(nil),            // 15: rts.v1.TickUpdate
 }
 var file_rts_v1_game_proto_depIdxs = []int32{
-	8,  // 0: rts.v1.ConnectResponse.world:type_name -> rts.v1.WorldInfo
-	9,  // 1: rts.v1.SubmitCommandRequest.payload:type_name -> google.protobuf.Any
-	10, // 2: rts.v1.GetSnapshotResponse.snapshot:type_name -> rts.v1.WorldSnapshot
-	10, // 3: rts.v1.ObserveResponse.snapshot:type_name -> rts.v1.WorldSnapshot
-	11, // 4: rts.v1.ObserveResponse.update:type_name -> rts.v1.TickUpdate
-	0,  // 5: rts.v1.GameService.Connect:input_type -> rts.v1.ConnectRequest
-	2,  // 6: rts.v1.GameService.SubmitCommand:input_type -> rts.v1.SubmitCommandRequest
-	4,  // 7: rts.v1.GameService.GetSnapshot:input_type -> rts.v1.GetSnapshotRequest
-	6,  // 8: rts.v1.GameService.Observe:input_type -> rts.v1.ObserveRequest
-	1,  // 9: rts.v1.GameService.Connect:output_type -> rts.v1.ConnectResponse
-	3,  // 10: rts.v1.GameService.SubmitCommand:output_type -> rts.v1.SubmitCommandResponse
-	5,  // 11: rts.v1.GameService.GetSnapshot:output_type -> rts.v1.GetSnapshotResponse
-	7,  // 12: rts.v1.GameService.Observe:output_type -> rts.v1.ObserveResponse
-	9,  // [9:13] is the sub-list for method output_type
-	5,  // [5:9] is the sub-list for method input_type
-	5,  // [5:5] is the sub-list for extension type_name
-	5,  // [5:5] is the sub-list for extension extendee
-	0,  // [0:5] is the sub-list for field type_name
+	10, // 0: rts.v1.GetMatchResponse.match:type_name -> rts.v1.MatchInfo
+	11, // 1: rts.v1.GetMatchResponse.history:type_name -> rts.v1.MatchResult
+	12, // 2: rts.v1.ConnectResponse.world:type_name -> rts.v1.WorldInfo
+	10, // 3: rts.v1.ConnectResponse.match:type_name -> rts.v1.MatchInfo
+	13, // 4: rts.v1.SubmitCommandRequest.payload:type_name -> google.protobuf.Any
+	14, // 5: rts.v1.GetSnapshotResponse.snapshot:type_name -> rts.v1.WorldSnapshot
+	14, // 6: rts.v1.ObserveResponse.snapshot:type_name -> rts.v1.WorldSnapshot
+	15, // 7: rts.v1.ObserveResponse.update:type_name -> rts.v1.TickUpdate
+	2,  // 8: rts.v1.GameService.Connect:input_type -> rts.v1.ConnectRequest
+	4,  // 9: rts.v1.GameService.SubmitCommand:input_type -> rts.v1.SubmitCommandRequest
+	6,  // 10: rts.v1.GameService.GetSnapshot:input_type -> rts.v1.GetSnapshotRequest
+	8,  // 11: rts.v1.GameService.Observe:input_type -> rts.v1.ObserveRequest
+	0,  // 12: rts.v1.GameService.GetMatch:input_type -> rts.v1.GetMatchRequest
+	3,  // 13: rts.v1.GameService.Connect:output_type -> rts.v1.ConnectResponse
+	5,  // 14: rts.v1.GameService.SubmitCommand:output_type -> rts.v1.SubmitCommandResponse
+	7,  // 15: rts.v1.GameService.GetSnapshot:output_type -> rts.v1.GetSnapshotResponse
+	9,  // 16: rts.v1.GameService.Observe:output_type -> rts.v1.ObserveResponse
+	1,  // 17: rts.v1.GameService.GetMatch:output_type -> rts.v1.GetMatchResponse
+	13, // [13:18] is the sub-list for method output_type
+	8,  // [8:13] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_rts_v1_game_proto_init() }
@@ -549,8 +661,9 @@ func file_rts_v1_game_proto_init() {
 	if File_rts_v1_game_proto != nil {
 		return
 	}
+	file_rts_v1_match_proto_init()
 	file_rts_v1_types_proto_init()
-	file_rts_v1_game_proto_msgTypes[7].OneofWrappers = []any{
+	file_rts_v1_game_proto_msgTypes[9].OneofWrappers = []any{
 		(*ObserveResponse_Snapshot)(nil),
 		(*ObserveResponse_Update)(nil),
 	}
@@ -560,7 +673,7 @@ func file_rts_v1_game_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rts_v1_game_proto_rawDesc), len(file_rts_v1_game_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

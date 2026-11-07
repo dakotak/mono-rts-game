@@ -36,7 +36,7 @@ you may not command produce `not_found`.
 
 | Command | Fields | Who | Notes |
 |---|---|---|---|
-| `CreateWellCommand` | `position`, optional `energy`, `capacity`, `extraction_rate`, `unlimited` | admin | Unset fields use `wells.defaults`. |
+| `CreateWellCommand` | `position`, optional `energy`, `capacity`, `extraction_rate`, `unlimited`, `regeneration` | admin | Unset fields use `wells.defaults`. |
 | `ConfigureWellCommand` | `well_id`, optional fields as above | admin | Only set fields change; `0 ≤ energy ≤ capacity`. |
 
 ## Attributes, upgrades, cloning
@@ -80,6 +80,22 @@ you may not command produce `not_found`.
 |---|---|---|---|---|---|
 | `SupplyCommand` | `unit_ids[]` (suppliers), `receiver_id`, `reserve`, `fill_to`, `resume_below` | player | ✓ | 1 per unit | Adds or updates a link; max 4 receivers per supplier; receiver must be your unit; cycles rejected (`failed_precondition`); `resume_below ≤ fill_to` when `fill_to > 0`. |
 | `CancelSupplyCommand` | `unit_ids[]`, `receiver_id` (0 = all links) | player | ✓ | 1 per unit | |
+
+## Match (`rts.match.v1`)
+
+| Command | Fields | Who | Notes |
+|---|---|---|---|
+| `SetReadyCommand` | `ready` | player | Only while READY. Costs no budget. With `start: all_ready`, the last required ready player starts the match in the same tick. |
+| `StartMatchCommand` | — | admin | READY → RUNNING. |
+| `PauseMatchCommand` | — | admin | RUNNING → PAUSED: systems stop, the match clock stops, player gameplay commands are rejected. Not the same as `AdminService.SetPaused`. |
+| `ResumeMatchCommand` | — | admin | PAUSED → RUNNING. |
+| `EndMatchCommand` | `winner_id` (0 = no winner), `reason` | admin | READY, RUNNING or PAUSED → FINISHED. |
+| `EliminatePlayerCommand` | `player_id`, `remove_units` | admin | Marks the player eliminated (their commands are refused), optionally removes their units, then evaluates victory. |
+
+Invalid transitions fail with `failed_precondition`. While a match isn't
+RUNNING, every **player** command except `SetReadyCommand` fails with
+`failed_precondition` ("match is ready/paused/finished"). Eliminated
+players' commands fail the same way. Admin commands are always allowed.
 
 ## Kernel commands (AdminService RPCs only)
 

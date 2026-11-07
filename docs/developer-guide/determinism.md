@@ -49,16 +49,16 @@ The repository verifies this in several places:
 
 ## Limits of what's guaranteed
 
-- **No replay files.** Logs live in memory. Command payloads are
-  protobuf messages, so persisting them is straightforward, but there's no
-  file format, CLI or tooling for it yet.
+- **Replay files** (Milestone 7): every match is recorded and exportable
+  as a `mono-replay/1` document, and `rts-replay verify` reproduces it and
+  reports the first divergent tick. See [replay.md](replay.md).
 - **Same build only.** A replay is exact only with the same plugin set,
   configuration and code. Changing a plugin's logic, adding a component
   (the component list is part of `StateHash`) or reordering phases
   changes results. There is no cross-version replay compatibility.
-- **The ID key is part of the initial state.** With an empty `id_key` the
-  server generates a random one, and the run can't be reproduced unless
-  you record it.
+- **The seed and ID key are part of the initial state.** With an empty
+  `id_key` or `random_seed`, the server draws random ones, records them in
+  `Game.Resolved`, and writes them into the replay.
 - **Observation is deterministic too**, but clients don't receive the
   authoritative state, only their view.
 

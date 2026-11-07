@@ -3,6 +3,7 @@ syntax = "proto3";
 package rts.v1;
 
 import "google/protobuf/any.proto";
+import "rts/v1/match.proto";
 import "rts/v1/types.proto";
 
 option go_package = "github.com/dakotaknutson/unit-strategy-game/gen/rts/v1;rtsv1";
@@ -31,6 +32,19 @@ service GameService {
   // snapshot instead of the missed updates. Reconnecting is simply calling
   // Observe again.
   rpc Observe(ObserveRequest) returns (stream ObserveResponse);
+
+  // GetMatch returns the current match (lifecycle state, readiness,
+  // objectives, clock, score as permitted, result when finished) and the
+  // results of recent finished matches in this server process.
+  rpc GetMatch(GetMatchRequest) returns (GetMatchResponse);
+}
+
+message GetMatchRequest {}
+
+message GetMatchResponse {
+  MatchInfo match = 1;
+  // Most recent first; at most 16.
+  repeated MatchResult history = 2;
 }
 
 message ConnectRequest {
@@ -43,6 +57,7 @@ message ConnectResponse {
   string session_token = 2;
   WorldInfo world = 3;
   string player_name = 4;
+  MatchInfo match = 5;
 }
 
 message SubmitCommandRequest {

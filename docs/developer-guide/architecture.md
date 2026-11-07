@@ -46,12 +46,13 @@ flowchart TB
 | [`internal/sim`](../../internal/sim) | The kernel: `World` (entities, occupancy, components, change tracking), `Engine` (tick loop, command queue and ordering, budget), `Ruleset` (plugin registry, phase and system ordering), events, frames, `StateHash`, seeded `Rand`, opaque IDs. **No game rules, no protobuf, no networking.** | stdlib |
 | [`internal/expr`](../../internal/expr) | Deterministic integer formula language. | stdlib |
 | [`internal/fairshare`](../../internal/fairshare) | Max-min fair integer split, used by mining, salvage and logistics. | stdlib |
-| [`internal/plugins/*`](../../internal/plugins) | One package per mechanic: `terrain`, `wells`, `attributes`, `energy`, `upgrades`, `cloning`, `movement`, `metadata`, `combat`, `salvage`, `automation`, `logistics`, `visibility`. | `sim`, each other (declared with `DependsOn`), their own `gen/` packages |
+| [`internal/plugins/*`](../../internal/plugins) | One package per mechanic: `terrain`, `wells`, `attributes`, `energy`, `upgrades`, `cloning`, `movement`, `metadata`, `combat`, `salvage`, `automation`, `logistics`, `visibility`, `match` (lifecycle, victory, scoring), `worldgen` (map generation). | `sim`, each other (declared with `DependsOn`), their own `gen/` packages |
 | [`internal/game`](../../internal/game) | Config loading and validation, plugin composition (`game.Plugins()`), building the engine, deriving player IDs, placing initial units. The **only** package that knows which plugins exist. | `sim`, plugins |
 | [`internal/protoreg`](../../internal/protoreg) | Imports every plugin's generated proto package so `Any` payloads can be decoded by name. | `gen` |
 | [`internal/server`](../../internal/server) | gRPC `GameService` and `AdminService`, sessions, command dedupe, the `Hub`, per-viewer filtering. | `sim`, `game`, `gen`, `protoreg` |
 | [`internal/gateway`](../../internal/gateway) | HTTP/NDJSON ↔ gRPC bridge for browsers. Just another API client. | `gen`, `protoreg` |
 | [`internal/plugintest`](../../internal/plugintest) | Test harness over the real plugin composition. | `game`, plugins |
+| [`internal/replay`](../../internal/replay) | Replay format, recorder and verifier. | `game`, `sim`, `protoreg` |
 | [`internal/scale`](../../internal/scale) | Repeatable large-world scenarios and measurement. | `game`, plugins |
 | [`proto/`](../../proto) → [`gen/`](../../gen) | Public API (`rts.v1`) and one package per plugin for its command messages. Generated code is committed. | — |
 | [`web/static`](../../web/static) | Player and admin clients (plain JS, no build step) and shared rendering code. | gateway HTTP API |
@@ -64,7 +65,11 @@ game-specific.
 ## Ownership of authoritative state
 
 - **All authoritative state lives in one `sim.World`**: entities
-  (`ID`, `Kind`, `Owner`, `Pos`, `Passable`) and typed component values.
+  (`ID`, `Kind`, `Owner`, `Pos`, `Passable`), typed component values, and
+  world-scoped globals (e.g. the match status).
+- **One world per match.** The server hosts one *current match* (game,
+  engine, hub, replay recorder) and replaces it whole on a reset
+  (`internal/server`, `Server.Reset` and `Server.Run`).
   There are no package-level mutable game variables.
 - **Only the simulation goroutine touches the `World`**: the one calling
   `Engine.Run` or `Engine.Step`. Setup code may touch it before the engine
@@ -105,6 +110,7 @@ With every built-in plugin the resolved order is (`Ruleset.Schedule()`):
 
 ```
 automation: automation.evaluate
+wells:      wells.regenerate
 energy:     energy.mine, energy.transfer
 logistics:  logistics.supply
 salvage:    salvage.collect
@@ -112,8 +118,12 @@ movement:   movement.step
 combat:     combat.resolve
 upgrades:   upgrades.progress
 cloning:    cloning.progress
+match:      match.evaluate
 (then the visibility plugin's Observations)
 ```
+
+Phases run only while the match is RUNNING (the match plugin's gate); see
+[simulation.md](simulation.md#match-lifecycle-and-resets).
 
 Details in [simulation.md](simulation.md).
 

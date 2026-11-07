@@ -30,11 +30,13 @@ the project name.)*
 
 ## Status
 
-Milestones 1–6 are implemented: kernel and movement, administration and
+Milestones 1–7 are implemented: kernel and movement, administration and
 the energy economy, unit evolution (attributes, upgrades, cloning,
-metadata), combat and salvage, fog of war and sensors, and pathfinding,
-automation, logistics and scale benchmarks. Everything is in memory. There
-is no persistence, no account system and no runtime plugin loading. See
+metadata), combat and salvage, fog of war and sensors, pathfinding,
+automation, logistics and scale benchmarks, and complete matches. The last
+covers procedural world generation, a lobby, victory conditions, scoring,
+results, resets and verifiable replays. Everything is in memory. There is
+no persistence, no account system and no runtime plugin loading. See
 [what's implemented and what isn't](docs/developer-guide/design-notes.md#not-implemented).
 
 | Area | State |
@@ -42,8 +44,9 @@ is no persistence, no account system and no runtime plugin loading. See
 | Simulation kernel, plugins, determinism, replay from a command log (in process) | Implemented, tested |
 | Movement and pathfinding, energy, upgrades, cloning, metadata and batches, combat, salvage, fog of war, automation, logistics | Implemented, tested |
 | gRPC `GameService` / `AdminService`, browser gateway, player and admin web clients | Implemented, tested |
+| Match lifecycle (lobby, start, pause, finish, reset), world generation, victory conditions, scoring, results, presets, replay export and verification | Implemented, tested |
 | Scale: 10k units within a 10 Hz tick budget; 25k with fog of war is over budget | Measured ([performance](docs/developer-guide/design-notes.md#performance-milestone-6)) |
-| Persistence, TLS, accounts, replay files, CI, containers | Not implemented |
+| Persistence (save/load), TLS, accounts, matchmaking, CI, containers | Not implemented |
 
 ## Quickstart
 
@@ -68,6 +71,16 @@ credentials come from [`configs/dev.json`](configs/dev.json) and are for
 local development only.
 
 Next: [Quickstart walkthrough](docs/getting-started/quickstart.md).
+
+**Play a real match.** The presets in [`configs/presets`](configs/presets)
+generate a map and run a lobby, victory conditions and scoring:
+
+```bash
+CONFIG=configs/presets/standard.json make dev    # 2 players, fog of war, last player standing
+CONFIG=configs/presets/bot-arena.json make dev   # 4 bots, reproducible seed: go run ./examples/bot -token bot-red
+```
+
+See [running matches](docs/operations/matches.md).
 
 ## Architecture at a glance
 
@@ -104,7 +117,8 @@ Start at the **[documentation index](docs/README.md)**.
 | Run a server | [Installation](docs/getting-started/installation.md), [configuration](docs/getting-started/configuration.md), [operations](docs/operations/deployment.md) |
 | Write a bot or client | [API overview](docs/api/overview.md), [bot development](docs/api/bot-development.md) |
 | Understand the engine | [Architecture](docs/developer-guide/architecture.md), [simulation](docs/developer-guide/simulation.md), [mechanics rules](docs/developer-guide/mechanics.md) |
-| Add a mechanic | [Plugin guide](docs/developer-guide/plugins/overview.md), [plugin tutorial](docs/developer-guide/plugins/getting-started.md) |
+| Add a mechanic | [Plugin guide](docs/developer-guide/plugins/overview.md), [plugin tutorial](docs/developer-guide/plugins/getting-started.md), [map generators](docs/developer-guide/plugins/worldgen.md), [victory conditions and scoring](docs/developer-guide/plugins/match-extensions.md) |
+| Run matches and replays | [Running matches](docs/operations/matches.md), [replay format](docs/developer-guide/replay.md) |
 | Look something up | [Configuration](docs/reference/configuration.md), [commands](docs/reference/commands.md), [events](docs/reference/events.md), [formulas](docs/reference/formulas.md) |
 
 ## Development
@@ -117,6 +131,8 @@ make generate   # regenerate gen/ from proto/
 make bench      # per-tick kernel benchmark
 make scale      # scale scenarios: 1k-25k units x 7 workloads
 make sim        # headless harness: 5000 units x 2000 ticks
+bin/rts-server -check -config configs/presets/standard.json   # validate a configuration
+bin/rts-replay verify replay.json                             # reproduce an exported match
 make build      # binaries in bin/
 ```
 

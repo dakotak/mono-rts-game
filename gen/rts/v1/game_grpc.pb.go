@@ -23,6 +23,7 @@ const (
 	GameService_SubmitCommand_FullMethodName = "/rts.v1.GameService/SubmitCommand"
 	GameService_GetSnapshot_FullMethodName   = "/rts.v1.GameService/GetSnapshot"
 	GameService_Observe_FullMethodName       = "/rts.v1.GameService/Observe"
+	GameService_GetMatch_FullMethodName      = "/rts.v1.GameService/GetMatch"
 )
 
 // GameServiceClient is the client API for GameService service.
@@ -50,6 +51,10 @@ type GameServiceClient interface {
 	// snapshot instead of the missed updates. Reconnecting is simply calling
 	// Observe again.
 	Observe(ctx context.Context, in *ObserveRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ObserveResponse], error)
+	// GetMatch returns the current match (lifecycle state, readiness,
+	// objectives, clock, score as permitted, result when finished) and the
+	// results of recent finished matches in this server process.
+	GetMatch(ctx context.Context, in *GetMatchRequest, opts ...grpc.CallOption) (*GetMatchResponse, error)
 }
 
 type gameServiceClient struct {
@@ -109,6 +114,16 @@ func (c *gameServiceClient) Observe(ctx context.Context, in *ObserveRequest, opt
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type GameService_ObserveClient = grpc.ServerStreamingClient[ObserveResponse]
 
+func (c *gameServiceClient) GetMatch(ctx context.Context, in *GetMatchRequest, opts ...grpc.CallOption) (*GetMatchResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetMatchResponse)
+	err := c.cc.Invoke(ctx, GameService_GetMatch_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // GameServiceServer is the server API for GameService service.
 // All implementations must embed UnimplementedGameServiceServer
 // for forward compatibility.
@@ -134,6 +149,10 @@ type GameServiceServer interface {
 	// snapshot instead of the missed updates. Reconnecting is simply calling
 	// Observe again.
 	Observe(*ObserveRequest, grpc.ServerStreamingServer[ObserveResponse]) error
+	// GetMatch returns the current match (lifecycle state, readiness,
+	// objectives, clock, score as permitted, result when finished) and the
+	// results of recent finished matches in this server process.
+	GetMatch(context.Context, *GetMatchRequest) (*GetMatchResponse, error)
 	mustEmbedUnimplementedGameServiceServer()
 }
 
@@ -155,6 +174,9 @@ func (UnimplementedGameServiceServer) GetSnapshot(context.Context, *GetSnapshotR
 }
 func (UnimplementedGameServiceServer) Observe(*ObserveRequest, grpc.ServerStreamingServer[ObserveResponse]) error {
 	return status.Error(codes.Unimplemented, "method Observe not implemented")
+}
+func (UnimplementedGameServiceServer) GetMatch(context.Context, *GetMatchRequest) (*GetMatchResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetMatch not implemented")
 }
 func (UnimplementedGameServiceServer) mustEmbedUnimplementedGameServiceServer() {}
 func (UnimplementedGameServiceServer) testEmbeddedByValue()                     {}
@@ -242,6 +264,24 @@ func _GameService_Observe_Handler(srv interface{}, stream grpc.ServerStream) err
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type GameService_ObserveServer = grpc.ServerStreamingServer[ObserveResponse]
 
+func _GameService_GetMatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetMatchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GameServiceServer).GetMatch(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GameService_GetMatch_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GameServiceServer).GetMatch(ctx, req.(*GetMatchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // GameService_ServiceDesc is the grpc.ServiceDesc for GameService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -260,6 +300,10 @@ var GameService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSnapshot",
 			Handler:    _GameService_GetSnapshot_Handler,
+		},
+		{
+			MethodName: "GetMatch",
+			Handler:    _GameService_GetMatch_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

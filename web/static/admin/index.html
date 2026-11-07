@@ -59,6 +59,39 @@
         <h2>Inspector</h2>
         <div id="inspector" class="inspector"><p class="hint">Click an entity to inspect it.</p></div>
 
+        <h2>Match</h2>
+        <div class="form match-admin">
+          <p id="match-summary" class="hint">–</p>
+          <div class="actions">
+            <button id="m-start" type="button">Start</button>
+            <button id="m-pause" type="button">Pause match</button>
+            <button id="m-resume" type="button">Resume match</button>
+          </div>
+          <table id="match-players" class="inspector"></table>
+          <label>End with winner <select id="m-winner"></select></label>
+          <label>Reason <input id="m-reason" placeholder="admin"></label>
+          <div class="actions"><button id="m-end" type="button" class="danger">End match</button></div>
+          <label>Eliminate <select id="m-elim-player"></select></label>
+          <label><span><input id="m-elim-units" type="checkbox" checked> remove their units</span></label>
+          <div class="actions"><button id="m-elim" type="button" class="danger">Eliminate</button></div>
+        </div>
+        <h2>New match</h2>
+        <div class="form">
+          <label>Seed (blank: from configuration) <input id="m-seed" type="number" min="0"></label>
+          <label><span><input id="m-random" type="checkbox"> random seed</span></label>
+          <label>Configuration for the next match (blank: keep current; players and admin token cannot change)
+            <textarea id="m-config" rows="8" spellcheck="false" placeholder="worldgen, match, plugins…"></textarea></label>
+          <div class="actions">
+            <button id="m-load-config" type="button">Load current config</button>
+            <button id="m-reset" type="button" class="danger">Reset / new match</button>
+          </div>
+        </div>
+        <h2>Replays</h2>
+        <div class="form">
+          <label>Match <select id="m-history"></select></label>
+          <div class="actions"><button id="m-export" type="button">Export replay</button></div>
+          <label>Verify a replay file <input id="m-verify" type="file" accept="application/json,.json"></label>
+        </div>
         <h2>Automation &amp; logistics</h2>
         <div id="automation" class="inspector"></div>
         <h2>Players</h2>
@@ -76,5 +109,6 @@
   </section>
   <script src="/shared/board.js"></script>
   <script src="admin.js"></script>
+  <script src="match.js"></script>
 </body>
 </html>

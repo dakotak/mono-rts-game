@@ -27,6 +27,11 @@ tab resumes it. Several sessions may play the same player at once.
 
 ### Sidebar
 
+**Match panel** (top of the sidebar): the match state (also in the
+header), objectives, map, the lobby's **Ready** button and readiness
+count, the match clock and time left, your score, and, after the match,
+**Show results**. See [matches](matches.md).
+
 **With one unit selected:**
 
 - **Attributes:** each attribute with the exact cost and duration of +1

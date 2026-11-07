@@ -35,6 +35,7 @@ type env struct {
 	engine            *sim.Engine
 	game              rtsv1.GameServiceClient
 	admin             rtsv1.AdminServiceClient
+	srv               *server.Server
 }
 
 func newEnv(t *testing.T) *env {
@@ -82,7 +83,7 @@ func newEnvWith(t *testing.T, adjust func(*game.Config)) *env {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(cancel)
-	return &env{redUnit: uint64(redID), blueUnit: uint64(blueID), t: t, ctx: ctx, engine: engine, game: rtsv1.NewGameServiceClient(conn), admin: rtsv1.NewAdminServiceClient(conn)}
+	return &env{srv: srv, redUnit: uint64(redID), blueUnit: uint64(blueID), t: t, ctx: ctx, engine: engine, game: rtsv1.NewGameServiceClient(conn), admin: rtsv1.NewAdminServiceClient(conn)}
 }
 
 func authed(ctx context.Context, token string) context.Context {
@@ -410,7 +411,10 @@ func TestSnapshotPlusUpdatesEqualsLaterSnapshot(t *testing.T) {
 	if snap.GetSnapshot().GetTick() != 6 {
 		t.Fatalf("tick = %d", snap.GetSnapshot().GetTick())
 	}
-	want := &rtsv1.WorldSnapshot{Tick: 6, Entities: state}
+	if m := snap.GetSnapshot().GetMatch(); m.GetState() != rtsv1.MatchState_MATCH_STATE_RUNNING || m.GetRunTicks() != 6 {
+		t.Fatalf("match info = %v", m)
+	}
+	want := &rtsv1.WorldSnapshot{Tick: 6, Entities: state, Match: snap.GetSnapshot().GetMatch()}
 	if !proto.Equal(want, snap.GetSnapshot()) {
 		t.Fatalf("incremental state diverged\n got %v\nwant %v", snap.GetSnapshot(), want)
 	}

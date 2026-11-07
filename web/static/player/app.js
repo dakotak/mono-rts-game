@@ -168,6 +168,7 @@ function renderLegend() {
 // ---- observation --------------------------------------------------------
 
 function handleMessage(msg) {
+  if (typeof matchBefore === "function") matchBefore(msg);
   if (typeof fogBefore === "function") fogBefore(msg);
   tick = applyMessage(entities, msg);
   for (const id of [...selected]) if (!entities.has(id)) selected.delete(id);
@@ -205,6 +206,7 @@ function handleEvent(ev) {
   if (typeof evolutionEvent === "function" && evolutionEvent(ev)) return;
   if (typeof combatEvent === "function" && combatEvent(ev)) return;
   if (typeof autoEvent === "function" && autoEvent(ev)) return;
+  if (typeof matchEvent === "function" && matchEvent(ev)) return;
   const f = ev.fields || {};
   const int = (k) => Number((f[k] && f[k].intValue) || 0);
   const str = (k) => (f[k] && f[k].stringValue) || "";
@@ -388,6 +390,7 @@ function render() {
   renderSelection();
   if (typeof renderFogPanel === "function") renderFogPanel();
   if (typeof renderAutoStatus === "function") renderAutoStatus();
+  if (typeof renderMatch === "function") renderMatch();
   if (typeof renderEvolution === "function") renderEvolution();
 }
 

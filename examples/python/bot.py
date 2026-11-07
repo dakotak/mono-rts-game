@@ -19,6 +19,7 @@ import random
 import urllib.request
 
 MOVE = "type.googleapis.com/rts.movement.v1.GroupMoveCommand"
+READY = "type.googleapis.com/rts.match.v1.SetReadyCommand"
 
 
 class Client:
@@ -75,8 +76,19 @@ def main():
     w = c.world
     print(f"player {c.player}: {w['width']}x{w['height']} at {w['tickRateHz']} Hz, budget {w['unitCommandBudget']}")
     entities = {}  # id -> entity: our client-side view
+    match = {}     # MatchInfo: lifecycle, readiness, clock, result
     ticks = 0
     for msg in c.observe():
+        m = (msg.get("snapshot") or msg.get("update") or {}).get("match")
+        if m:
+            if match and m["matchId"] != match["matchId"]:
+                print("new match (reset):", m["matchId"])
+            if m.get("yourPlayerId"):
+                c.player = m["yourPlayerId"]  # player IDs are per match
+            if m.get("result") and not match.get("result"):
+                r = m["result"]
+                print(f"match over: winner {r['winnerId']} draw {r['draw']} reason {r['reason']}")
+            match = m
         if "snapshot" in msg:
             snap = msg["snapshot"]
             entities = {e["id"]: e for e in snap.get("entities", [])}
@@ -91,7 +103,11 @@ def main():
             print(f"tick {u['tick']}: {r['commandId']} -> {r['status']} {r.get('errorCode', '')}")
         ticks += 1
         tick = int(u["tick"])
-        if tick % 20 == 0:
+        state = match.get("state", "")
+        if state == "MATCH_STATE_READY" and not match.get("youReady") and tick % 10 == 0:
+            c.submit({"@type": READY, "ready": True})
+            print(f"tick {tick}: ready")
+        if state == "MATCH_STATE_RUNNING" and tick % 20 == 0:
             idle = [e for e in entities.values()
                     if e.get("ownerId") == c.player and e["kind"] == "ENTITY_KIND_UNIT"
                     and "movement.destination" not in e.get("attributes", {})]

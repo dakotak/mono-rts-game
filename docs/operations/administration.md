@@ -28,6 +28,19 @@ and every event.
 The log shows each mutation's scheduled tick and its result, plus every
 event in the world.
 
+**Match, New match and Replays panels** (Milestone 7):
+
+- **Match:**
+  - lifecycle buttons (Start, Pause match, Resume match, End match with a
+    winner or none, Eliminate a player)
+  - per-player readiness, elimination, open connections and live
+    statistics
+- **New match:** reset with a seed (or random), or with an edited
+  configuration. Players and admin token can't change.
+- **Replays:** export any recent match, and verify a replay file.
+
+See [running matches](matches.md).
+
 ## World initialization
 
 The world is built at startup from the config file
@@ -75,6 +88,16 @@ Typical uses: inspect a situation tick by tick, reproduce a bug with
 receive, plus `detections`: for each foreign entity, the observing unit,
 detection score, identification score and level. Use them to explain
 "why can (or can't) this player see that?".
+
+## Pause the clock vs. pause the match
+
+| | Clock pause (`SetPaused`, *Pause* button) | Match pause (`PauseMatchCommand`) |
+|---|---|---|
+| Ticks | Stop | Continue |
+| Systems | Don't run (no ticks) | Skipped |
+| Player commands | Queued for the next tick | Rejected (`failed_precondition`) |
+| Single-step | Available (`Step`) | — |
+| Purpose | Debugging, inspection | A suspended match (the clock stops, players are told) |
 
 ## What admins can't do
 

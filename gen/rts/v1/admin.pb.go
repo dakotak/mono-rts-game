@@ -22,6 +22,553 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type GetMatchDetailsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetMatchDetailsRequest) Reset() {
+	*x = GetMatchDetailsRequest{}
+	mi := &file_rts_v1_admin_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetMatchDetailsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetMatchDetailsRequest) ProtoMessage() {}
+
+func (x *GetMatchDetailsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rts_v1_admin_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetMatchDetailsRequest.ProtoReflect.Descriptor instead.
+func (*GetMatchDetailsRequest) Descriptor() ([]byte, []int) {
+	return file_rts_v1_admin_proto_rawDescGZIP(), []int{0}
+}
+
+type GetMatchDetailsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Match         *MatchInfo             `protobuf:"bytes,1,opt,name=match,proto3" json:"match,omitempty"`
+	ConfigJson    string                 `protobuf:"bytes,2,opt,name=config_json,json=configJson,proto3" json:"config_json,omitempty"`
+	Seed          uint64                 `protobuf:"varint,3,opt,name=seed,proto3" json:"seed,omitempty"`
+	Players       []*AdminPlayerStatus   `protobuf:"bytes,4,rep,name=players,proto3" json:"players,omitempty"`
+	History       []*MatchResult         `protobuf:"bytes,5,rep,name=history,proto3" json:"history,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetMatchDetailsResponse) Reset() {
+	*x = GetMatchDetailsResponse{}
+	mi := &file_rts_v1_admin_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetMatchDetailsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetMatchDetailsResponse) ProtoMessage() {}
+
+func (x *GetMatchDetailsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_rts_v1_admin_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetMatchDetailsResponse.ProtoReflect.Descriptor instead.
+func (*GetMatchDetailsResponse) Descriptor() ([]byte, []int) {
+	return file_rts_v1_admin_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *GetMatchDetailsResponse) GetMatch() *MatchInfo {
+	if x != nil {
+		return x.Match
+	}
+	return nil
+}
+
+func (x *GetMatchDetailsResponse) GetConfigJson() string {
+	if x != nil {
+		return x.ConfigJson
+	}
+	return ""
+}
+
+func (x *GetMatchDetailsResponse) GetSeed() uint64 {
+	if x != nil {
+		return x.Seed
+	}
+	return 0
+}
+
+func (x *GetMatchDetailsResponse) GetPlayers() []*AdminPlayerStatus {
+	if x != nil {
+		return x.Players
+	}
+	return nil
+}
+
+func (x *GetMatchDetailsResponse) GetHistory() []*MatchResult {
+	if x != nil {
+		return x.History
+	}
+	return nil
+}
+
+type AdminPlayerStatus struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId   uint32                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	Name       string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Slot       int32                  `protobuf:"varint,3,opt,name=slot,proto3" json:"slot,omitempty"`
+	Ready      bool                   `protobuf:"varint,4,opt,name=ready,proto3" json:"ready,omitempty"`
+	Eliminated bool                   `protobuf:"varint,5,opt,name=eliminated,proto3" json:"eliminated,omitempty"`
+	// Open Observe streams for this player.
+	Connections   uint32        `protobuf:"varint,6,opt,name=connections,proto3" json:"connections,omitempty"`
+	Stats         *PlayerResult `protobuf:"bytes,7,opt,name=stats,proto3" json:"stats,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AdminPlayerStatus) Reset() {
+	*x = AdminPlayerStatus{}
+	mi := &file_rts_v1_admin_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AdminPlayerStatus) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AdminPlayerStatus) ProtoMessage() {}
+
+func (x *AdminPlayerStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_rts_v1_admin_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AdminPlayerStatus.ProtoReflect.Descriptor instead.
+func (*AdminPlayerStatus) Descriptor() ([]byte, []int) {
+	return file_rts_v1_admin_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *AdminPlayerStatus) GetPlayerId() uint32 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *AdminPlayerStatus) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *AdminPlayerStatus) GetSlot() int32 {
+	if x != nil {
+		return x.Slot
+	}
+	return 0
+}
+
+func (x *AdminPlayerStatus) GetReady() bool {
+	if x != nil {
+		return x.Ready
+	}
+	return false
+}
+
+func (x *AdminPlayerStatus) GetEliminated() bool {
+	if x != nil {
+		return x.Eliminated
+	}
+	return false
+}
+
+func (x *AdminPlayerStatus) GetConnections() uint32 {
+	if x != nil {
+		return x.Connections
+	}
+	return 0
+}
+
+func (x *AdminPlayerStatus) GetStats() *PlayerResult {
+	if x != nil {
+		return x.Stats
+	}
+	return nil
+}
+
+type ResetMatchRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Use this seed (otherwise the configuration decides: its seed, or a
+	// random one with random_seed).
+	Seed *uint64 `protobuf:"varint,1,opt,name=seed,proto3,oneof" json:"seed,omitempty"`
+	// A full configuration replacing the current one (empty = keep). Its
+	// players and admin_token are ignored: they can only change by restarting
+	// the server.
+	ConfigJson    string `protobuf:"bytes,2,opt,name=config_json,json=configJson,proto3" json:"config_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResetMatchRequest) Reset() {
+	*x = ResetMatchRequest{}
+	mi := &file_rts_v1_admin_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResetMatchRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResetMatchRequest) ProtoMessage() {}
+
+func (x *ResetMatchRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rts_v1_admin_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResetMatchRequest.ProtoReflect.Descriptor instead.
+func (*ResetMatchRequest) Descriptor() ([]byte, []int) {
+	return file_rts_v1_admin_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *ResetMatchRequest) GetSeed() uint64 {
+	if x != nil && x.Seed != nil {
+		return *x.Seed
+	}
+	return 0
+}
+
+func (x *ResetMatchRequest) GetConfigJson() string {
+	if x != nil {
+		return x.ConfigJson
+	}
+	return ""
+}
+
+type ResetMatchResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MatchId       string                 `protobuf:"bytes,1,opt,name=match_id,json=matchId,proto3" json:"match_id,omitempty"`
+	Seed          uint64                 `protobuf:"varint,2,opt,name=seed,proto3" json:"seed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResetMatchResponse) Reset() {
+	*x = ResetMatchResponse{}
+	mi := &file_rts_v1_admin_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResetMatchResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResetMatchResponse) ProtoMessage() {}
+
+func (x *ResetMatchResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_rts_v1_admin_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResetMatchResponse.ProtoReflect.Descriptor instead.
+func (*ResetMatchResponse) Descriptor() ([]byte, []int) {
+	return file_rts_v1_admin_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ResetMatchResponse) GetMatchId() string {
+	if x != nil {
+		return x.MatchId
+	}
+	return ""
+}
+
+func (x *ResetMatchResponse) GetSeed() uint64 {
+	if x != nil {
+		return x.Seed
+	}
+	return 0
+}
+
+type ExportReplayRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Empty = the current match.
+	MatchId       string `protobuf:"bytes,1,opt,name=match_id,json=matchId,proto3" json:"match_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExportReplayRequest) Reset() {
+	*x = ExportReplayRequest{}
+	mi := &file_rts_v1_admin_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExportReplayRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExportReplayRequest) ProtoMessage() {}
+
+func (x *ExportReplayRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rts_v1_admin_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExportReplayRequest.ProtoReflect.Descriptor instead.
+func (*ExportReplayRequest) Descriptor() ([]byte, []int) {
+	return file_rts_v1_admin_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ExportReplayRequest) GetMatchId() string {
+	if x != nil {
+		return x.MatchId
+	}
+	return ""
+}
+
+type ExportReplayResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ReplayJson    string                 `protobuf:"bytes,1,opt,name=replay_json,json=replayJson,proto3" json:"replay_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExportReplayResponse) Reset() {
+	*x = ExportReplayResponse{}
+	mi := &file_rts_v1_admin_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExportReplayResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExportReplayResponse) ProtoMessage() {}
+
+func (x *ExportReplayResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_rts_v1_admin_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExportReplayResponse.ProtoReflect.Descriptor instead.
+func (*ExportReplayResponse) Descriptor() ([]byte, []int) {
+	return file_rts_v1_admin_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ExportReplayResponse) GetReplayJson() string {
+	if x != nil {
+		return x.ReplayJson
+	}
+	return ""
+}
+
+type VerifyReplayRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ReplayJson    string                 `protobuf:"bytes,1,opt,name=replay_json,json=replayJson,proto3" json:"replay_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *VerifyReplayRequest) Reset() {
+	*x = VerifyReplayRequest{}
+	mi := &file_rts_v1_admin_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VerifyReplayRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VerifyReplayRequest) ProtoMessage() {}
+
+func (x *VerifyReplayRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rts_v1_admin_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VerifyReplayRequest.ProtoReflect.Descriptor instead.
+func (*VerifyReplayRequest) Descriptor() ([]byte, []int) {
+	return file_rts_v1_admin_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *VerifyReplayRequest) GetReplayJson() string {
+	if x != nil {
+		return x.ReplayJson
+	}
+	return ""
+}
+
+type VerifyReplayResponse struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	Ok                 bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	TicksReplayed      uint64                 `protobuf:"varint,2,opt,name=ticks_replayed,json=ticksReplayed,proto3" json:"ticks_replayed,omitempty"`
+	EngineMatches      bool                   `protobuf:"varint,3,opt,name=engine_matches,json=engineMatches,proto3" json:"engine_matches,omitempty"`
+	RulesetMatches     bool                   `protobuf:"varint,4,opt,name=ruleset_matches,json=rulesetMatches,proto3" json:"ruleset_matches,omitempty"`
+	FirstDivergentTick uint64                 `protobuf:"varint,5,opt,name=first_divergent_tick,json=firstDivergentTick,proto3" json:"first_divergent_tick,omitempty"`
+	Detail             string                 `protobuf:"bytes,6,opt,name=detail,proto3" json:"detail,omitempty"`
+	FinalHash          string                 `protobuf:"bytes,7,opt,name=final_hash,json=finalHash,proto3" json:"final_hash,omitempty"`
+	CheckpointsChecked uint32                 `protobuf:"varint,8,opt,name=checkpoints_checked,json=checkpointsChecked,proto3" json:"checkpoints_checked,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *VerifyReplayResponse) Reset() {
+	*x = VerifyReplayResponse{}
+	mi := &file_rts_v1_admin_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VerifyReplayResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VerifyReplayResponse) ProtoMessage() {}
+
+func (x *VerifyReplayResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_rts_v1_admin_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VerifyReplayResponse.ProtoReflect.Descriptor instead.
+func (*VerifyReplayResponse) Descriptor() ([]byte, []int) {
+	return file_rts_v1_admin_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *VerifyReplayResponse) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *VerifyReplayResponse) GetTicksReplayed() uint64 {
+	if x != nil {
+		return x.TicksReplayed
+	}
+	return 0
+}
+
+func (x *VerifyReplayResponse) GetEngineMatches() bool {
+	if x != nil {
+		return x.EngineMatches
+	}
+	return false
+}
+
+func (x *VerifyReplayResponse) GetRulesetMatches() bool {
+	if x != nil {
+		return x.RulesetMatches
+	}
+	return false
+}
+
+func (x *VerifyReplayResponse) GetFirstDivergentTick() uint64 {
+	if x != nil {
+		return x.FirstDivergentTick
+	}
+	return 0
+}
+
+func (x *VerifyReplayResponse) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+func (x *VerifyReplayResponse) GetFinalHash() string {
+	if x != nil {
+		return x.FinalHash
+	}
+	return ""
+}
+
+func (x *VerifyReplayResponse) GetCheckpointsChecked() uint32 {
+	if x != nil {
+		return x.CheckpointsChecked
+	}
+	return 0
+}
+
 type GetPlayerViewRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PlayerId      uint32                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
@@ -31,7 +578,7 @@ type GetPlayerViewRequest struct {
 
 func (x *GetPlayerViewRequest) Reset() {
 	*x = GetPlayerViewRequest{}
-	mi := &file_rts_v1_admin_proto_msgTypes[0]
+	mi := &file_rts_v1_admin_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -43,7 +590,7 @@ func (x *GetPlayerViewRequest) String() string {
 func (*GetPlayerViewRequest) ProtoMessage() {}
 
 func (x *GetPlayerViewRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_admin_proto_msgTypes[0]
+	mi := &file_rts_v1_admin_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -56,7 +603,7 @@ func (x *GetPlayerViewRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPlayerViewRequest.ProtoReflect.Descriptor instead.
 func (*GetPlayerViewRequest) Descriptor() ([]byte, []int) {
-	return file_rts_v1_admin_proto_rawDescGZIP(), []int{0}
+	return file_rts_v1_admin_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *GetPlayerViewRequest) GetPlayerId() uint32 {
@@ -76,7 +623,7 @@ type GetPlayerViewResponse struct {
 
 func (x *GetPlayerViewResponse) Reset() {
 	*x = GetPlayerViewResponse{}
-	mi := &file_rts_v1_admin_proto_msgTypes[1]
+	mi := &file_rts_v1_admin_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -88,7 +635,7 @@ func (x *GetPlayerViewResponse) String() string {
 func (*GetPlayerViewResponse) ProtoMessage() {}
 
 func (x *GetPlayerViewResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_admin_proto_msgTypes[1]
+	mi := &file_rts_v1_admin_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -101,7 +648,7 @@ func (x *GetPlayerViewResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPlayerViewResponse.ProtoReflect.Descriptor instead.
 func (*GetPlayerViewResponse) Descriptor() ([]byte, []int) {
-	return file_rts_v1_admin_proto_rawDescGZIP(), []int{1}
+	return file_rts_v1_admin_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *GetPlayerViewResponse) GetSnapshot() *WorldSnapshot {
@@ -133,7 +680,7 @@ type Detection struct {
 
 func (x *Detection) Reset() {
 	*x = Detection{}
-	mi := &file_rts_v1_admin_proto_msgTypes[2]
+	mi := &file_rts_v1_admin_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -145,7 +692,7 @@ func (x *Detection) String() string {
 func (*Detection) ProtoMessage() {}
 
 func (x *Detection) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_admin_proto_msgTypes[2]
+	mi := &file_rts_v1_admin_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -158,7 +705,7 @@ func (x *Detection) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Detection.ProtoReflect.Descriptor instead.
 func (*Detection) Descriptor() ([]byte, []int) {
-	return file_rts_v1_admin_proto_rawDescGZIP(), []int{2}
+	return file_rts_v1_admin_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *Detection) GetEntityId() uint64 {
@@ -199,16 +746,19 @@ func (x *Detection) GetIdentificationScore() int64 {
 type SimulationStatus struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Last executed tick.
-	Tick          uint64 `protobuf:"varint,1,opt,name=tick,proto3" json:"tick,omitempty"`
-	Paused        bool   `protobuf:"varint,2,opt,name=paused,proto3" json:"paused,omitempty"`
-	TickRateHz    uint32 `protobuf:"varint,3,opt,name=tick_rate_hz,json=tickRateHz,proto3" json:"tick_rate_hz,omitempty"`
+	Tick uint64 `protobuf:"varint,1,opt,name=tick,proto3" json:"tick,omitempty"`
+	// The tick clock is paused (debugging; see SetPaused). Distinct from a
+	// PAUSED match (match.state).
+	Paused        bool       `protobuf:"varint,2,opt,name=paused,proto3" json:"paused,omitempty"`
+	TickRateHz    uint32     `protobuf:"varint,3,opt,name=tick_rate_hz,json=tickRateHz,proto3" json:"tick_rate_hz,omitempty"`
+	Match         *MatchInfo `protobuf:"bytes,4,opt,name=match,proto3" json:"match,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SimulationStatus) Reset() {
 	*x = SimulationStatus{}
-	mi := &file_rts_v1_admin_proto_msgTypes[3]
+	mi := &file_rts_v1_admin_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -220,7 +770,7 @@ func (x *SimulationStatus) String() string {
 func (*SimulationStatus) ProtoMessage() {}
 
 func (x *SimulationStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_admin_proto_msgTypes[3]
+	mi := &file_rts_v1_admin_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -233,7 +783,7 @@ func (x *SimulationStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SimulationStatus.ProtoReflect.Descriptor instead.
 func (*SimulationStatus) Descriptor() ([]byte, []int) {
-	return file_rts_v1_admin_proto_rawDescGZIP(), []int{3}
+	return file_rts_v1_admin_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *SimulationStatus) GetTick() uint64 {
@@ -257,6 +807,13 @@ func (x *SimulationStatus) GetTickRateHz() uint32 {
 	return 0
 }
 
+func (x *SimulationStatus) GetMatch() *MatchInfo {
+	if x != nil {
+		return x.Match
+	}
+	return nil
+}
+
 type GetWorldSnapshotRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -265,7 +822,7 @@ type GetWorldSnapshotRequest struct {
 
 func (x *GetWorldSnapshotRequest) Reset() {
 	*x = GetWorldSnapshotRequest{}
-	mi := &file_rts_v1_admin_proto_msgTypes[4]
+	mi := &file_rts_v1_admin_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -277,7 +834,7 @@ func (x *GetWorldSnapshotRequest) String() string {
 func (*GetWorldSnapshotRequest) ProtoMessage() {}
 
 func (x *GetWorldSnapshotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_admin_proto_msgTypes[4]
+	mi := &file_rts_v1_admin_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -290,7 +847,7 @@ func (x *GetWorldSnapshotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetWorldSnapshotRequest.ProtoReflect.Descriptor instead.
 func (*GetWorldSnapshotRequest) Descriptor() ([]byte, []int) {
-	return file_rts_v1_admin_proto_rawDescGZIP(), []int{4}
+	return file_rts_v1_admin_proto_rawDescGZIP(), []int{13}
 }
 
 type GetWorldSnapshotResponse struct {
@@ -306,7 +863,7 @@ type GetWorldSnapshotResponse struct {
 
 func (x *GetWorldSnapshotResponse) Reset() {
 	*x = GetWorldSnapshotResponse{}
-	mi := &file_rts_v1_admin_proto_msgTypes[5]
+	mi := &file_rts_v1_admin_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -318,7 +875,7 @@ func (x *GetWorldSnapshotResponse) String() string {
 func (*GetWorldSnapshotResponse) ProtoMessage() {}
 
 func (x *GetWorldSnapshotResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_admin_proto_msgTypes[5]
+	mi := &file_rts_v1_admin_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -331,7 +888,7 @@ func (x *GetWorldSnapshotResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetWorldSnapshotResponse.ProtoReflect.Descriptor instead.
 func (*GetWorldSnapshotResponse) Descriptor() ([]byte, []int) {
-	return file_rts_v1_admin_proto_rawDescGZIP(), []int{5}
+	return file_rts_v1_admin_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *GetWorldSnapshotResponse) GetSnapshot() *WorldSnapshot {
@@ -370,7 +927,7 @@ type ObserveWorldRequest struct {
 
 func (x *ObserveWorldRequest) Reset() {
 	*x = ObserveWorldRequest{}
-	mi := &file_rts_v1_admin_proto_msgTypes[6]
+	mi := &file_rts_v1_admin_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -382,7 +939,7 @@ func (x *ObserveWorldRequest) String() string {
 func (*ObserveWorldRequest) ProtoMessage() {}
 
 func (x *ObserveWorldRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_admin_proto_msgTypes[6]
+	mi := &file_rts_v1_admin_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -395,7 +952,7 @@ func (x *ObserveWorldRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ObserveWorldRequest.ProtoReflect.Descriptor instead.
 func (*ObserveWorldRequest) Descriptor() ([]byte, []int) {
-	return file_rts_v1_admin_proto_rawDescGZIP(), []int{6}
+	return file_rts_v1_admin_proto_rawDescGZIP(), []int{15}
 }
 
 type ObserveWorldResponse struct {
@@ -411,7 +968,7 @@ type ObserveWorldResponse struct {
 
 func (x *ObserveWorldResponse) Reset() {
 	*x = ObserveWorldResponse{}
-	mi := &file_rts_v1_admin_proto_msgTypes[7]
+	mi := &file_rts_v1_admin_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -423,7 +980,7 @@ func (x *ObserveWorldResponse) String() string {
 func (*ObserveWorldResponse) ProtoMessage() {}
 
 func (x *ObserveWorldResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_admin_proto_msgTypes[7]
+	mi := &file_rts_v1_admin_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -436,7 +993,7 @@ func (x *ObserveWorldResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ObserveWorldResponse.ProtoReflect.Descriptor instead.
 func (*ObserveWorldResponse) Descriptor() ([]byte, []int) {
-	return file_rts_v1_admin_proto_rawDescGZIP(), []int{7}
+	return file_rts_v1_admin_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ObserveWorldResponse) GetKind() isObserveWorldResponse_Kind {
@@ -488,7 +1045,7 @@ type GetStatusRequest struct {
 
 func (x *GetStatusRequest) Reset() {
 	*x = GetStatusRequest{}
-	mi := &file_rts_v1_admin_proto_msgTypes[8]
+	mi := &file_rts_v1_admin_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -500,7 +1057,7 @@ func (x *GetStatusRequest) String() string {
 func (*GetStatusRequest) ProtoMessage() {}
 
 func (x *GetStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_admin_proto_msgTypes[8]
+	mi := &file_rts_v1_admin_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -513,7 +1070,7 @@ func (x *GetStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetStatusRequest.ProtoReflect.Descriptor instead.
 func (*GetStatusRequest) Descriptor() ([]byte, []int) {
-	return file_rts_v1_admin_proto_rawDescGZIP(), []int{8}
+	return file_rts_v1_admin_proto_rawDescGZIP(), []int{17}
 }
 
 type GetStatusResponse struct {
@@ -525,7 +1082,7 @@ type GetStatusResponse struct {
 
 func (x *GetStatusResponse) Reset() {
 	*x = GetStatusResponse{}
-	mi := &file_rts_v1_admin_proto_msgTypes[9]
+	mi := &file_rts_v1_admin_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -537,7 +1094,7 @@ func (x *GetStatusResponse) String() string {
 func (*GetStatusResponse) ProtoMessage() {}
 
 func (x *GetStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_admin_proto_msgTypes[9]
+	mi := &file_rts_v1_admin_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -550,7 +1107,7 @@ func (x *GetStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetStatusResponse.ProtoReflect.Descriptor instead.
 func (*GetStatusResponse) Descriptor() ([]byte, []int) {
-	return file_rts_v1_admin_proto_rawDescGZIP(), []int{9}
+	return file_rts_v1_admin_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *GetStatusResponse) GetStatus() *SimulationStatus {
@@ -570,7 +1127,7 @@ type SpawnUnitRequest struct {
 
 func (x *SpawnUnitRequest) Reset() {
 	*x = SpawnUnitRequest{}
-	mi := &file_rts_v1_admin_proto_msgTypes[10]
+	mi := &file_rts_v1_admin_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -582,7 +1139,7 @@ func (x *SpawnUnitRequest) String() string {
 func (*SpawnUnitRequest) ProtoMessage() {}
 
 func (x *SpawnUnitRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_admin_proto_msgTypes[10]
+	mi := &file_rts_v1_admin_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -595,7 +1152,7 @@ func (x *SpawnUnitRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SpawnUnitRequest.ProtoReflect.Descriptor instead.
 func (*SpawnUnitRequest) Descriptor() ([]byte, []int) {
-	return file_rts_v1_admin_proto_rawDescGZIP(), []int{10}
+	return file_rts_v1_admin_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *SpawnUnitRequest) GetOwnerId() uint32 {
@@ -622,7 +1179,7 @@ type SpawnUnitResponse struct {
 
 func (x *SpawnUnitResponse) Reset() {
 	*x = SpawnUnitResponse{}
-	mi := &file_rts_v1_admin_proto_msgTypes[11]
+	mi := &file_rts_v1_admin_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -634,7 +1191,7 @@ func (x *SpawnUnitResponse) String() string {
 func (*SpawnUnitResponse) ProtoMessage() {}
 
 func (x *SpawnUnitResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_admin_proto_msgTypes[11]
+	mi := &file_rts_v1_admin_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -647,7 +1204,7 @@ func (x *SpawnUnitResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SpawnUnitResponse.ProtoReflect.Descriptor instead.
 func (*SpawnUnitResponse) Descriptor() ([]byte, []int) {
-	return file_rts_v1_admin_proto_rawDescGZIP(), []int{11}
+	return file_rts_v1_admin_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *SpawnUnitResponse) GetCommandId() string {
@@ -673,7 +1230,7 @@ type DeleteEntityRequest struct {
 
 func (x *DeleteEntityRequest) Reset() {
 	*x = DeleteEntityRequest{}
-	mi := &file_rts_v1_admin_proto_msgTypes[12]
+	mi := &file_rts_v1_admin_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -685,7 +1242,7 @@ func (x *DeleteEntityRequest) String() string {
 func (*DeleteEntityRequest) ProtoMessage() {}
 
 func (x *DeleteEntityRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_admin_proto_msgTypes[12]
+	mi := &file_rts_v1_admin_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -698,7 +1255,7 @@ func (x *DeleteEntityRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteEntityRequest.ProtoReflect.Descriptor instead.
 func (*DeleteEntityRequest) Descriptor() ([]byte, []int) {
-	return file_rts_v1_admin_proto_rawDescGZIP(), []int{12}
+	return file_rts_v1_admin_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *DeleteEntityRequest) GetEntityId() uint64 {
@@ -718,7 +1275,7 @@ type DeleteEntityResponse struct {
 
 func (x *DeleteEntityResponse) Reset() {
 	*x = DeleteEntityResponse{}
-	mi := &file_rts_v1_admin_proto_msgTypes[13]
+	mi := &file_rts_v1_admin_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -730,7 +1287,7 @@ func (x *DeleteEntityResponse) String() string {
 func (*DeleteEntityResponse) ProtoMessage() {}
 
 func (x *DeleteEntityResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_admin_proto_msgTypes[13]
+	mi := &file_rts_v1_admin_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -743,7 +1300,7 @@ func (x *DeleteEntityResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteEntityResponse.ProtoReflect.Descriptor instead.
 func (*DeleteEntityResponse) Descriptor() ([]byte, []int) {
-	return file_rts_v1_admin_proto_rawDescGZIP(), []int{13}
+	return file_rts_v1_admin_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *DeleteEntityResponse) GetCommandId() string {
@@ -770,7 +1327,7 @@ type MoveEntityRequest struct {
 
 func (x *MoveEntityRequest) Reset() {
 	*x = MoveEntityRequest{}
-	mi := &file_rts_v1_admin_proto_msgTypes[14]
+	mi := &file_rts_v1_admin_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -782,7 +1339,7 @@ func (x *MoveEntityRequest) String() string {
 func (*MoveEntityRequest) ProtoMessage() {}
 
 func (x *MoveEntityRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_admin_proto_msgTypes[14]
+	mi := &file_rts_v1_admin_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -795,7 +1352,7 @@ func (x *MoveEntityRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MoveEntityRequest.ProtoReflect.Descriptor instead.
 func (*MoveEntityRequest) Descriptor() ([]byte, []int) {
-	return file_rts_v1_admin_proto_rawDescGZIP(), []int{14}
+	return file_rts_v1_admin_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *MoveEntityRequest) GetEntityId() uint64 {
@@ -822,7 +1379,7 @@ type MoveEntityResponse struct {
 
 func (x *MoveEntityResponse) Reset() {
 	*x = MoveEntityResponse{}
-	mi := &file_rts_v1_admin_proto_msgTypes[15]
+	mi := &file_rts_v1_admin_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -834,7 +1391,7 @@ func (x *MoveEntityResponse) String() string {
 func (*MoveEntityResponse) ProtoMessage() {}
 
 func (x *MoveEntityResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_admin_proto_msgTypes[15]
+	mi := &file_rts_v1_admin_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -847,7 +1404,7 @@ func (x *MoveEntityResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MoveEntityResponse.ProtoReflect.Descriptor instead.
 func (*MoveEntityResponse) Descriptor() ([]byte, []int) {
-	return file_rts_v1_admin_proto_rawDescGZIP(), []int{15}
+	return file_rts_v1_admin_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *MoveEntityResponse) GetCommandId() string {
@@ -873,7 +1430,7 @@ type SubmitAdminCommandRequest struct {
 
 func (x *SubmitAdminCommandRequest) Reset() {
 	*x = SubmitAdminCommandRequest{}
-	mi := &file_rts_v1_admin_proto_msgTypes[16]
+	mi := &file_rts_v1_admin_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -885,7 +1442,7 @@ func (x *SubmitAdminCommandRequest) String() string {
 func (*SubmitAdminCommandRequest) ProtoMessage() {}
 
 func (x *SubmitAdminCommandRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_admin_proto_msgTypes[16]
+	mi := &file_rts_v1_admin_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -898,7 +1455,7 @@ func (x *SubmitAdminCommandRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubmitAdminCommandRequest.ProtoReflect.Descriptor instead.
 func (*SubmitAdminCommandRequest) Descriptor() ([]byte, []int) {
-	return file_rts_v1_admin_proto_rawDescGZIP(), []int{16}
+	return file_rts_v1_admin_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *SubmitAdminCommandRequest) GetPayload() *anypb.Any {
@@ -920,7 +1477,7 @@ type SubmitAdminCommandResponse struct {
 
 func (x *SubmitAdminCommandResponse) Reset() {
 	*x = SubmitAdminCommandResponse{}
-	mi := &file_rts_v1_admin_proto_msgTypes[17]
+	mi := &file_rts_v1_admin_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -932,7 +1489,7 @@ func (x *SubmitAdminCommandResponse) String() string {
 func (*SubmitAdminCommandResponse) ProtoMessage() {}
 
 func (x *SubmitAdminCommandResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_admin_proto_msgTypes[17]
+	mi := &file_rts_v1_admin_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -945,7 +1502,7 @@ func (x *SubmitAdminCommandResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubmitAdminCommandResponse.ProtoReflect.Descriptor instead.
 func (*SubmitAdminCommandResponse) Descriptor() ([]byte, []int) {
-	return file_rts_v1_admin_proto_rawDescGZIP(), []int{17}
+	return file_rts_v1_admin_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *SubmitAdminCommandResponse) GetCommandId() string {
@@ -985,7 +1542,7 @@ type SetPausedRequest struct {
 
 func (x *SetPausedRequest) Reset() {
 	*x = SetPausedRequest{}
-	mi := &file_rts_v1_admin_proto_msgTypes[18]
+	mi := &file_rts_v1_admin_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -997,7 +1554,7 @@ func (x *SetPausedRequest) String() string {
 func (*SetPausedRequest) ProtoMessage() {}
 
 func (x *SetPausedRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_admin_proto_msgTypes[18]
+	mi := &file_rts_v1_admin_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1010,7 +1567,7 @@ func (x *SetPausedRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetPausedRequest.ProtoReflect.Descriptor instead.
 func (*SetPausedRequest) Descriptor() ([]byte, []int) {
-	return file_rts_v1_admin_proto_rawDescGZIP(), []int{18}
+	return file_rts_v1_admin_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *SetPausedRequest) GetPaused() bool {
@@ -1030,7 +1587,7 @@ type SetPausedResponse struct {
 
 func (x *SetPausedResponse) Reset() {
 	*x = SetPausedResponse{}
-	mi := &file_rts_v1_admin_proto_msgTypes[19]
+	mi := &file_rts_v1_admin_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1042,7 +1599,7 @@ func (x *SetPausedResponse) String() string {
 func (*SetPausedResponse) ProtoMessage() {}
 
 func (x *SetPausedResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_admin_proto_msgTypes[19]
+	mi := &file_rts_v1_admin_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1055,7 +1612,7 @@ func (x *SetPausedResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetPausedResponse.ProtoReflect.Descriptor instead.
 func (*SetPausedResponse) Descriptor() ([]byte, []int) {
-	return file_rts_v1_admin_proto_rawDescGZIP(), []int{19}
+	return file_rts_v1_admin_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *SetPausedResponse) GetPaused() bool {
@@ -1082,7 +1639,7 @@ type StepRequest struct {
 
 func (x *StepRequest) Reset() {
 	*x = StepRequest{}
-	mi := &file_rts_v1_admin_proto_msgTypes[20]
+	mi := &file_rts_v1_admin_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1094,7 +1651,7 @@ func (x *StepRequest) String() string {
 func (*StepRequest) ProtoMessage() {}
 
 func (x *StepRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_admin_proto_msgTypes[20]
+	mi := &file_rts_v1_admin_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1107,7 +1664,7 @@ func (x *StepRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StepRequest.ProtoReflect.Descriptor instead.
 func (*StepRequest) Descriptor() ([]byte, []int) {
-	return file_rts_v1_admin_proto_rawDescGZIP(), []int{20}
+	return file_rts_v1_admin_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *StepRequest) GetCount() uint32 {
@@ -1128,7 +1685,7 @@ type StepResponse struct {
 
 func (x *StepResponse) Reset() {
 	*x = StepResponse{}
-	mi := &file_rts_v1_admin_proto_msgTypes[21]
+	mi := &file_rts_v1_admin_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1140,7 +1697,7 @@ func (x *StepResponse) String() string {
 func (*StepResponse) ProtoMessage() {}
 
 func (x *StepResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rts_v1_admin_proto_msgTypes[21]
+	mi := &file_rts_v1_admin_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1153,7 +1710,7 @@ func (x *StepResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StepResponse.ProtoReflect.Descriptor instead.
 func (*StepResponse) Descriptor() ([]byte, []int) {
-	return file_rts_v1_admin_proto_rawDescGZIP(), []int{21}
+	return file_rts_v1_admin_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *StepResponse) GetFirstTick() uint64 {
@@ -1174,7 +1731,51 @@ var File_rts_v1_admin_proto protoreflect.FileDescriptor
 
 const file_rts_v1_admin_proto_rawDesc = "" +
 	"\n" +
-	"\x12rts/v1/admin.proto\x12\x06rts.v1\x1a\x19google/protobuf/any.proto\x1a\x12rts/v1/types.proto\"3\n" +
+	"\x12rts/v1/admin.proto\x12\x06rts.v1\x1a\x19google/protobuf/any.proto\x1a\x12rts/v1/match.proto\x1a\x12rts/v1/types.proto\"\x18\n" +
+	"\x16GetMatchDetailsRequest\"\xdb\x01\n" +
+	"\x17GetMatchDetailsResponse\x12'\n" +
+	"\x05match\x18\x01 \x01(\v2\x11.rts.v1.MatchInfoR\x05match\x12\x1f\n" +
+	"\vconfig_json\x18\x02 \x01(\tR\n" +
+	"configJson\x12\x12\n" +
+	"\x04seed\x18\x03 \x01(\x04R\x04seed\x123\n" +
+	"\aplayers\x18\x04 \x03(\v2\x19.rts.v1.AdminPlayerStatusR\aplayers\x12-\n" +
+	"\ahistory\x18\x05 \x03(\v2\x13.rts.v1.MatchResultR\ahistory\"\xdc\x01\n" +
+	"\x11AdminPlayerStatus\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\rR\bplayerId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
+	"\x04slot\x18\x03 \x01(\x05R\x04slot\x12\x14\n" +
+	"\x05ready\x18\x04 \x01(\bR\x05ready\x12\x1e\n" +
+	"\n" +
+	"eliminated\x18\x05 \x01(\bR\n" +
+	"eliminated\x12 \n" +
+	"\vconnections\x18\x06 \x01(\rR\vconnections\x12*\n" +
+	"\x05stats\x18\a \x01(\v2\x14.rts.v1.PlayerResultR\x05stats\"V\n" +
+	"\x11ResetMatchRequest\x12\x17\n" +
+	"\x04seed\x18\x01 \x01(\x04H\x00R\x04seed\x88\x01\x01\x12\x1f\n" +
+	"\vconfig_json\x18\x02 \x01(\tR\n" +
+	"configJsonB\a\n" +
+	"\x05_seed\"C\n" +
+	"\x12ResetMatchResponse\x12\x19\n" +
+	"\bmatch_id\x18\x01 \x01(\tR\amatchId\x12\x12\n" +
+	"\x04seed\x18\x02 \x01(\x04R\x04seed\"0\n" +
+	"\x13ExportReplayRequest\x12\x19\n" +
+	"\bmatch_id\x18\x01 \x01(\tR\amatchId\"7\n" +
+	"\x14ExportReplayResponse\x12\x1f\n" +
+	"\vreplay_json\x18\x01 \x01(\tR\n" +
+	"replayJson\"6\n" +
+	"\x13VerifyReplayRequest\x12\x1f\n" +
+	"\vreplay_json\x18\x01 \x01(\tR\n" +
+	"replayJson\"\xb7\x02\n" +
+	"\x14VerifyReplayResponse\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\x12%\n" +
+	"\x0eticks_replayed\x18\x02 \x01(\x04R\rticksReplayed\x12%\n" +
+	"\x0eengine_matches\x18\x03 \x01(\bR\rengineMatches\x12'\n" +
+	"\x0fruleset_matches\x18\x04 \x01(\bR\x0erulesetMatches\x120\n" +
+	"\x14first_divergent_tick\x18\x05 \x01(\x04R\x12firstDivergentTick\x12\x16\n" +
+	"\x06detail\x18\x06 \x01(\tR\x06detail\x12\x1d\n" +
+	"\n" +
+	"final_hash\x18\a \x01(\tR\tfinalHash\x12/\n" +
+	"\x13checkpoints_checked\x18\b \x01(\rR\x12checkpointsChecked\"3\n" +
 	"\x14GetPlayerViewRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\rR\bplayerId\"}\n" +
 	"\x15GetPlayerViewResponse\x121\n" +
@@ -1188,12 +1789,13 @@ const file_rts_v1_admin_proto_rawDesc = "" +
 	"\vobserver_id\x18\x03 \x01(\x04R\n" +
 	"observerId\x12'\n" +
 	"\x0fdetection_score\x18\x04 \x01(\x03R\x0edetectionScore\x121\n" +
-	"\x14identification_score\x18\x05 \x01(\x03R\x13identificationScore\"`\n" +
+	"\x14identification_score\x18\x05 \x01(\x03R\x13identificationScore\"\x89\x01\n" +
 	"\x10SimulationStatus\x12\x12\n" +
 	"\x04tick\x18\x01 \x01(\x04R\x04tick\x12\x16\n" +
 	"\x06paused\x18\x02 \x01(\bR\x06paused\x12 \n" +
 	"\ftick_rate_hz\x18\x03 \x01(\rR\n" +
-	"tickRateHz\"\x19\n" +
+	"tickRateHz\x12'\n" +
+	"\x05match\x18\x04 \x01(\v2\x11.rts.v1.MatchInfoR\x05match\"\x19\n" +
 	"\x17GetWorldSnapshotRequest\"\xd6\x01\n" +
 	"\x18GetWorldSnapshotResponse\x121\n" +
 	"\bsnapshot\x18\x01 \x01(\v2\x15.rts.v1.WorldSnapshotR\bsnapshot\x12,\n" +
@@ -1246,7 +1848,7 @@ const file_rts_v1_admin_proto_rawDesc = "" +
 	"\fStepResponse\x12\x1d\n" +
 	"\n" +
 	"first_tick\x18\x01 \x01(\x04R\tfirstTick\x12\x14\n" +
-	"\x05count\x18\x02 \x01(\rR\x05count2\xe6\x05\n" +
+	"\x05count\x18\x02 \x01(\rR\x05count2\x95\b\n" +
 	"\fAdminService\x12U\n" +
 	"\x10GetWorldSnapshot\x12\x1f.rts.v1.GetWorldSnapshotRequest\x1a .rts.v1.GetWorldSnapshotResponse\x12K\n" +
 	"\fObserveWorld\x12\x1b.rts.v1.ObserveWorldRequest\x1a\x1c.rts.v1.ObserveWorldResponse0\x01\x12@\n" +
@@ -1258,7 +1860,12 @@ const file_rts_v1_admin_proto_rawDesc = "" +
 	"\x12SubmitAdminCommand\x12!.rts.v1.SubmitAdminCommandRequest\x1a\".rts.v1.SubmitAdminCommandResponse\x12@\n" +
 	"\tSetPaused\x12\x18.rts.v1.SetPausedRequest\x1a\x19.rts.v1.SetPausedResponse\x121\n" +
 	"\x04Step\x12\x13.rts.v1.StepRequest\x1a\x14.rts.v1.StepResponse\x12L\n" +
-	"\rGetPlayerView\x12\x1c.rts.v1.GetPlayerViewRequest\x1a\x1d.rts.v1.GetPlayerViewResponseB>Z<github.com/dakotaknutson/unit-strategy-game/gen/rts/v1;rtsv1b\x06proto3"
+	"\rGetPlayerView\x12\x1c.rts.v1.GetPlayerViewRequest\x1a\x1d.rts.v1.GetPlayerViewResponse\x12R\n" +
+	"\x0fGetMatchDetails\x12\x1e.rts.v1.GetMatchDetailsRequest\x1a\x1f.rts.v1.GetMatchDetailsResponse\x12C\n" +
+	"\n" +
+	"ResetMatch\x12\x19.rts.v1.ResetMatchRequest\x1a\x1a.rts.v1.ResetMatchResponse\x12I\n" +
+	"\fExportReplay\x12\x1b.rts.v1.ExportReplayRequest\x1a\x1c.rts.v1.ExportReplayResponse\x12I\n" +
+	"\fVerifyReplay\x12\x1b.rts.v1.VerifyReplayRequest\x1a\x1c.rts.v1.VerifyReplayResponseB>Z<github.com/dakotaknutson/unit-strategy-game/gen/rts/v1;rtsv1b\x06proto3"
 
 var (
 	file_rts_v1_admin_proto_rawDescOnce sync.Once
@@ -1272,77 +1879,102 @@ func file_rts_v1_admin_proto_rawDescGZIP() []byte {
 	return file_rts_v1_admin_proto_rawDescData
 }
 
-var file_rts_v1_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
+var file_rts_v1_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
 var file_rts_v1_admin_proto_goTypes = []any{
-	(*GetPlayerViewRequest)(nil),       // 0: rts.v1.GetPlayerViewRequest
-	(*GetPlayerViewResponse)(nil),      // 1: rts.v1.GetPlayerViewResponse
-	(*Detection)(nil),                  // 2: rts.v1.Detection
-	(*SimulationStatus)(nil),           // 3: rts.v1.SimulationStatus
-	(*GetWorldSnapshotRequest)(nil),    // 4: rts.v1.GetWorldSnapshotRequest
-	(*GetWorldSnapshotResponse)(nil),   // 5: rts.v1.GetWorldSnapshotResponse
-	(*ObserveWorldRequest)(nil),        // 6: rts.v1.ObserveWorldRequest
-	(*ObserveWorldResponse)(nil),       // 7: rts.v1.ObserveWorldResponse
-	(*GetStatusRequest)(nil),           // 8: rts.v1.GetStatusRequest
-	(*GetStatusResponse)(nil),          // 9: rts.v1.GetStatusResponse
-	(*SpawnUnitRequest)(nil),           // 10: rts.v1.SpawnUnitRequest
-	(*SpawnUnitResponse)(nil),          // 11: rts.v1.SpawnUnitResponse
-	(*DeleteEntityRequest)(nil),        // 12: rts.v1.DeleteEntityRequest
-	(*DeleteEntityResponse)(nil),       // 13: rts.v1.DeleteEntityResponse
-	(*MoveEntityRequest)(nil),          // 14: rts.v1.MoveEntityRequest
-	(*MoveEntityResponse)(nil),         // 15: rts.v1.MoveEntityResponse
-	(*SubmitAdminCommandRequest)(nil),  // 16: rts.v1.SubmitAdminCommandRequest
-	(*SubmitAdminCommandResponse)(nil), // 17: rts.v1.SubmitAdminCommandResponse
-	(*SetPausedRequest)(nil),           // 18: rts.v1.SetPausedRequest
-	(*SetPausedResponse)(nil),          // 19: rts.v1.SetPausedResponse
-	(*StepRequest)(nil),                // 20: rts.v1.StepRequest
-	(*StepResponse)(nil),               // 21: rts.v1.StepResponse
-	(*WorldSnapshot)(nil),              // 22: rts.v1.WorldSnapshot
-	(IdentificationLevel)(0),           // 23: rts.v1.IdentificationLevel
-	(*PlayerInfo)(nil),                 // 24: rts.v1.PlayerInfo
-	(*WorldInfo)(nil),                  // 25: rts.v1.WorldInfo
-	(*TickUpdate)(nil),                 // 26: rts.v1.TickUpdate
-	(*Position)(nil),                   // 27: rts.v1.Position
-	(*anypb.Any)(nil),                  // 28: google.protobuf.Any
+	(*GetMatchDetailsRequest)(nil),     // 0: rts.v1.GetMatchDetailsRequest
+	(*GetMatchDetailsResponse)(nil),    // 1: rts.v1.GetMatchDetailsResponse
+	(*AdminPlayerStatus)(nil),          // 2: rts.v1.AdminPlayerStatus
+	(*ResetMatchRequest)(nil),          // 3: rts.v1.ResetMatchRequest
+	(*ResetMatchResponse)(nil),         // 4: rts.v1.ResetMatchResponse
+	(*ExportReplayRequest)(nil),        // 5: rts.v1.ExportReplayRequest
+	(*ExportReplayResponse)(nil),       // 6: rts.v1.ExportReplayResponse
+	(*VerifyReplayRequest)(nil),        // 7: rts.v1.VerifyReplayRequest
+	(*VerifyReplayResponse)(nil),       // 8: rts.v1.VerifyReplayResponse
+	(*GetPlayerViewRequest)(nil),       // 9: rts.v1.GetPlayerViewRequest
+	(*GetPlayerViewResponse)(nil),      // 10: rts.v1.GetPlayerViewResponse
+	(*Detection)(nil),                  // 11: rts.v1.Detection
+	(*SimulationStatus)(nil),           // 12: rts.v1.SimulationStatus
+	(*GetWorldSnapshotRequest)(nil),    // 13: rts.v1.GetWorldSnapshotRequest
+	(*GetWorldSnapshotResponse)(nil),   // 14: rts.v1.GetWorldSnapshotResponse
+	(*ObserveWorldRequest)(nil),        // 15: rts.v1.ObserveWorldRequest
+	(*ObserveWorldResponse)(nil),       // 16: rts.v1.ObserveWorldResponse
+	(*GetStatusRequest)(nil),           // 17: rts.v1.GetStatusRequest
+	(*GetStatusResponse)(nil),          // 18: rts.v1.GetStatusResponse
+	(*SpawnUnitRequest)(nil),           // 19: rts.v1.SpawnUnitRequest
+	(*SpawnUnitResponse)(nil),          // 20: rts.v1.SpawnUnitResponse
+	(*DeleteEntityRequest)(nil),        // 21: rts.v1.DeleteEntityRequest
+	(*DeleteEntityResponse)(nil),       // 22: rts.v1.DeleteEntityResponse
+	(*MoveEntityRequest)(nil),          // 23: rts.v1.MoveEntityRequest
+	(*MoveEntityResponse)(nil),         // 24: rts.v1.MoveEntityResponse
+	(*SubmitAdminCommandRequest)(nil),  // 25: rts.v1.SubmitAdminCommandRequest
+	(*SubmitAdminCommandResponse)(nil), // 26: rts.v1.SubmitAdminCommandResponse
+	(*SetPausedRequest)(nil),           // 27: rts.v1.SetPausedRequest
+	(*SetPausedResponse)(nil),          // 28: rts.v1.SetPausedResponse
+	(*StepRequest)(nil),                // 29: rts.v1.StepRequest
+	(*StepResponse)(nil),               // 30: rts.v1.StepResponse
+	(*MatchInfo)(nil),                  // 31: rts.v1.MatchInfo
+	(*MatchResult)(nil),                // 32: rts.v1.MatchResult
+	(*PlayerResult)(nil),               // 33: rts.v1.PlayerResult
+	(*WorldSnapshot)(nil),              // 34: rts.v1.WorldSnapshot
+	(IdentificationLevel)(0),           // 35: rts.v1.IdentificationLevel
+	(*PlayerInfo)(nil),                 // 36: rts.v1.PlayerInfo
+	(*WorldInfo)(nil),                  // 37: rts.v1.WorldInfo
+	(*TickUpdate)(nil),                 // 38: rts.v1.TickUpdate
+	(*Position)(nil),                   // 39: rts.v1.Position
+	(*anypb.Any)(nil),                  // 40: google.protobuf.Any
 }
 var file_rts_v1_admin_proto_depIdxs = []int32{
-	22, // 0: rts.v1.GetPlayerViewResponse.snapshot:type_name -> rts.v1.WorldSnapshot
-	2,  // 1: rts.v1.GetPlayerViewResponse.detections:type_name -> rts.v1.Detection
-	23, // 2: rts.v1.Detection.level:type_name -> rts.v1.IdentificationLevel
-	22, // 3: rts.v1.GetWorldSnapshotResponse.snapshot:type_name -> rts.v1.WorldSnapshot
-	24, // 4: rts.v1.GetWorldSnapshotResponse.players:type_name -> rts.v1.PlayerInfo
-	3,  // 5: rts.v1.GetWorldSnapshotResponse.status:type_name -> rts.v1.SimulationStatus
-	25, // 6: rts.v1.GetWorldSnapshotResponse.world:type_name -> rts.v1.WorldInfo
-	22, // 7: rts.v1.ObserveWorldResponse.snapshot:type_name -> rts.v1.WorldSnapshot
-	26, // 8: rts.v1.ObserveWorldResponse.update:type_name -> rts.v1.TickUpdate
-	3,  // 9: rts.v1.GetStatusResponse.status:type_name -> rts.v1.SimulationStatus
-	27, // 10: rts.v1.SpawnUnitRequest.position:type_name -> rts.v1.Position
-	27, // 11: rts.v1.MoveEntityRequest.position:type_name -> rts.v1.Position
-	28, // 12: rts.v1.SubmitAdminCommandRequest.payload:type_name -> google.protobuf.Any
-	4,  // 13: rts.v1.AdminService.GetWorldSnapshot:input_type -> rts.v1.GetWorldSnapshotRequest
-	6,  // 14: rts.v1.AdminService.ObserveWorld:input_type -> rts.v1.ObserveWorldRequest
-	8,  // 15: rts.v1.AdminService.GetStatus:input_type -> rts.v1.GetStatusRequest
-	10, // 16: rts.v1.AdminService.SpawnUnit:input_type -> rts.v1.SpawnUnitRequest
-	12, // 17: rts.v1.AdminService.DeleteEntity:input_type -> rts.v1.DeleteEntityRequest
-	14, // 18: rts.v1.AdminService.MoveEntity:input_type -> rts.v1.MoveEntityRequest
-	16, // 19: rts.v1.AdminService.SubmitAdminCommand:input_type -> rts.v1.SubmitAdminCommandRequest
-	18, // 20: rts.v1.AdminService.SetPaused:input_type -> rts.v1.SetPausedRequest
-	20, // 21: rts.v1.AdminService.Step:input_type -> rts.v1.StepRequest
-	0,  // 22: rts.v1.AdminService.GetPlayerView:input_type -> rts.v1.GetPlayerViewRequest
-	5,  // 23: rts.v1.AdminService.GetWorldSnapshot:output_type -> rts.v1.GetWorldSnapshotResponse
-	7,  // 24: rts.v1.AdminService.ObserveWorld:output_type -> rts.v1.ObserveWorldResponse
-	9,  // 25: rts.v1.AdminService.GetStatus:output_type -> rts.v1.GetStatusResponse
-	11, // 26: rts.v1.AdminService.SpawnUnit:output_type -> rts.v1.SpawnUnitResponse
-	13, // 27: rts.v1.AdminService.DeleteEntity:output_type -> rts.v1.DeleteEntityResponse
-	15, // 28: rts.v1.AdminService.MoveEntity:output_type -> rts.v1.MoveEntityResponse
-	17, // 29: rts.v1.AdminService.SubmitAdminCommand:output_type -> rts.v1.SubmitAdminCommandResponse
-	19, // 30: rts.v1.AdminService.SetPaused:output_type -> rts.v1.SetPausedResponse
-	21, // 31: rts.v1.AdminService.Step:output_type -> rts.v1.StepResponse
-	1,  // 32: rts.v1.AdminService.GetPlayerView:output_type -> rts.v1.GetPlayerViewResponse
-	23, // [23:33] is the sub-list for method output_type
-	13, // [13:23] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	31, // 0: rts.v1.GetMatchDetailsResponse.match:type_name -> rts.v1.MatchInfo
+	2,  // 1: rts.v1.GetMatchDetailsResponse.players:type_name -> rts.v1.AdminPlayerStatus
+	32, // 2: rts.v1.GetMatchDetailsResponse.history:type_name -> rts.v1.MatchResult
+	33, // 3: rts.v1.AdminPlayerStatus.stats:type_name -> rts.v1.PlayerResult
+	34, // 4: rts.v1.GetPlayerViewResponse.snapshot:type_name -> rts.v1.WorldSnapshot
+	11, // 5: rts.v1.GetPlayerViewResponse.detections:type_name -> rts.v1.Detection
+	35, // 6: rts.v1.Detection.level:type_name -> rts.v1.IdentificationLevel
+	31, // 7: rts.v1.SimulationStatus.match:type_name -> rts.v1.MatchInfo
+	34, // 8: rts.v1.GetWorldSnapshotResponse.snapshot:type_name -> rts.v1.WorldSnapshot
+	36, // 9: rts.v1.GetWorldSnapshotResponse.players:type_name -> rts.v1.PlayerInfo
+	12, // 10: rts.v1.GetWorldSnapshotResponse.status:type_name -> rts.v1.SimulationStatus
+	37, // 11: rts.v1.GetWorldSnapshotResponse.world:type_name -> rts.v1.WorldInfo
+	34, // 12: rts.v1.ObserveWorldResponse.snapshot:type_name -> rts.v1.WorldSnapshot
+	38, // 13: rts.v1.ObserveWorldResponse.update:type_name -> rts.v1.TickUpdate
+	12, // 14: rts.v1.GetStatusResponse.status:type_name -> rts.v1.SimulationStatus
+	39, // 15: rts.v1.SpawnUnitRequest.position:type_name -> rts.v1.Position
+	39, // 16: rts.v1.MoveEntityRequest.position:type_name -> rts.v1.Position
+	40, // 17: rts.v1.SubmitAdminCommandRequest.payload:type_name -> google.protobuf.Any
+	13, // 18: rts.v1.AdminService.GetWorldSnapshot:input_type -> rts.v1.GetWorldSnapshotRequest
+	15, // 19: rts.v1.AdminService.ObserveWorld:input_type -> rts.v1.ObserveWorldRequest
+	17, // 20: rts.v1.AdminService.GetStatus:input_type -> rts.v1.GetStatusRequest
+	19, // 21: rts.v1.AdminService.SpawnUnit:input_type -> rts.v1.SpawnUnitRequest
+	21, // 22: rts.v1.AdminService.DeleteEntity:input_type -> rts.v1.DeleteEntityRequest
+	23, // 23: rts.v1.AdminService.MoveEntity:input_type -> rts.v1.MoveEntityRequest
+	25, // 24: rts.v1.AdminService.SubmitAdminCommand:input_type -> rts.v1.SubmitAdminCommandRequest
+	27, // 25: rts.v1.AdminService.SetPaused:input_type -> rts.v1.SetPausedRequest
+	29, // 26: rts.v1.AdminService.Step:input_type -> rts.v1.StepRequest
+	9,  // 27: rts.v1.AdminService.GetPlayerView:input_type -> rts.v1.GetPlayerViewRequest
+	0,  // 28: rts.v1.AdminService.GetMatchDetails:input_type -> rts.v1.GetMatchDetailsRequest
+	3,  // 29: rts.v1.AdminService.ResetMatch:input_type -> rts.v1.ResetMatchRequest
+	5,  // 30: rts.v1.AdminService.ExportReplay:input_type -> rts.v1.ExportReplayRequest
+	7,  // 31: rts.v1.AdminService.VerifyReplay:input_type -> rts.v1.VerifyReplayRequest
+	14, // 32: rts.v1.AdminService.GetWorldSnapshot:output_type -> rts.v1.GetWorldSnapshotResponse
+	16, // 33: rts.v1.AdminService.ObserveWorld:output_type -> rts.v1.ObserveWorldResponse
+	18, // 34: rts.v1.AdminService.GetStatus:output_type -> rts.v1.GetStatusResponse
+	20, // 35: rts.v1.AdminService.SpawnUnit:output_type -> rts.v1.SpawnUnitResponse
+	22, // 36: rts.v1.AdminService.DeleteEntity:output_type -> rts.v1.DeleteEntityResponse
+	24, // 37: rts.v1.AdminService.MoveEntity:output_type -> rts.v1.MoveEntityResponse
+	26, // 38: rts.v1.AdminService.SubmitAdminCommand:output_type -> rts.v1.SubmitAdminCommandResponse
+	28, // 39: rts.v1.AdminService.SetPaused:output_type -> rts.v1.SetPausedResponse
+	30, // 40: rts.v1.AdminService.Step:output_type -> rts.v1.StepResponse
+	10, // 41: rts.v1.AdminService.GetPlayerView:output_type -> rts.v1.GetPlayerViewResponse
+	1,  // 42: rts.v1.AdminService.GetMatchDetails:output_type -> rts.v1.GetMatchDetailsResponse
+	4,  // 43: rts.v1.AdminService.ResetMatch:output_type -> rts.v1.ResetMatchResponse
+	6,  // 44: rts.v1.AdminService.ExportReplay:output_type -> rts.v1.ExportReplayResponse
+	8,  // 45: rts.v1.AdminService.VerifyReplay:output_type -> rts.v1.VerifyReplayResponse
+	32, // [32:46] is the sub-list for method output_type
+	18, // [18:32] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_rts_v1_admin_proto_init() }
@@ -1350,8 +1982,10 @@ func file_rts_v1_admin_proto_init() {
 	if File_rts_v1_admin_proto != nil {
 		return
 	}
+	file_rts_v1_match_proto_init()
 	file_rts_v1_types_proto_init()
-	file_rts_v1_admin_proto_msgTypes[7].OneofWrappers = []any{
+	file_rts_v1_admin_proto_msgTypes[3].OneofWrappers = []any{}
+	file_rts_v1_admin_proto_msgTypes[16].OneofWrappers = []any{
 		(*ObserveWorldResponse_Snapshot)(nil),
 		(*ObserveWorldResponse_Update)(nil),
 	}
@@ -1361,7 +1995,7 @@ func file_rts_v1_admin_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rts_v1_admin_proto_rawDesc), len(file_rts_v1_admin_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   22,
+			NumMessages:   31,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

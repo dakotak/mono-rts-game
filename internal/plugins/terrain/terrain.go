@@ -98,6 +98,35 @@ func (p *Plugin) Register(r *sim.Registrar) error {
 	return r.Describe(p.cfg)
 }
 
+// Type returns a configured terrain type.
+func (p *Plugin) Type(name string) (TypeConfig, bool) {
+	t, ok := p.cfg.Types[name]
+	return t, ok
+}
+
+// Place creates one feature of a configured type (used by world
+// generation). Impassable features need a free tile.
+func (p *Plugin) Place(w *sim.World, typeName string, pos sim.Pos) error {
+	t, ok := p.cfg.Types[typeName]
+	if !ok {
+		return fmt.Errorf("unknown terrain type %q", typeName)
+	}
+	f := Feature{Type: typeName, Passable: t.Passable, Cost: max(t.Cost, 1)}
+	var id sim.EntityID
+	var err error
+	if t.Passable {
+		id, err = w.CreatePassable(sim.KindTerrain, 0, pos)
+	} else {
+		f.Cost = 0
+		id, err = w.CreateEntity(sim.KindTerrain, 0, pos)
+	}
+	if err != nil {
+		return err
+	}
+	features.Set(w, id, f)
+	return nil
+}
+
 func (p *Plugin) place(w *sim.World) error {
 	for i, b := range p.cfg.Tiles {
 		t := p.cfg.Types[b.Type]

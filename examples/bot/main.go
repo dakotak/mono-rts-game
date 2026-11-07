@@ -30,12 +30,14 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 
 	automationv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/automation/v1"
+	matchv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/match/v1"
 	movementv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/movement/v1"
 	rtsv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/v1"
 )
 
 // state is the bot's client-side copy of what it observes.
 type state struct {
+	match    *rtsv1.MatchInfo // lifecycle, readiness, clock, result
 	me       uint32
 	tick     uint64
 	width    int32
@@ -48,7 +50,27 @@ type state struct {
 	depleted map[uint64]bool          // wells known to be empty (they stay on the map)
 }
 
+// applyMatch tracks the match. Player IDs are per match: after a reset the
+// same join token plays under a new ID, so adopt it.
+func (s *state) applyMatch(m *rtsv1.MatchInfo) {
+	if m == nil {
+		return
+	}
+	if s.match != nil && s.match.GetMatchId() != m.GetMatchId() {
+		log.Printf("new match %s (reset); forgetting the old world", m.GetMatchId())
+		s.lastSeen, s.assigned, s.depleted = map[uint64]uint64{}, map[uint64]uint64{}, map[uint64]bool{}
+	}
+	if id := m.GetYourPlayerId(); id != 0 {
+		s.me = id
+	}
+	if r := m.GetResult(); r != nil && (s.match == nil || s.match.GetResult() == nil) {
+		log.Printf("match over: winner %d, draw %v, reason %s", r.GetWinnerId(), r.GetDraw(), r.GetReason())
+	}
+	s.match = m
+}
+
 func (s *state) applySnapshot(snap *rtsv1.WorldSnapshot) {
+	s.applyMatch(snap.GetMatch())
 	s.tick = snap.GetTick()
 	s.entities = map[uint64]*rtsv1.Entity{}
 	for _, e := range snap.GetEntities() {
@@ -60,6 +82,7 @@ func (s *state) applySnapshot(snap *rtsv1.WorldSnapshot) {
 // replacements; removed ones are gone from our view (under fog of war:
 // destroyed or merely no longer detected — we cannot tell).
 func (s *state) applyUpdate(u *rtsv1.TickUpdate) {
+	s.applyMatch(u.GetMatch())
 	s.tick = u.GetTick()
 	for _, e := range u.GetChanged() {
 		s.entities[e.GetId()] = e
@@ -183,6 +206,16 @@ func (b *bot) submit(ctx context.Context, desc string, msg proto.Message) {
 
 // think issues this tick's commands, spending at most the unit budget.
 func (b *bot) think(ctx context.Context) {
+	switch b.s.match.GetState() {
+	case rtsv1.MatchState_MATCH_STATE_READY:
+		if !b.s.match.GetYouReady() && b.s.tick%10 == 0 { // retry until the server reports us ready
+			b.submit(ctx, "ready", &matchv1.SetReadyCommand{Ready: true})
+		}
+		return
+	case rtsv1.MatchState_MATCH_STATE_RUNNING:
+	default: // paused or finished: gameplay commands would be rejected
+		return
+	}
 	if b.s.tick%10 != 0 { // persistent orders do the work; re-plan every 10 ticks
 		return
 	}

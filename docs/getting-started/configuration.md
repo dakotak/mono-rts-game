@@ -143,6 +143,18 @@ wide when estimated, and exact when detailed. See
 "logistics":  { "range": { "default": 2 } }
 ```
 
+## Matches and presets
+
+The `worldgen` and `match` sections turn a world into a complete game:
+
+- a generated map with spawns and starting units
+- a lobby
+- victory conditions and scoring
+
+Three presets in [`configs/presets`](../../configs/presets) (sandbox,
+standard, bot arena) are complete examples, documented in
+[running matches](../operations/matches.md#presets).
+
 ## The complete development config
 
 [`configs/dev.json`](../../configs/dev.json) uses every plugin and is the

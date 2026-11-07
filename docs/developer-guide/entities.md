@@ -108,6 +108,28 @@ wire's `int_value` is signed.
 - The kernel never filters. The server filters per viewer, and the
   observation authority filters foreign entities under fog.
 
+## Globals (world-scoped state)
+
+State that belongs to the match rather than to an entity uses a
+**global**:
+
+```go
+var status = sim.NewGlobal("match.status", Status{}) // plugin-prefixed ID, initial value
+r.Global(status.Def())
+st := status.Get(w)
+status.Set(w, st) // equal values are no-ops
+```
+
+Globals follow the same rules as components:
+
+- `T` is a plain comparable value (fixed-size arrays are fine).
+- They're part of `StateHash` and replay.
+- Changes are reported in `Frame.Globals`; the server reads the match
+  status from there.
+
+Examples: `match.status` (lifecycle, players, statistics, scores) and the
+`koth.hill` example.
+
 ## Derived properties
 
 A derived property is a value computed on demand rather than stored:

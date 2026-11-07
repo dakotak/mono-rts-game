@@ -614,7 +614,7 @@ function showRules() {
 }
 $("login-form").addEventListener("submit", (ev) => { ev.preventDefault(); login($("admin-token").value); });
 window.addEventListener("keydown", (ev) => {
-  if (!token || ["INPUT", "SELECT"].includes(ev.target.tagName)) return;
+  if (!token || ["INPUT", "SELECT", "TEXTAREA"].includes(ev.target.tagName)) return;
   if (ev.key === "Escape") { selected.clear(); render(); }
   if (ev.key === "Delete" || ev.key === "Backspace") deleteSelected();
   if (ev.key === " ") { ev.preventDefault(); $("pause-btn").click(); }

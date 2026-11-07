@@ -56,6 +56,9 @@ type World struct {
 
 	// components[componentID][entity] = value
 	components map[string]map[EntityID]any
+	// globals[globalID] = value (world-scoped plugin state)
+	globals      map[string]any
+	globalsDirty map[string]struct{}
 
 	// Change tracking for the current tick.
 	dirty   map[EntityID]struct{}
@@ -80,6 +83,11 @@ func newWorld(width, height int32, seed uint64, idKey []byte, rules *Ruleset) *W
 	}
 	for _, id := range rules.componentOrder {
 		w.components[id] = make(map[EntityID]any)
+	}
+	w.globals = make(map[string]any, len(rules.globals))
+	w.globalsDirty = make(map[string]struct{})
+	for _, g := range rules.globals {
+		w.globals[g.ID] = g.initial
 	}
 	return w
 }
@@ -407,6 +415,9 @@ func (w *World) StateHash() uint64 {
 		for _, id := range keys {
 			fmt.Fprintf(h, "%d=%#v|", id, store[id])
 		}
+	}
+	for _, gid := range w.globalIDs() {
+		fmt.Fprintf(h, "g%s=%#v|", gid, w.globals[gid])
 	}
 	return h.Sum64()
 }

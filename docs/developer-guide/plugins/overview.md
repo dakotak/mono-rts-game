@@ -15,6 +15,8 @@ building, registering, testing and shipping one.
 | [Attributes and formulas](attributes-and-formulas.md) | Components as attributes, derived properties, binding to upgradable attributes, formulas |
 | [State and determinism](state-and-determinism.md) | The rules every plugin must follow |
 | [Testing](testing.md) | Unit, integration, determinism and benchmark tests |
+| [World generation](worldgen.md) | Custom map generators |
+| [Victory conditions and scoring](match-extensions.md) | Custom win conditions and score metrics |
 | [Examples](examples.md) | The example plugin and built-in plugins worth reading |
 
 ## What a plugin is
@@ -81,6 +83,10 @@ way to extend the game:
 | Command budget and per-unit results | `TickContext.Charge`, `ReportUnit`, `ApplyToUnit` |
 | Using other mechanics | Their exported Go APIs (e.g. `energy.GetStore`, `energy.SetStored`, `movement.Destination`, `attributes.Plugin.Lookup`), declared with `DependsOn` |
 | Fog of war (one plugin only) | `Registrar.ObservationAuthority` (used by `visibility`) |
+| World-scoped state | `sim.NewGlobal`, `Registrar.Global` |
+| Command and system gating (one plugin only) | `Registrar.Gate` (used by `match`) |
+| Map generators | `worldgen.Generator`, `(*worldgen.Plugin).AddGenerator` |
+| Victory conditions, scoring metrics | `match.Condition`, `match.Metric`, `(*match.Plugin).AddCondition` / `AddMetric` |
 
 ### Internal details, not extension points
 

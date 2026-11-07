@@ -22,10 +22,14 @@
 | **Fog of war** | Per-player visibility, detection and identification (`visibility.enabled`). |
 | **Frame** | Everything one tick produced: changed views, removals, events, results, commands, observations. |
 | **Ghost** | Client-side memory of a foreign entity no longer observed. |
+| **Gate** | The single plugin (match) that decides whether commands and systems run in a tick. |
+| **Generator** | A world-generation algorithm (`arena`, `procedural`, custom), selected by `worldgen.generator`. |
+| **Global** | A world-scoped plugin value (`sim.Global[T]`), hashed and replayed like components. |
 | **Hub** | The server component that keeps a read-only copy of views and per-player observations, and fans out updates. |
 | **Identification level** | How well a detected entity is known: basic, estimated or detailed (`OWN` for your own). |
 | **Invested** | Energy actually paid into a unit's levels (upgrades, plus embodied energy inherited by a clone). |
 | **Join token** | Config secret that lets a client connect as a player slot. |
+| **Match** | One game on the server, from setup to finished. Its lifecycle is setup, ready, running, paused, finished; a reset starts a new match. |
 | **Max-min fair split** | Dividing a limited amount: smallest requests are filled first, the rest share evenly, ties by ID (`fairshare.Split`). |
 | **Observation authority** | The single plugin (visibility) deciding what each player observes of foreign entities. |
 | **Order** | Persistent per-unit intent stored as a component (move, mine, attack, upgrade, supply, ...) and advanced by a system each tick. |
@@ -35,8 +39,12 @@
 | **Plugin** | A compiled-in package implementing `sim.Plugin` that contributes a mechanic. |
 | **Registrar** | The object a plugin declares its contributions through during `Register`. |
 | **Relay** | A unit that both receives and supplies energy through supply links, forming chains. |
+| **Preset** | A ready-made configuration in `configs/presets` (sandbox, standard, bot arena). |
+| **Replay** | A recorded match (`mono-replay/1`): resolved config, commands, digests and hashes. |
+| **Reset** | Replacing the current match with a newly built one, in the same server process. |
 | **Rules description** | A plugin's published effective configuration (`WorldInfo.rules_json`). |
 | **Ruleset** | The validated, immutable combination of registered plugins (`sim.Ruleset`). |
+| **Score** | `Σ weight × metric` per player; a measurement, never spendable. |
 | **Selector** | Metadata conditions (plus optional IDs and a limit) choosing your own units for a batch. |
 | **Session token** | Bearer token returned by `Connect`, valid until server restart. |
 | **Snapshot** | A complete view at a tick (`WorldSnapshot`). |

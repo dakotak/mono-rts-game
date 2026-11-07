@@ -10,9 +10,11 @@ Per-tick phase order with every built-in plugin (logged by the server at
 startup as `tick schedule`):
 
 ```
-commands → automation → energy (energy.mine, energy.transfer) → logistics
-→ salvage → movement → combat → upgrades → cloning → [observation]
+commands (gated) → automation → wells → energy (energy.mine, energy.transfer)
+→ logistics → salvage → movement → combat → upgrades → cloning → match → [observation]
 ```
+
+Phases run only while the match is RUNNING; see *Match lifecycle* below.
 
 Observation (fog of war) is not a phase: the observation authority runs
 after every system (see [simulation.md](simulation.md)).
@@ -533,3 +535,65 @@ does not depend on hidden state.
 **Client memory.** The server keeps no explored-map history. The client
 keeps explored tiles (per tab) and "last known" ghosts of lost entities,
 drawn as stale outlines with the tick last seen.
+
+## Match lifecycle, victory and scoring (Milestone 7)
+
+`internal/plugins/match` (player-facing: [matches](../user-guide/matches.md)).
+
+- **State.** The world global `match.status` holds: state, players
+  (configuration order), ready and eliminated flags, cumulative stats,
+  scores, final totals, start and finish ticks, running ticks, and the
+  winner, draw flag and reason.
+- **Transitions**, through commands or the match system only:
+
+  | From | To | How |
+  |---|---|---|
+  | SETUP | READY | `Init` |
+  | SETUP | RUNNING | `Init`, when `start` is `immediate` |
+  | READY | RUNNING | `SetReadyCommand` (`all_ready`) or `StartMatchCommand` |
+  | RUNNING | PAUSED | `PauseMatchCommand` |
+  | PAUSED | RUNNING | `ResumeMatchCommand` |
+  | READY, RUNNING, PAUSED | FINISHED | `EndMatchCommand`, or a victory condition |
+
+  Anything else is `failed_precondition`.
+- **Gate.** Admin commands are always allowed; `SetReadyCommand` always
+  reaches its handler. Every other player command needs RUNNING and a
+  non-eliminated player. Systems run only while RUNNING.
+- **Statistics.**
+  - `EnergyMined` is tallied from this tick's `energy.mined` events
+    (`TickContext.Events`).
+  - `Kills`, `InvestmentDestroyed` and `UnitsLost` come from combat's
+    destruction hook. Every player whose units hit the unit in the
+    destroying tick (other than the owner) gets the kill and the unit's
+    *invested* energy. Shared kills credit each attacker.
+- **Victory** (end of each running tick):
+  1. elimination (when enabled: players with zero units are eliminated;
+     one survivor wins, none is a draw)
+  2. custom conditions
+  3. the time limit (highest score; ties are a draw)
+
+  `EndMatchCommand` acts immediately, and `EliminatePlayerCommand`
+  evaluates elimination immediately.
+- **Score.** `Σ weight × metric`, recomputed every `interval_ticks` and at
+  the end. Integer arithmetic; weights are applied in metric-name order.
+
+## World generation (Milestone 7)
+
+`internal/plugins/worldgen`
+([guide](plugins/worldgen.md)):
+
+- **Pipeline.** Spawn regions, terrain, resources and spawns are planned on
+  a grid. Units are placed on the reachable free tiles nearest each spawn
+  (BFS, fixed neighbour order). The plan is validated, retried up to
+  `max_attempts` times, then applied in `Init`, after config units, terrain
+  and wells.
+- **Randomness** comes only from `World.Rand()`.
+- **Spawn layouts** use integer geometry: `corners` (inset corners in the
+  order TL, BR, TR, BL), `ring` (evenly spaced along the inset rectangle's
+  perimeter from the top-left, clockwise), or `random` (rejection
+  sampling with `min_distance`).
+
+**Wells regeneration.** In phase `wells`, before energy, every finite well
+with `regeneration > 0` regains that much energy per tick, up to its
+capacity, in ID order. A well that hits 0 still ends its mining orders
+(`well_depleted`) and refills afterwards.

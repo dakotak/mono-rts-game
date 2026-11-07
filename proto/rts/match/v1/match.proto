@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package rts.match.v1;
+
+option go_package = "github.com/dakotaknutson/unit-strategy-game/gen/rts/match/v1;matchv1";
+
+// Command messages of the match plugin (lifecycle, readiness, victory).
+// Like every command they execute inside a tick, in the deterministic
+// command order, and are part of the replay log.
+//
+// Lifecycle: SETUP -> READY -> RUNNING <-> PAUSED, and READY / RUNNING /
+// PAUSED -> FINISHED. A finished match stays finished; starting another one
+// is a reset (AdminService.ResetMatch), which builds a new world.
+
+// SetReadyCommand marks the issuing player ready (or not) while the match
+// is READY. With start mode "all_ready" the match starts in the tick the
+// last required player becomes ready. Costs no unit-commands.
+message SetReadyCommand {
+  bool ready = 1;
+}
+
+// StartMatchCommand (admin) moves a READY match to RUNNING.
+message StartMatchCommand {}
+
+// PauseMatchCommand (admin) moves a RUNNING match to PAUSED: gameplay
+// systems stop and player gameplay commands are rejected until resumed.
+// Unlike AdminService.SetPaused (which stops the tick clock for debugging),
+// ticks keep advancing and the match timer does not.
+message PauseMatchCommand {}
+
+// ResumeMatchCommand (admin) moves a PAUSED match back to RUNNING.
+message ResumeMatchCommand {}
+
+// EndMatchCommand (admin) finishes a READY, RUNNING or PAUSED match with
+// the given winner, or with no winner when winner_id is 0.
+message EndMatchCommand {
+  uint32 winner_id = 1;
+  // Free-form reason recorded in the result (default "admin").
+  string reason = 2;
+}
+
+// EliminatePlayerCommand (admin) eliminates a player: their commands are
+// rejected from then on and, with remove_units, their units are removed
+// (without wreckage). Victory conditions are evaluated right away.
+message EliminatePlayerCommand {
+  uint32 player_id = 1;
+  bool remove_units = 2;
+}

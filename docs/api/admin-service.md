@@ -33,6 +33,24 @@ all attributes (owner-only and admin-only included), every event.
 | `ObserveWorld` | Stream: snapshot, then one `TickUpdate` per tick with every change and event, plus admin command results | Same resync rule as `Observe` |
 | `GetStatus` | `SimulationStatus {tick, paused, tick_rate_hz}` | `tick` is the last executed tick. |
 | `GetPlayerView(player_id)` | `snapshot` exactly as that player would receive it, plus `detections[]` `{entity_id, level, observer_id, detection_score, identification_score}` | For debugging fog of war. `InvalidArgument` for an unknown player. |
+| `GetMatchDetails` | `match` (unfiltered `MatchInfo`), `config_json` (effective configuration, tokens redacted), `seed`, `players[]` `{player_id, name, slot, ready, eliminated, connections, stats}`, `history[]` | `connections` counts open Observe streams per player. |
+
+`GetStatus` also returns the match (`status.match`). Its `paused` field is
+the tick **clock** (`SetPaused`), not a paused match.
+
+## Matches
+
+| RPC | Request → response | Behavior |
+|---|---|---|
+| `ResetMatch` | `{optional seed, config_json}` → `{match_id, seed}` | Builds a new match from the current configuration, or from `config_json` (strict). It replaces the current match whether finished or not. `players` and `admin_token` always come from the server's startup configuration. **Validation first:** on any error (`InvalidArgument`, e.g. a world that can't be generated) the current match continues. Player sessions survive; open streams restart with a snapshot of the new match. |
+| `ExportReplay` | `{match_id}` (empty = current) → `{replay_json}` | The match's replay (`mono-replay/1`) so far, for the current or one of the last 16 matches. See [replay format](../developer-guide/replay.md). |
+| `VerifyReplay` | `{replay_json}` → `{ok, ticks_replayed, engine_matches, ruleset_matches, first_divergent_tick, detail, final_hash, checkpoints_checked}` | Rebuilds and replays in an isolated simulation; the live match is untouched. |
+
+Lifecycle changes are **commands** (`SubmitAdminCommand` with
+`rts.match.v1.StartMatchCommand`, `PauseMatchCommand`,
+`ResumeMatchCommand`, `EndMatchCommand`, `EliminatePlayerCommand`), so
+they're ordered with everything else and replayed. A reset is not a
+command: it replaces the world.
 
 ## World mutations
 
@@ -58,6 +76,7 @@ tile, say) arrive as failed `CommandResult`s.
 | `rts.combat.v1.SetHealthCommand` | Set integrity; 0 destroys the unit (leaving wreckage). |
 | `rts.salvage.v1.CreateWreckCommand` | Create a wreck with energy. |
 | `rts.salvage.v1.SetWreckEnergyCommand` | Set a wreck's energy; 0 removes it. |
+| `rts.match.v1.*` (start, pause, resume, end, eliminate) | Match lifecycle (see [command reference](../reference/commands.md#match-rtsmatchv1)). |
 
 **Player commands** may be submitted too. Ownership checks then pass for
 any unit. Examples: cancel a unit's automation, issue a move for any

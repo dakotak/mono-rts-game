@@ -313,7 +313,8 @@ func (p *Plugin) Register(r *sim.Registrar) error {
 			stores.Set(w, e.ID, Store{Energy: min(p.cfg.InitialEnergy, c), Capacity: c})
 		}
 	})
-	if err := r.Phase(sim.PhaseDef{Name: Phase}); err != nil {
+	// Wells regenerate before units mine.
+	if err := r.Phase(sim.PhaseDef{Name: Phase, After: []string{wells.Phase}}); err != nil {
 		return err
 	}
 	if err := r.System(sim.SystemDef{Name: "energy.mine", Phase: Phase, Run: p.mine}); err != nil {

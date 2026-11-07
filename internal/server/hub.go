@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	rtsv1 "github.com/dakotaknutson/unit-strategy-game/gen/rts/v1"
+	"github.com/dakotaknutson/unit-strategy-game/internal/plugins/match"
 	"github.com/dakotaknutson/unit-strategy-game/internal/sim"
 )
 
@@ -19,6 +20,9 @@ type published struct {
 	// removedOwner maps removed entity IDs to their last owner, so a
 	// player is only told about removals of their own entities.
 	removedOwner map[sim.EntityID]sim.PlayerID
+	// status is the match status after this frame when it changed.
+	status *match.Status
+	static *matchStatic
 }
 
 // playerObs is one player's current observation under fog of war, built
@@ -39,6 +43,9 @@ type Hub struct {
 	entities map[sim.EntityID]sim.EntityView
 	players  map[sim.PlayerID]*playerObs
 	subs     map[*subscription]struct{}
+	static   *matchStatic
+	status   match.Status
+	closed   bool
 }
 
 type subscription struct {
@@ -77,8 +84,16 @@ func (h *Hub) player(p sim.PlayerID) *playerObs {
 func (h *Hub) Publish(f *sim.Frame) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	pub := &published{frame: f, removedOwner: make(map[sim.EntityID]sim.PlayerID, len(f.Removed))}
+	if h.closed {
+		return
+	}
+	pub := &published{frame: f, removedOwner: make(map[sim.EntityID]sim.PlayerID, len(f.Removed)), static: h.static}
 	h.tick = f.Tick
+	if v, ok := f.Globals[match.GlobalID]; ok {
+		h.status = v.(match.Status)
+		st := h.status
+		pub.status = &st
+	}
 	for _, id := range f.Removed {
 		pub.removedOwner[id] = h.entities[id].Owner
 		delete(h.entities, id)
@@ -140,6 +155,7 @@ func (h *Hub) snapshotLocked(v viewer) *rtsv1.WorldSnapshot {
 	}
 	slices.SortFunc(es, func(a, b *rtsv1.Entity) int { return cmp.Compare(a.GetId(), b.GetId()) })
 	snap.Entities = es
+	snap.Match = h.matchInfoLocked(v)
 	return snap
 }
 
@@ -189,6 +205,10 @@ func (h *Hub) Subscribe(v viewer) (*rtsv1.WorldSnapshot, *subscription) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	s := &subscription{ch: make(chan *published, subscriberBuffer)}
+	if h.closed {
+		close(s.ch) // the match was replaced: the caller resubscribes
+		return h.snapshotLocked(v), s
+	}
 	h.subs[s] = struct{}{}
 	return h.snapshotLocked(v), s
 }

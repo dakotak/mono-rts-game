@@ -32,7 +32,8 @@ General rules:
 | Field | Type | Default | Rules |
 |---|---|---|---|
 | `width`, `height` | int32 | — | > 0. |
-| `seed` | uint64 | 0 | Seeds `World.Rand()` (gameplay randomness, e.g. movement contention backoff). |
+| `seed` | uint64 | 0 | Seeds `World.Rand()`: gameplay randomness and world generation. |
+| `random_seed` | bool | false | Draw a fresh random seed for every match instead of `seed`. The chosen seed is recorded (match info, results, replays). |
 | `tick_rate_hz` | uint32 | — | 1..1000. The tick interval is `1s / tick_rate_hz`. |
 | `id_key` | hex string | random | ≥ 16 bytes (32 hex characters). Secret: derives entity and player IDs. Set it only for reproducible runs. |
 | `unit_command_budget` | int | 0 | ≥ 0. Unit-commands each player may execute per tick; 0 = unlimited. Admin commands are never charged. |
@@ -58,7 +59,8 @@ General rules:
 Plugins in registration order (the order printed at startup):
 `attributes`, `metadata`, `terrain`, `visibility`, `wells`, `energy`,
 `logistics`, `movement`, `upgrades`, `cloning`, `combat`, `salvage`,
-`automation`. The order comes from `DependsOn` with ties broken by name.
+`automation`, `match`, `worldgen`. The order comes from `DependsOn` with
+ties broken by name.
 
 ### `attributes` ([source](../../internal/plugins/attributes/attributes.go))
 
@@ -117,7 +119,7 @@ Each attribute:
 
 | Field | Default | Rules |
 |---|---|---|
-| `defaults` | `{ "energy": 1000, "capacity": 1000, "extraction_rate": 5, "unlimited": false }` | `0 ≤ energy ≤ capacity`, `extraction_rate ≥ 0`. |
+| `defaults` | `{ "energy": 1000, "capacity": 1000, "extraction_rate": 5, "unlimited": false, "regeneration": 0 }` | `0 ≤ energy ≤ capacity`, `extraction_rate ≥ 0`, `regeneration ≥ 0`. A finite well regains `regeneration` energy per tick up to its capacity (this creates energy). |
 | `wells` | `[]` | `{ "x", "y" }` plus optional overrides of any default field. Placed in `Init`, after units. |
 
 ### `energy` ([source](../../internal/plugins/energy/energy.go))
@@ -193,6 +195,42 @@ Each attribute:
 | `eval_interval` | 5 | 1..100. A unit is evaluated when `(id + tick) % eval_interval == 0`. |
 | `max_evaluations_per_tick` | 2000 | ≥ 1. The rest are deferred to their next slot. |
 
+### `worldgen` ([source](../../internal/plugins/worldgen/worldgen.go))
+
+World generation; see the [guide](../developer-guide/plugins/worldgen.md).
+
+| Field | Default | Rules |
+|---|---|---|
+| `generator` | `none` | `none`, `arena`, `procedural`, or a registered custom generator. |
+| `params` | — | Generator-specific (strict). `arena`: `walls` (bool), `wall_type` (`rock`). `procedural`: `obstacle_type` (`rock`), `obstacle_percent` 0..40 (8), `cluster_size` 1..64 (6), `rough_type`, `rough_percent` 0..40 (0), `clear_radius` ≥ 0 (4). Terrain type names must exist in `terrain.types`. |
+| `max_attempts` | 10 | 1..100. Generation attempts before setup fails. |
+| `spawns.layout` | `ring` | `corners` (≤ 4 players; otherwise ring), `ring`, `random`. |
+| `spawns.min_distance` | 10 | ≥ 0. Minimum Chebyshev distance between spawns (validated). |
+| `spawns.margin` | 3 | ≥ 0. Distance of spawn regions from the edge. |
+| `wells.per_spawn` | 1 | ≥ 0. Wells within `near_distance` of each spawn (validated: reachable). |
+| `wells.near_distance` | 8 | ≥ 3. |
+| `wells.extra` | 2 | ≥ 0. Additional wells. |
+| `wells.well` | wells defaults | Overrides for generated wells: `energy`, `capacity`, `extraction_rate`, `unlimited`, `regeneration`. |
+| `start.units` | 4 | 0..256. Starting units per player, nearest their spawn. |
+| `start.energy` | energy `initial_energy` | ≥ 0. Starting units' energy. |
+| `start.min_free_tiles` | 25 | ≥ 0. Reachable area each spawn must have (validated). |
+
+### `match` ([source](../../internal/plugins/match/match.go))
+
+Lifecycle, victory and scoring; see [matches](../user-guide/matches.md).
+**Without this section, matches start immediately and never end.**
+That's the pre-Milestone-7 behavior.
+
+| Field | Default | Rules |
+|---|---|---|
+| `start` | `immediate` | `immediate` (running after setup), `all_ready` (when `min_players` are ready), `manual` (admin `StartMatchCommand`). `all_ready` needs at least one player. |
+| `min_players` | 0 | 0..16 and ≤ the configured players. Ready players needed with `all_ready` (0 = all). |
+| `victory.elimination` | false | Last player standing. Players with no units are eliminated (publicly announced). Needs ≥ 2 players to trigger. |
+| `victory.time_limit_ticks` | 0 | ≥ 0. Running ticks before the highest score wins (0 = none). |
+| `scoring.weights` | `{"units": 100, "embodied": 1, "stored_energy": 1, "kills": 50}` | Metric name → integer weight. Built-in metrics: `units`, `embodied`, `stored_energy`, `energy_mined`, `kills`, `investment_destroyed`, `units_lost`, plus registered custom metrics. Unknown names are errors. |
+| `scoring.public_during_match` | false | Show every player's score to everyone while running (otherwise only your own). |
+| `scoring.interval_ticks` | 50 | ≥ 1. Score recomputation and `match.score` event interval. |
+
 ## Operational limits (compiled in)
 
 | Limit | Value | Where |
@@ -210,3 +248,7 @@ Each attribute:
 | Supply links per supplier / supply range | 4 / 16 | `logistics.MaxLinks`, `MaxRange` |
 | Path waypoints stored per order | 32 | `movement.PathLen` |
 | Terrain cost | 20 | `terrain.MaxCost` |
+| Players per match | 16 | `match.MaxPlayers` |
+| Recent matches kept (results, replays) | 16 | `internal/server` (`historySize`) |
+| gRPC message size (server receive, gateway calls) | 64 MiB | `cmd/rts-server`, `cmd/rts-gateway`; for replays |
+| Replay upload through the admin gateway | 64 MiB | `internal/gateway` (`maxReplayBody`) |

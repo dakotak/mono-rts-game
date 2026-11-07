@@ -3,6 +3,7 @@ syntax = "proto3";
 package rts.v1;
 
 import "google/protobuf/any.proto";
+import "rts/v1/match.proto";
 import "rts/v1/types.proto";
 
 option go_package = "github.com/dakotaknutson/unit-strategy-game/gen/rts/v1;rtsv1";
@@ -57,6 +58,85 @@ service AdminService {
   // same snapshot GameService would send them), plus the detection details
   // behind it. For debugging fog of war; never available to players.
   rpc GetPlayerView(GetPlayerViewRequest) returns (GetPlayerViewResponse);
+
+  // GetMatchDetails returns the full current match: unfiltered match info,
+  // the effective configuration (tokens redacted), the seed, and per-player
+  // readiness, connection and statistics. Lifecycle changes (start, pause,
+  // resume, end, eliminate) are rts.match.v1 commands sent through
+  // SubmitAdminCommand, so they are ordered and replayed like any command.
+  rpc GetMatchDetails(GetMatchDetailsRequest) returns (GetMatchDetailsResponse);
+  // ResetMatch builds a new world from the current (or given) configuration
+  // and replaces the current match, finished or not. Validation happens
+  // first: on error the current match continues untouched. Players keep
+  // their sessions (bound to their slot); streams restart with a snapshot
+  // of the new match.
+  rpc ResetMatch(ResetMatchRequest) returns (ResetMatchResponse);
+  // ExportReplay returns a match's replay document (format mono-replay/1):
+  // the current match (so far) or a recent one by id.
+  rpc ExportReplay(ExportReplayRequest) returns (ExportReplayResponse);
+  // VerifyReplay rebuilds a replay in an isolated simulation and reports
+  // whether it reproduces, and the first divergent tick if not.
+  rpc VerifyReplay(VerifyReplayRequest) returns (VerifyReplayResponse);
+}
+
+message GetMatchDetailsRequest {}
+
+message GetMatchDetailsResponse {
+  MatchInfo match = 1;
+  string config_json = 2;
+  uint64 seed = 3;
+  repeated AdminPlayerStatus players = 4;
+  repeated MatchResult history = 5;
+}
+
+message AdminPlayerStatus {
+  uint32 player_id = 1;
+  string name = 2;
+  int32 slot = 3;
+  bool ready = 4;
+  bool eliminated = 5;
+  // Open Observe streams for this player.
+  uint32 connections = 6;
+  PlayerResult stats = 7;
+}
+
+message ResetMatchRequest {
+  // Use this seed (otherwise the configuration decides: its seed, or a
+  // random one with random_seed).
+  optional uint64 seed = 1;
+  // A full configuration replacing the current one (empty = keep). Its
+  // players and admin_token are ignored: they can only change by restarting
+  // the server.
+  string config_json = 2;
+}
+
+message ResetMatchResponse {
+  string match_id = 1;
+  uint64 seed = 2;
+}
+
+message ExportReplayRequest {
+  // Empty = the current match.
+  string match_id = 1;
+}
+
+message ExportReplayResponse {
+  string replay_json = 1;
+}
+
+message VerifyReplayRequest {
+  string replay_json = 1;
+}
+
+message VerifyReplayResponse {
+  bool ok = 1;
+  uint64 ticks_replayed = 2;
+  bool engine_matches = 3;
+  bool ruleset_matches = 4;
+  uint64 first_divergent_tick = 5;
+  string detail = 6;
+  string final_hash = 7;
+  uint32 checkpoints_checked = 8;
 }
 
 message GetPlayerViewRequest {
@@ -81,8 +161,11 @@ message Detection {
 message SimulationStatus {
   // Last executed tick.
   uint64 tick = 1;
+  // The tick clock is paused (debugging; see SetPaused). Distinct from a
+  // PAUSED match (match.state).
   bool paused = 2;
   uint32 tick_rate_hz = 3;
+  MatchInfo match = 4;
 }
 
 message GetWorldSnapshotRequest {}

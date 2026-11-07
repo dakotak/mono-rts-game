@@ -31,8 +31,10 @@ type CreateWellCommand struct {
 	Capacity       *int64                 `protobuf:"varint,3,opt,name=capacity,proto3,oneof" json:"capacity,omitempty"`
 	ExtractionRate *int64                 `protobuf:"varint,4,opt,name=extraction_rate,json=extractionRate,proto3,oneof" json:"extraction_rate,omitempty"`
 	Unlimited      *bool                  `protobuf:"varint,5,opt,name=unlimited,proto3,oneof" json:"unlimited,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Energy a finite well regains per tick, up to capacity.
+	Regeneration  *int64 `protobuf:"varint,6,opt,name=regeneration,proto3,oneof" json:"regeneration,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CreateWellCommand) Reset() {
@@ -100,6 +102,13 @@ func (x *CreateWellCommand) GetUnlimited() bool {
 	return false
 }
 
+func (x *CreateWellCommand) GetRegeneration() int64 {
+	if x != nil && x.Regeneration != nil {
+		return *x.Regeneration
+	}
+	return 0
+}
+
 // ConfigureWellCommand changes a well's parameters. Only set fields change.
 // The result must satisfy 0 <= energy <= capacity and extraction_rate >= 0.
 type ConfigureWellCommand struct {
@@ -109,8 +118,10 @@ type ConfigureWellCommand struct {
 	Capacity       *int64                 `protobuf:"varint,3,opt,name=capacity,proto3,oneof" json:"capacity,omitempty"`
 	ExtractionRate *int64                 `protobuf:"varint,4,opt,name=extraction_rate,json=extractionRate,proto3,oneof" json:"extraction_rate,omitempty"`
 	Unlimited      *bool                  `protobuf:"varint,5,opt,name=unlimited,proto3,oneof" json:"unlimited,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Energy a finite well regains per tick, up to capacity.
+	Regeneration  *int64 `protobuf:"varint,6,opt,name=regeneration,proto3,oneof" json:"regeneration,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ConfigureWellCommand) Reset() {
@@ -178,33 +189,44 @@ func (x *ConfigureWellCommand) GetUnlimited() bool {
 	return false
 }
 
+func (x *ConfigureWellCommand) GetRegeneration() int64 {
+	if x != nil && x.Regeneration != nil {
+		return *x.Regeneration
+	}
+	return 0
+}
+
 var File_rts_wells_v1_wells_proto protoreflect.FileDescriptor
 
 const file_rts_wells_v1_wells_proto_rawDesc = "" +
 	"\n" +
-	"\x18rts/wells/v1/wells.proto\x12\frts.wells.v1\x1a\x12rts/v1/types.proto\"\x8a\x02\n" +
+	"\x18rts/wells/v1/wells.proto\x12\frts.wells.v1\x1a\x12rts/v1/types.proto\"\xc4\x02\n" +
 	"\x11CreateWellCommand\x12,\n" +
 	"\bposition\x18\x01 \x01(\v2\x10.rts.v1.PositionR\bposition\x12\x1b\n" +
 	"\x06energy\x18\x02 \x01(\x03H\x00R\x06energy\x88\x01\x01\x12\x1f\n" +
 	"\bcapacity\x18\x03 \x01(\x03H\x01R\bcapacity\x88\x01\x01\x12,\n" +
 	"\x0fextraction_rate\x18\x04 \x01(\x03H\x02R\x0eextractionRate\x88\x01\x01\x12!\n" +
-	"\tunlimited\x18\x05 \x01(\bH\x03R\tunlimited\x88\x01\x01B\t\n" +
+	"\tunlimited\x18\x05 \x01(\bH\x03R\tunlimited\x88\x01\x01\x12'\n" +
+	"\fregeneration\x18\x06 \x01(\x03H\x04R\fregeneration\x88\x01\x01B\t\n" +
 	"\a_energyB\v\n" +
 	"\t_capacityB\x12\n" +
 	"\x10_extraction_rateB\f\n" +
 	"\n" +
-	"_unlimited\"\xf8\x01\n" +
+	"_unlimitedB\x0f\n" +
+	"\r_regeneration\"\xb2\x02\n" +
 	"\x14ConfigureWellCommand\x12\x17\n" +
 	"\awell_id\x18\x01 \x01(\x04R\x06wellId\x12\x1b\n" +
 	"\x06energy\x18\x02 \x01(\x03H\x00R\x06energy\x88\x01\x01\x12\x1f\n" +
 	"\bcapacity\x18\x03 \x01(\x03H\x01R\bcapacity\x88\x01\x01\x12,\n" +
 	"\x0fextraction_rate\x18\x04 \x01(\x03H\x02R\x0eextractionRate\x88\x01\x01\x12!\n" +
-	"\tunlimited\x18\x05 \x01(\bH\x03R\tunlimited\x88\x01\x01B\t\n" +
+	"\tunlimited\x18\x05 \x01(\bH\x03R\tunlimited\x88\x01\x01\x12'\n" +
+	"\fregeneration\x18\x06 \x01(\x03H\x04R\fregeneration\x88\x01\x01B\t\n" +
 	"\a_energyB\v\n" +
 	"\t_capacityB\x12\n" +
 	"\x10_extraction_rateB\f\n" +
 	"\n" +
-	"_unlimitedBFZDgithub.com/dakotaknutson/unit-strategy-game/gen/rts/wells/v1;wellsv1b\x06proto3"
+	"_unlimitedB\x0f\n" +
+	"\r_regenerationBFZDgithub.com/dakotaknutson/unit-strategy-game/gen/rts/wells/v1;wellsv1b\x06proto3"
 
 var (
 	file_rts_wells_v1_wells_proto_rawDescOnce sync.Once

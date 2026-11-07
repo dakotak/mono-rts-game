@@ -106,7 +106,7 @@ func TestAutomationAndSupplyOverGRPC(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !proto.Equal(&rtsv1.WorldSnapshot{Tick: snap.GetSnapshot().GetTick(), Entities: state}, snap.GetSnapshot()) {
+	if !proto.Equal(&rtsv1.WorldSnapshot{Tick: snap.GetSnapshot().GetTick(), Entities: state, Match: snap.GetSnapshot().GetMatch()}, snap.GetSnapshot()) {
 		t.Fatal("snapshot + updates diverged from a fresh snapshot under automation")
 	}
 }

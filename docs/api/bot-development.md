@@ -73,6 +73,24 @@ Rules:
   passable. Under fog of war a well's `wells.energy` may be absent, exact
   or a `range_value` ([streaming](streaming.md#fog-of-war)).
 
+## 2b. Follow the match lifecycle
+
+`MatchInfo` arrives in the first snapshot and in every update where the
+match changed:
+
+- **READY:** send `rts.match.v1.SetReadyCommand{ready: true}`. With
+  `start: all_ready` the match starts when everyone is ready. Retry until
+  `you_ready` is true.
+- **RUNNING:** play. Gameplay commands sent in other states fail with
+  `failed_precondition`.
+- **PAUSED / FINISHED:** stop issuing commands. A finished match carries
+  `result` (winner, reason, scores, statistics).
+- **A new `match_id`:** the server was reset. Drop all state, adopt
+  `your_player_id`, and ready up again.
+
+The example bot's `applyMatch` and the start of `think` implement exactly
+this. See [matches](../user-guide/matches.md) for the rules.
+
 ## 3. Handle fog of war
 
 When `snapshot.fog_of_war` is true:

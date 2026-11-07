@@ -32,6 +32,8 @@ declared through the `Registrar` inside `Register`.
 | `OnCreate(fn func(w *World, e Entity))` | Run for every created entity, in registration order. It must not create or remove entities. | — |
 | `Describe(v any) error` | Publish a JSON rules description (`WorldInfo.rules_json[name]`). | Must marshal |
 | `ObservationAuthority(a ObservationAuthority) error` | Become the single authority on what players observe. | Only one per ruleset |
+| `Global(g GlobalDef) error` | Register a world-scoped value (`sim.NewGlobal[T](id, initial)`). | ID prefixed; unique |
+| `Gate(g Gate) error` | Become the single authority on whether commands run (`AllowCommand`) and systems run (`RunSystems`) each tick. The match plugin uses it. | Only one per ruleset |
 
 Phase and system references (`After`, `Before`, `SystemDef.Phase`) are
 resolved after every plugin has registered, so you may reference phases
@@ -99,7 +101,28 @@ ctx.Charge(issuer Principal, n int) error  // per-tick unit budget; fails with r
 ctx.BudgetLeft(issuer Principal) int       // -1 = unlimited
 ctx.ReportUnit(unit EntityID, err error)   // per-unit result for the command being executed
 ctx.ApplyToUnit(cmd Command, unit EntityID) error // run another command's ApplyToUnit (used by batches)
+ctx.Events() []Event                       // events emitted so far this tick (read-only); later phases can tally them
 ```
+
+## Globals: `sim.Global[T]`
+
+```go
+func NewGlobal[T comparable](id string, initial T) Global[T]
+func (g Global[T]) Def() GlobalDef
+func (g Global[T]) Get(w *World) T
+func (g Global[T]) Set(w *World, v T)   // reported in Frame.Globals when changed
+func (w *World) Globals() map[string]any
+```
+
+## Composition helpers in `internal/game`
+
+| API | Use |
+|---|---|
+| `game.Plugins()` | The server's plugin set (edit to register plugins) |
+| `game.NewWithPlugins(cfg, plugins)` | Build a game from any plugin set: `game.New` with extra plugins (tests, tools) |
+| `game.Find[T](plugins)`, `game.Plugin[T](g)` | Find a plugin instance by type, e.g. the shared `*match.Plugin` |
+| `game.PlayerAware` (`SetPlayers([]sim.PlayerID)`) | Implement it to receive the match's players before `Init` (worldgen, match) |
+| `game.RulesetHash(rules)`, `game.EngineVersion` | Ruleset fingerprint and engine version (results, replays) |
 
 ## `*sim.World`
 
@@ -148,6 +171,9 @@ dependency in `DependsOn`):
 | `terrain` | `StepCost`, `IsTerrain` |
 | `metadata` | `Get`, `(*Plugin).Select` |
 | `visibility` | `(*Plugin).Detected`, `Enabled`, `Disclose` |
+| `match` | `Get(w)` (status), `(*Plugin).AddCondition`, `AddMetric`, `NewMetric`, `Config`, `ConditionNames`; types `Condition`, `Metric`, `View`, `Outcome`, `Status` |
+| `worldgen` | `(*Plugin).AddGenerator`, `LastPlan`; `Generator`, `Context`, `Plan`, `PlaceHomeWells`, `SpawnsAtAnchors` |
+| `terrain` / `wells` (generation) | `(*terrain.Plugin).Place`, `Type`; `wells.Create`, `(*wells.Plugin).Defaults` |
 
 ### Gaps a plugin author may hit
 

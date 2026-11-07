@@ -985,7 +985,10 @@ type WorldSnapshot struct {
 	// visible_tiles is empty.
 	FogOfWar bool `protobuf:"varint,3,opt,name=fog_of_war,json=fogOfWar,proto3" json:"fog_of_war,omitempty"`
 	// Tiles currently visible to the player (fog of war only).
-	VisibleTiles  []*TileRun `protobuf:"bytes,4,rep,name=visible_tiles,json=visibleTiles,proto3" json:"visible_tiles,omitempty"`
+	VisibleTiles []*TileRun `protobuf:"bytes,4,rep,name=visible_tiles,json=visibleTiles,proto3" json:"visible_tiles,omitempty"`
+	// The current match. A snapshot with a different match_id than before
+	// means the world was reset: discard everything from the old match.
+	Match         *MatchInfo `protobuf:"bytes,5,opt,name=match,proto3" json:"match,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1048,6 +1051,13 @@ func (x *WorldSnapshot) GetVisibleTiles() []*TileRun {
 	return nil
 }
 
+func (x *WorldSnapshot) GetMatch() *MatchInfo {
+	if x != nil {
+		return x.Match
+	}
+	return nil
+}
+
 // TickUpdate is the batched set of changes produced by one simulation tick,
 // as visible to the requester. Applying it to the snapshot of tick-1 yields
 // the snapshot of tick.
@@ -1066,8 +1076,11 @@ type TickUpdate struct {
 	CommandResults []*CommandResult `protobuf:"bytes,5,rep,name=command_results,json=commandResults,proto3" json:"command_results,omitempty"`
 	// Tiles that became visible / stopped being visible this tick (fog of
 	// war only), sorted by row then column.
-	TilesEntered  []*Position `protobuf:"bytes,6,rep,name=tiles_entered,json=tilesEntered,proto3" json:"tiles_entered,omitempty"`
-	TilesExited   []*Position `protobuf:"bytes,7,rep,name=tiles_exited,json=tilesExited,proto3" json:"tiles_exited,omitempty"`
+	TilesEntered []*Position `protobuf:"bytes,6,rep,name=tiles_entered,json=tilesEntered,proto3" json:"tiles_entered,omitempty"`
+	TilesExited  []*Position `protobuf:"bytes,7,rep,name=tiles_exited,json=tilesExited,proto3" json:"tiles_exited,omitempty"`
+	// Present when the match status changed this tick (state, clock,
+	// readiness, scores).
+	Match         *MatchInfo `protobuf:"bytes,8,opt,name=match,proto3" json:"match,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1151,11 +1164,18 @@ func (x *TickUpdate) GetTilesExited() []*Position {
 	return nil
 }
 
+func (x *TickUpdate) GetMatch() *MatchInfo {
+	if x != nil {
+		return x.Match
+	}
+	return nil
+}
+
 var File_rts_v1_types_proto protoreflect.FileDescriptor
 
 const file_rts_v1_types_proto_rawDesc = "" +
 	"\n" +
-	"\x12rts/v1/types.proto\x12\x06rts.v1\"&\n" +
+	"\x12rts/v1/types.proto\x12\x06rts.v1\x1a\x12rts/v1/match.proto\"&\n" +
 	"\bPosition\x12\f\n" +
 	"\x01x\x18\x01 \x01(\x05R\x01x\x12\f\n" +
 	"\x01y\x18\x02 \x01(\x05R\x01y\"\xe1\x01\n" +
@@ -1225,13 +1245,14 @@ const file_rts_v1_types_proto_rawDesc = "" +
 	"\n" +
 	"PlayerInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\"\xa3\x01\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\"\xcc\x01\n" +
 	"\rWorldSnapshot\x12\x12\n" +
 	"\x04tick\x18\x01 \x01(\x04R\x04tick\x12*\n" +
 	"\bentities\x18\x02 \x03(\v2\x0e.rts.v1.EntityR\bentities\x12\x1c\n" +
 	"\n" +
 	"fog_of_war\x18\x03 \x01(\bR\bfogOfWar\x124\n" +
-	"\rvisible_tiles\x18\x04 \x03(\v2\x0f.rts.v1.TileRunR\fvisibleTiles\"\xb7\x02\n" +
+	"\rvisible_tiles\x18\x04 \x03(\v2\x0f.rts.v1.TileRunR\fvisibleTiles\x12'\n" +
+	"\x05match\x18\x05 \x01(\v2\x11.rts.v1.MatchInfoR\x05match\"\xe0\x02\n" +
 	"\n" +
 	"TickUpdate\x12\x12\n" +
 	"\x04tick\x18\x01 \x01(\x04R\x04tick\x12(\n" +
@@ -1240,7 +1261,8 @@ const file_rts_v1_types_proto_rawDesc = "" +
 	"\x06events\x18\x04 \x03(\v2\r.rts.v1.EventR\x06events\x12>\n" +
 	"\x0fcommand_results\x18\x05 \x03(\v2\x15.rts.v1.CommandResultR\x0ecommandResults\x125\n" +
 	"\rtiles_entered\x18\x06 \x03(\v2\x10.rts.v1.PositionR\ftilesEntered\x123\n" +
-	"\ftiles_exited\x18\a \x03(\v2\x10.rts.v1.PositionR\vtilesExited*r\n" +
+	"\ftiles_exited\x18\a \x03(\v2\x10.rts.v1.PositionR\vtilesExited\x12'\n" +
+	"\x05match\x18\b \x01(\v2\x11.rts.v1.MatchInfoR\x05match*r\n" +
 	"\n" +
 	"EntityKind\x12\x1b\n" +
 	"\x17ENTITY_KIND_UNSPECIFIED\x10\x00\x12\x14\n" +
@@ -1291,6 +1313,7 @@ var file_rts_v1_types_proto_goTypes = []any{
 	(*TickUpdate)(nil),       // 14: rts.v1.TickUpdate
 	nil,                      // 15: rts.v1.Entity.AttributesEntry
 	nil,                      // 16: rts.v1.Event.FieldsEntry
+	(*MatchInfo)(nil),        // 17: rts.v1.MatchInfo
 }
 var file_rts_v1_types_proto_depIdxs = []int32{
 	3,  // 0: rts.v1.Value.position_value:type_name -> rts.v1.Position
@@ -1304,18 +1327,20 @@ var file_rts_v1_types_proto_depIdxs = []int32{
 	10, // 8: rts.v1.CommandResult.unit_results:type_name -> rts.v1.UnitResult
 	6,  // 9: rts.v1.WorldSnapshot.entities:type_name -> rts.v1.Entity
 	7,  // 10: rts.v1.WorldSnapshot.visible_tiles:type_name -> rts.v1.TileRun
-	6,  // 11: rts.v1.TickUpdate.changed:type_name -> rts.v1.Entity
-	8,  // 12: rts.v1.TickUpdate.events:type_name -> rts.v1.Event
-	9,  // 13: rts.v1.TickUpdate.command_results:type_name -> rts.v1.CommandResult
-	3,  // 14: rts.v1.TickUpdate.tiles_entered:type_name -> rts.v1.Position
-	3,  // 15: rts.v1.TickUpdate.tiles_exited:type_name -> rts.v1.Position
-	4,  // 16: rts.v1.Entity.AttributesEntry.value:type_name -> rts.v1.Value
-	4,  // 17: rts.v1.Event.FieldsEntry.value:type_name -> rts.v1.Value
-	18, // [18:18] is the sub-list for method output_type
-	18, // [18:18] is the sub-list for method input_type
-	18, // [18:18] is the sub-list for extension type_name
-	18, // [18:18] is the sub-list for extension extendee
-	0,  // [0:18] is the sub-list for field type_name
+	17, // 11: rts.v1.WorldSnapshot.match:type_name -> rts.v1.MatchInfo
+	6,  // 12: rts.v1.TickUpdate.changed:type_name -> rts.v1.Entity
+	8,  // 13: rts.v1.TickUpdate.events:type_name -> rts.v1.Event
+	9,  // 14: rts.v1.TickUpdate.command_results:type_name -> rts.v1.CommandResult
+	3,  // 15: rts.v1.TickUpdate.tiles_entered:type_name -> rts.v1.Position
+	3,  // 16: rts.v1.TickUpdate.tiles_exited:type_name -> rts.v1.Position
+	17, // 17: rts.v1.TickUpdate.match:type_name -> rts.v1.MatchInfo
+	4,  // 18: rts.v1.Entity.AttributesEntry.value:type_name -> rts.v1.Value
+	4,  // 19: rts.v1.Event.FieldsEntry.value:type_name -> rts.v1.Value
+	20, // [20:20] is the sub-list for method output_type
+	20, // [20:20] is the sub-list for method input_type
+	20, // [20:20] is the sub-list for extension type_name
+	20, // [20:20] is the sub-list for extension extendee
+	0,  // [0:20] is the sub-list for field type_name
 }
 
 func init() { file_rts_v1_types_proto_init() }
@@ -1323,6 +1348,7 @@ func file_rts_v1_types_proto_init() {
 	if File_rts_v1_types_proto != nil {
 		return
 	}
+	file_rts_v1_match_proto_init()
 	file_rts_v1_types_proto_msgTypes[1].OneofWrappers = []any{
 		(*Value_IntValue)(nil),
 		(*Value_BoolValue)(nil),

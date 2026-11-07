@@ -2,7 +2,7 @@
 
 Why the engine is built the way it is, the assumptions made where the
 specification was silent, what is known not to work yet, and what comes
-next. Status as of Milestone 6.
+next. Status as of Milestone 7.
 
 ## Key decisions and tradeoffs
 
@@ -73,8 +73,11 @@ These are frequently assumed but do **not** exist in the current code:
 
 - Runtime (dynamic) plugin loading. Plugins are compiled in; see
   [plugins/overview.md](plugins/overview.md#compatibility-and-limitations).
-- Persistence: save/load of world state, replay files on disk, durable
-  sessions. Everything is in memory; a restart starts a fresh world.
+- Persistence: save/load of world state, durable sessions, a replay
+  database. Replays exist as exported files (Milestone 7), but matches live
+  in memory: a restart starts a fresh world and loses unexported replays.
+- Matchmaking, lobbies across servers, player accounts, rankings; more
+  than one world per server process.
 - Accounts, TLS, rate limiting beyond the per-tick unit-command budget.
 - Teams, alliances and shared vision (owner = team).
 - Terrain line of sight (`visibility.occlusion` accepts only `"none"`).
@@ -84,6 +87,32 @@ These are frequently assumed but do **not** exist in the current code:
 - Formations, pursuit outside a guard area, projectile or area damage.
 - CI configuration, container images and deployment manifests are not part
   of the repository.
+
+## Milestone 7 limitations
+
+- **Resets need a new world.** A match can't be "rewound" or restarted
+  in place; a reset rebuilds the game. Changing `players` or
+  `admin_token` needs a server restart.
+- **Player IDs are per match.** Clients must follow
+  `MatchInfo.your_player_id` after a reset.
+- **Disconnect policy is fixed** at "keep playing": units, orders and
+  automation continue. A configurable alternative (pause, forfeit after a
+  timeout) isn't implemented, because it would need server-driven admin
+  commands with wall-clock timers.
+- **Elimination is public.** With elimination victory, everyone learns
+  that a player has lost all units: an intended rule-level disclosure.
+  Without it, elimination isn't tracked.
+- **Maps are validated, not balanced.** Spawn distance, reachable space,
+  mutual reachability and nearby wells are guaranteed; fairness beyond
+  that is not.
+- **Replays are tied to the build**, kept in memory (current match plus
+  the last 16), and capped at 64 MiB per gRPC message. Recording costs one
+  digest per tick and a full state hash every 100 ticks.
+- **Up to 16 players per match** (`match.MaxPlayers`). Victory conditions
+  and metrics are compiled in.
+- **The match status is sent every running tick** in `TickUpdate.match`,
+  because the clock changes. That's small, but it adds to per-tick
+  traffic.
 
 ## Known limitations
 
@@ -180,7 +209,22 @@ a single slab per tick for all changed views raised heap and tick time.
 - **Entity lookups:** `World.Entity` is a hash-map lookup. It is about
   13% of the fog pass.
 
-## Proposed next milestones
+## Recommended scope for Milestone 8
+
+1. **Persistence and operations.** Save and restore a world snapshot plus
+   its command log, write replays to disk automatically at match end, and
+   export metrics (tick time, players, match state).
+2. **Incremental fog of war and attribute-level deltas**, the scale
+   bottlenecks recorded in Milestone 6.
+3. **Teams and shared vision** (alliances, team victory), built on the
+   match plugin's player model.
+4. **Configurable disconnect policy** and spectators, as read-only viewers
+   of finished or running matches through the public API.
+5. **Tournament tooling for bots:** scripted series of seeds, result
+   aggregation, replay archives. Built on `ResetMatch`, `ExportReplay` and
+   the bot-arena preset.
+
+## Proposed next milestones (Milestone 6 recommendations)
 
 Recommendations after Milestone 6 (earlier proposals below were largely
 delivered by Milestones 4–6):

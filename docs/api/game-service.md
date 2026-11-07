@@ -11,7 +11,7 @@ is the player API. Every RPC except `Connect` needs the metadata header
 ```proto
 rpc Connect(ConnectRequest) returns (ConnectResponse);
 message ConnectRequest  { string join_token = 1; }
-message ConnectResponse { uint32 player_id = 1; string session_token = 2; WorldInfo world = 3; string player_name = 4; }
+message ConnectResponse { uint32 player_id = 1; string session_token = 2; WorldInfo world = 3; string player_name = 4; MatchInfo match = 5; }
 ```
 
 Exchanges a configured join token for a new session. Calling it again
@@ -24,6 +24,11 @@ earlier sessions stay valid. Several sessions per player may be active.
 | `session_token` | Bearer token for every other call. In memory only: invalid after a server restart. |
 | `world` | `WorldInfo` (below). |
 | `player_name` | The configured display name. |
+| `match` | The current match (see [GetMatch](#getmatch)). |
+
+Sessions are bound to the player **slot**, not to a match. After an admin
+reset the same session plays the slot's player in the new match, under a
+**new player ID** (IDs are per match): read `MatchInfo.your_player_id`.
 
 **Errors:** `Unauthenticated` "unknown join token".
 
@@ -156,6 +161,42 @@ message Entity {
 `Value` is a oneof: `int_value`, `bool_value`, `string_value`,
 `position_value` or `range_value {low, high}` (an estimate). Entity IDs
 inside attribute and event values are **decimal strings**.
+
+## GetMatch
+
+```proto
+rpc GetMatch(GetMatchRequest) returns (GetMatchResponse);
+message GetMatchResponse { MatchInfo match = 1; repeated MatchResult history = 2; }
+```
+
+The current match as you may see it, plus the results of recent finished
+matches in this server process (most recent first, at most 16). The same
+`MatchInfo` is attached to every snapshot (`WorldSnapshot.match`), and to
+a `TickUpdate` (`TickUpdate.match`) whenever the match status changed that
+tick.
+
+| `MatchInfo` field | Meaning |
+|---|---|
+| `match_id` | Changes on every reset. |
+| `state` | `MATCH_STATE_SETUP`, `READY`, `RUNNING`, `PAUSED`, `FINISHED`. |
+| `tick`, `start_tick`, `run_ticks` | Current tick, the tick the match started, ticks spent running (the match clock; stops while paused). |
+| `time_limit_ticks`, `ticks_remaining` | 0 = no time limit. |
+| `victory_conditions` | In precedence order, e.g. `["elimination", "time_limit"]`. |
+| `start_mode` | `immediate`, `all_ready`, `manual`. |
+| `expected_players`, `ready_players`, `eliminated_players` | Counts only: no identities. |
+| `you_ready`, `you_eliminated`, `your_score`, `your_player_id` | About you. |
+| `scores_public`, `scores` | Everyone's score: only when the rules make scores public, or after the match. |
+| `generator`, `width`, `height` | World-generation metadata safe for players. The **seed is not included**, because it would reveal the map; it appears in the result. |
+| `result` | When finished: `MatchResult` with match ID, seed, ruleset hash, engine version, winner or draw, reason, final tick, running time, and per-player score, units, embodied, stored energy, energy mined, kills, units lost and investment destroyed. |
+
+Lifecycle effects on commands:
+
+- While the match isn't RUNNING, every gameplay command fails at
+  execution with `failed_precondition` ("match is ready", "match is
+  paused", ...).
+- `rts.match.v1.SetReadyCommand` is the one player command for the READY
+  state.
+- Eliminated players' commands fail the same way.
 
 ## Authorization summary
 

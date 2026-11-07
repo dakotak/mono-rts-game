@@ -1,0 +1,101 @@
+syntax = "proto3";
+
+package rts.v1;
+
+option go_package = "github.com/dakotaknutson/unit-strategy-game/gen/rts/v1;rtsv1";
+
+// Match lifecycle state.
+enum MatchState {
+  MATCH_STATE_UNSPECIFIED = 0;
+  // The world is being built.
+  MATCH_STATE_SETUP = 1;
+  // Built; waiting to start (readiness, or an admin).
+  MATCH_STATE_READY = 2;
+  MATCH_STATE_RUNNING = 3;
+  // Suspended by an admin; resumes where it stopped.
+  MATCH_STATE_PAUSED = 4;
+  // A victory condition or an admin ended it. Final.
+  MATCH_STATE_FINISHED = 5;
+}
+
+// MatchInfo is the current match as the requester may see it. Players never
+// receive the world seed (it would reveal the map) until the match has
+// finished, and see other players' scores only when the rules make scores
+// public or the match is over.
+message MatchInfo {
+  // Changes on every reset; clients that see a new id must discard all
+  // state from the previous match.
+  string match_id = 1;
+  MatchState state = 2;
+  uint64 tick = 3;
+  uint64 start_tick = 4;
+  // Ticks the match has been running (the match clock; stops while paused).
+  int64 run_ticks = 5;
+  // 0 = no time limit.
+  int64 time_limit_ticks = 6;
+  int64 ticks_remaining = 7;
+  // Active victory conditions in precedence order, e.g. "elimination".
+  repeated string victory_conditions = 8;
+  // immediate | all_ready | manual.
+  string start_mode = 9;
+  uint32 expected_players = 10;
+  uint32 ready_players = 11;
+  bool you_ready = 12;
+  bool you_eliminated = 13;
+  int64 your_score = 14;
+  bool scores_public = 15;
+  // Every player's score when public (or for admins).
+  repeated PlayerScore scores = 16;
+  // World-generation metadata safe for players.
+  string generator = 17;
+  int32 width = 18;
+  int32 height = 19;
+  // Set once finished.
+  MatchResult result = 20;
+  uint32 eliminated_players = 21;
+  // The requester's player ID in this match. Player IDs are per match:
+  // after a reset the same join token plays under a new ID.
+  uint32 your_player_id = 22;
+}
+
+message PlayerScore {
+  uint32 player_id = 1;
+  string name = 2;
+  int64 score = 3;
+  bool eliminated = 4;
+  bool ready = 5;
+}
+
+// MatchResult is the public record of a finished match.
+message MatchResult {
+  string match_id = 1;
+  uint64 seed = 2;
+  string ruleset_hash = 3;
+  string engine_version = 4;
+  // 0 when there is no winner.
+  uint32 winner_id = 5;
+  bool draw = 6;
+  // e.g. last_player_standing, simultaneous_elimination, time_limit, admin.
+  string reason = 7;
+  uint64 final_tick = 8;
+  int64 run_ticks = 9;
+  repeated PlayerResult players = 10;
+  string generator = 11;
+}
+
+message PlayerResult {
+  uint32 player_id = 1;
+  string name = 2;
+  bool winner = 3;
+  bool eliminated = 4;
+  int64 score = 5;
+  // State at the end of the match.
+  int64 units = 6;
+  int64 embodied = 7;
+  int64 stored_energy = 8;
+  // Cumulative over the match.
+  int64 energy_mined = 9;
+  int64 kills = 10;
+  int64 units_lost = 11;
+  int64 investment_destroyed = 12;
+}

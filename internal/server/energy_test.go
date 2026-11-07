@@ -96,7 +96,7 @@ func TestEnergySnapshotAndEventConsistency(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !proto.Equal(snap.GetSnapshot(), &rtsv1.WorldSnapshot{Tick: 30, Entities: state}) {
+	if !proto.Equal(snap.GetSnapshot(), &rtsv1.WorldSnapshot{Tick: 30, Entities: state, Match: snap.GetSnapshot().GetMatch()}) {
 		t.Fatal("incremental state diverged from snapshot")
 	}
 }

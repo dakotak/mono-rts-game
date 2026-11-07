@@ -16,6 +16,7 @@
 //	POST /api/command   SubmitCommandRequest  -> SubmitCommandResponse
 //	GET  /api/snapshot                        -> GetSnapshotResponse
 //	GET  /api/observe                         -> ObserveResponse stream
+//	GET  /api/match                           -> GetMatchResponse
 //
 // Admin API (NewAdmin):
 //
@@ -29,6 +30,10 @@
 //	POST /api/pause     SetPausedRequest          -> SetPausedResponse
 //	POST /api/step      StepRequest               -> StepResponse
 //	POST /api/playerview GetPlayerViewRequest     -> GetPlayerViewResponse
+//	GET  /api/match                              -> GetMatchDetailsResponse
+//	POST /api/reset     ResetMatchRequest         -> ResetMatchResponse
+//	POST /api/replay/export ExportReplayRequest   -> ExportReplayResponse
+//	POST /api/replay/verify VerifyReplayRequest   -> VerifyReplayResponse
 //
 // Static files: the player handler serves web/static/player at "/", the
 // admin handler serves web/static/admin at "/"; both serve
@@ -58,6 +63,9 @@ import (
 
 const maxBody = 1 << 20
 
+// maxReplayBody bounds replays uploaded for verification (admin only).
+const maxReplayBody = 64 << 20
+
 var (
 	marshal   = protojson.MarshalOptions{EmitUnpopulated: true}
 	unmarshal = protojson.UnmarshalOptions{}
@@ -71,6 +79,7 @@ func New(conn grpc.ClientConnInterface, static fs.FS) http.Handler {
 	mux.HandleFunc("POST /api/command", unary(c.SubmitCommand))
 	mux.HandleFunc("GET /api/snapshot", unary(c.GetSnapshot))
 	mux.HandleFunc("GET /api/observe", streaming(c.Observe))
+	mux.HandleFunc("GET /api/match", unary(c.GetMatch))
 	serveStatic(mux, static, "player")
 	return mux
 }
@@ -89,6 +98,10 @@ func NewAdmin(conn grpc.ClientConnInterface, static fs.FS) http.Handler {
 	mux.HandleFunc("POST /api/pause", unary(c.SetPaused))
 	mux.HandleFunc("POST /api/step", unary(c.Step))
 	mux.HandleFunc("POST /api/playerview", unary(c.GetPlayerView))
+	mux.HandleFunc("GET /api/match", unary(c.GetMatchDetails))
+	mux.HandleFunc("POST /api/reset", unary(c.ResetMatch))
+	mux.HandleFunc("POST /api/replay/export", unary(c.ExportReplay))
+	mux.HandleFunc("POST /api/replay/verify", unaryLimit(maxReplayBody, c.VerifyReplay))
 	serveStatic(mux, static, "admin")
 	return mux
 }
@@ -117,10 +130,18 @@ func unary[Req any, Resp proto.Message, PReq interface {
 	*Req
 	proto.Message
 }](call func(context.Context, PReq, ...grpc.CallOption) (Resp, error)) http.HandlerFunc {
+	return unaryLimit(maxBody, call)
+}
+
+// unaryLimit is unary with a custom request body limit.
+func unaryLimit[Req any, Resp proto.Message, PReq interface {
+	*Req
+	proto.Message
+}](limit int64, call func(context.Context, PReq, ...grpc.CallOption) (Resp, error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		req := PReq(new(Req))
 		if r.Method == http.MethodPost {
-			body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
+			body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, limit))
 			if err == nil {
 				err = unmarshal.Unmarshal(body, req)
 			}

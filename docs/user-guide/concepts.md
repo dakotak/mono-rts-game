@@ -110,5 +110,6 @@ metadata) are always hidden.
 ## Where to go next
 
 - [Gameplay and the web client](gameplay.md): controls and a first match
+- [Matches](matches.md): lobby, victory conditions, scoring, results
 - [Units, movement and groups](units.md)
 - [Glossary](../reference/glossary.md)

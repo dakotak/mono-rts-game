@@ -24,8 +24,12 @@ Guarantees, tested in `internal/server`:
   snapshots.
 - **snapshot(N−1) + update(N) = snapshot(N)**, including attributes,
   removals and fog tiles.
-- A snapshot can arrive **at any time** (after lag), and it replaces all
-  entity state.
+- A snapshot can arrive **at any time** (after lag, or after a reset), and
+  it replaces all entity state.
+- **Match resets.** A snapshot whose `match.match_id` differs from the one
+  you hold means the world was replaced. Drop everything (entities, memory
+  of foreign units, explored tiles) and adopt `match.your_player_id`:
+  player IDs are per match.
 
 ## Applying messages
 
@@ -96,6 +100,8 @@ object per line, `{"snapshot": {...}}` or `{"update": {...}}`.
 | `POST /api/command` | SubmitCommandRequest → SubmitCommandResponse | `GET /api/status` | GetStatusResponse |
 | `GET /api/snapshot` | GetSnapshotResponse | `GET /api/observe` | ObserveWorldResponse stream |
 | `GET /api/observe` | ObserveResponse stream | `POST /api/spawn` `/api/delete` `/api/move` | SpawnUnit, DeleteEntity, MoveEntity |
+| `GET /api/match` | GetMatchResponse | `GET /api/match` | GetMatchDetailsResponse |
+| | | `POST /api/reset` `/api/replay/export` `/api/replay/verify` | ResetMatch, ExportReplay, VerifyReplay |
 | | | `POST /api/command` | SubmitAdminCommandRequest → response |
 | | | `POST /api/pause` `/api/step` `/api/playerview` | SetPaused, Step, GetPlayerView |
 

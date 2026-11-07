@@ -40,6 +40,11 @@ type TickContext struct {
 // Emit records an event for this tick.
 func (c *TickContext) Emit(e Event) { c.events = append(c.events, e) }
 
+// Events returns the events emitted so far this tick, in emission order.
+// Systems in later phases use it to observe what earlier phases did (e.g.
+// match statistics). The slice must not be modified.
+func (c *TickContext) Events() []Event { return c.events }
+
 // Charge consumes n unit-commands from the issuer's budget for this tick.
 // It fails, consuming nothing, if the budget does not cover n.
 func (c *TickContext) Charge(issuer Principal, n int) error {
@@ -117,6 +122,9 @@ type Frame struct {
 	// ObservationMode reports whether an observation authority is active
 	// (even if no player observed anything this tick).
 	ObservationMode bool
+	// Globals holds the world-scoped values (see Global) that changed this
+	// tick, keyed by ID. Nil when none changed.
+	Globals map[string]any
 }
 
 // Observation is one player's change in observation over a tick.
@@ -338,17 +346,24 @@ func (e *Engine) execute(tick Tick, cmds []Command) *Frame {
 		def, ok := e.rules.commands[cmds[i].Type]
 		var err error
 		ctx.units = nil
-		if !ok {
+		switch {
+		case !ok:
 			err = Fail(CodeInvalidArgument, "unknown command type %q", cmds[i].Type)
-		} else {
+		case e.rules.gate != nil:
+			if err = e.rules.gate.AllowCommand(w, cmds[i]); err == nil {
+				err = def.Execute(ctx, cmds[i])
+			}
+		default:
 			err = def.Execute(ctx, cmds[i])
 		}
 		results = append(results, resultFor(&cmds[i], tick, err, ctx.units))
 	}
 
-	for _, p := range e.rules.phases {
-		for _, s := range p.systems {
-			s.Run(ctx)
+	if e.rules.gate == nil || e.rules.gate.RunSystems(w) {
+		for _, p := range e.rules.phases {
+			for _, s := range p.systems {
+				s.Run(ctx)
+			}
 		}
 	}
 
@@ -359,6 +374,7 @@ func (e *Engine) execute(tick Tick, cmds []Command) *Frame {
 		obs = e.rules.observer.Observations(ctx)
 	}
 	changed, removed := w.takeChanges()
+	globals := w.takeGlobals()
 	f := &Frame{
 		Tick:            tick,
 		Changed:         changed,
@@ -367,6 +383,7 @@ func (e *Engine) execute(tick Tick, cmds []Command) *Frame {
 		Results:         results,
 		Commands:        cmds,
 		Observations:    obs,
+		Globals:         globals,
 		ObservationMode: e.rules.observer != nil,
 	}
 	if e.sink != nil {

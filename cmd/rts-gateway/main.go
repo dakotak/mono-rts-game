@@ -30,7 +30,8 @@ func main() {
 	webDir := flag.String("web", "", "serve the client from this directory instead of the embedded copy (for live editing)")
 	flag.Parse()
 
-	conn, err := grpc.NewClient(*serverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(*serverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(64<<20), grpc.MaxCallSendMsgSize(64<<20)))
 	if err != nil {
 		log.Fatal(err)
 	}

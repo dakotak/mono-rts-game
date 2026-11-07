@@ -67,6 +67,13 @@ function fogBefore(msg) {
   }
 }
 
+// fogReset forgets the old world after a match reset.
+function fogReset() {
+  visibleTiles.clear();
+  ghosts.clear();
+  explored = new Set();
+}
+
 // fogState is merged into the board state.
 function fogState() {
   if (!fogOn) return {};
