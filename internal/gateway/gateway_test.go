@@ -256,3 +256,17 @@ func TestAdminGateway(t *testing.T) {
 		t.Fatalf("admin static: %d", code)
 	}
 }
+
+// TestStaticFilesRevalidate: browsers must revalidate client files, so an
+// updated client never runs stale cached scripts against a new page.
+func TestStaticFilesRevalidate(t *testing.T) {
+	for _, h := range []http.Handler{gateway.New(nil, testStatic), gateway.NewAdmin(nil, testStatic)} {
+		for _, path := range []string{"/", "/shared/board.js"} {
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+			if rec.Code != http.StatusOK || rec.Header().Get("Cache-Control") != "no-cache" {
+				t.Errorf("GET %s: %d, Cache-Control %q", path, rec.Code, rec.Header().Get("Cache-Control"))
+			}
+		}
+	}
+}

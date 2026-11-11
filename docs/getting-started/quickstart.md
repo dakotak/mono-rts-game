@@ -61,11 +61,14 @@ control.
 ## 3. Watch as an admin
 
 Open http://127.0.0.1:8081 and sign in with `dev-admin`. The admin client
-shows the whole world with no fog. You can:
+is a dockable workspace (drag panel tabs to rearrange it; the layout is
+remembered) that shows the whole world with no fog. You can:
 
-- pause and single-step the simulation
+- pause and single-step the simulation, and start, pause or restart the match
+- follow each player's live statistics and highlight their units
 - spawn units and wells
 - inspect any entity
+- filter and search every event in the Logs panel
 - preview what a given player sees ("View as")
 
 See [administration](../operations/administration.md).

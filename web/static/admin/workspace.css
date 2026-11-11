@@ -1,0 +1,128 @@
+/* Admin workspace: dockview themed with the shared palette (shared/style.css)
+   and compact, information-dense panel contents. */
+
+body.admin { overflow: hidden; }
+body.admin #game { display: flex; flex-direction: column; height: 100vh; }
+
+.ws-header { gap: 12px; padding: 4px 10px; flex: 0 0 auto; }
+.ws-header button, .ws-header select { padding: 3px 8px; }
+.ws-meta { color: var(--muted); }
+.ws-root { flex: 1 1 auto; min-height: 0; position: relative; }
+
+/* Status bar: values that change every tick live here, in fixed-width
+   slots, so nothing else on screen shifts as they update. */
+.ws-status { flex: 0 0 auto; display: flex; gap: 18px; align-items: center; padding: 2px 10px;
+  font-size: 12px; color: var(--muted); border-top: 1px solid var(--border); white-space: nowrap; overflow: hidden; }
+.ws-status strong { color: var(--text); }
+.ws-status .num { display: inline-block; min-width: 7ch; font-variant-numeric: tabular-nums; }
+.ws-status #sim-status { min-width: 14ch; }
+
+/* Panels menu */
+.ws-menu { position: relative; }
+.ws-menu > summary {
+  list-style: none; cursor: pointer; padding: 3px 8px;
+  border: 1px solid var(--border); border-radius: 4px; background: var(--panel);
+}
+.ws-menu > summary::-webkit-details-marker { display: none; }
+.ws-menu > summary::after { content: " ▾"; color: var(--muted); }
+.ws-menu-body {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 1000; min-width: 230px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 8px;
+  box-shadow: 0 8px 24px #0008;
+}
+.ws-menu-body label { display: flex; gap: 6px; align-items: center; padding: 2px 0; }
+.ws-menu-body hr { border: 0; border-top: 1px solid var(--border); margin: 8px 0; }
+.ws-menu-body button { width: 100%; }
+
+/* dockview, in the shared palette */
+.mono-dock {
+  --dv-group-view-background-color: var(--panel);
+  --dv-tabs-and-actions-container-background-color: var(--bg);
+  --dv-activegroup-visiblepanel-tab-background-color: var(--panel);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--bg);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--panel);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--bg);
+  --dv-activegroup-visiblepanel-tab-color: var(--text);
+  --dv-activegroup-hiddenpanel-tab-color: var(--muted);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--text);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--muted);
+  --dv-separator-border: var(--border);
+  --dv-tabs-and-actions-container-height: 28px;
+  --dv-tabs-and-actions-container-font-size: 12px;
+  --dv-active-sash-color: #6b4fd8;
+  --dv-drag-over-background-color: rgba(107, 79, 216, 0.25);
+  --dv-paneview-active-outline-color: #6b4fd8;
+  height: 100%;
+}
+.ws-group-actions { display: flex; align-items: center; height: 100%; padding: 0 4px; }
+.ws-icon { border: 0; background: none; color: var(--muted); padding: 0 6px; font-size: 14px; line-height: 1; }
+.ws-icon:hover { color: var(--text); }
+
+/* Panel hosts: each panel scrolls on its own. */
+.pn-host { height: 100%; width: 100%; overflow: hidden; }
+section.pn { height: 100%; overflow: auto; padding: 6px 10px; font-size: 13px; }
+section.pn h3 { font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
+.pn-toolbar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 4px 0; }
+.pn-toolbar button, .pn-toolbar select, .pn-toolbar input { padding: 2px 6px; font-size: 12px; }
+.chip-note { background: #6b4fd833; border: 1px solid #6b4fd8; border-radius: 10px; padding: 0 8px; font-size: 12px; }
+
+/* Game board: fills its panel; the canvas follows the panel's size. */
+section.pn-board { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+section.pn-board .pn-toolbar { padding: 3px 8px; border-bottom: 1px solid var(--border); }
+section.pn-board #board { flex: 1 1 auto; min-height: 0; padding: 0; display: block; position: relative; overflow: hidden; }
+section.pn-board canvas { display: block; }
+
+/* Simulation controls */
+section.pn-controls { padding: 4px 10px; }
+.ctl-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ctl-row button { padding: 3px 8px; }
+#pause-btn { min-width: 7ch; }
+.ctl-sep { width: 1px; align-self: stretch; background: var(--border); margin: 0 4px; }
+
+/* Players */
+.players-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.players-table th { text-align: left; color: var(--muted); font-weight: 600; font-size: 11px; padding: 2px 4px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.players-table td { padding: 3px 4px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.players-table td.num { text-align: right; }
+.player-row { cursor: pointer; }
+.player-row:hover { background: #ffffff08; }
+.player-row:focus-visible { outline: 1px solid var(--select); outline-offset: -1px; }
+.player-row.focused { background: #6b4fd826; }
+.player-row.eliminated td { color: var(--muted); text-decoration: line-through; }
+.player-detail > td { padding: 4px 4px 10px; white-space: normal; }
+.player-details .actions { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+.player-details .actions button { padding: 2px 8px; font-size: 12px; }
+.kv { width: 100%; border-collapse: collapse; font-size: 12px; }
+.kv td { padding: 1px 4px; border-bottom: 1px solid var(--border); }
+.kv td.num { text-align: right; }
+.kv tr.group td { color: var(--text); font-weight: 600; padding-top: 6px; border-bottom: 0; }
+.conn-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+.conn-dot.on { background: var(--ok); }
+.conn-dot.off { background: var(--error); }
+.legend-note { font-size: 11px; margin: 6px 0 0; }
+
+/* Inspector */
+.pn-inspector .inspector table { font-size: 12px; }
+
+/* Logs */
+section.pn-logs { display: flex; flex-direction: column; padding: 0 8px 4px; overflow: hidden; }
+.log-toolbar { border-bottom: 1px solid var(--border); }
+.log-sev { display: inline-flex; gap: 6px; font-size: 12px; }
+.log-sev label { display: inline-flex; gap: 2px; align-items: center; }
+.log-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.log-table { width: 100%; border-collapse: collapse; font: 12px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.log-table td { padding: 1px 6px 1px 0; border-bottom: 1px solid #ffffff08; vertical-align: top; white-space: nowrap; }
+.log-table td:first-child { color: var(--muted); text-align: right; width: 1%; }
+.log-table td:nth-child(2), .log-table td:nth-child(3), .log-table td:nth-child(4) { color: var(--muted); width: 1%; }
+.log-table td:last-child { white-space: normal; word-break: break-word; }
+.log-table tr.has-entity { cursor: pointer; }
+.log-table tr.has-entity:hover { background: #ffffff0a; }
+.sev-error, .log-table tr.sev-error td:last-child { color: var(--error); }
+.sev-warn, .log-table tr.sev-warn td:last-child { color: var(--select); }
+.sev-ok, .log-table tr.sev-ok td:last-child { color: var(--ok); }
+.log-table tr.sev-debug td:last-child { color: var(--muted); }
+#log-follow[aria-pressed="false"] { border-color: var(--select); color: var(--select); }
+
+/* Forms inside panels */
+section.pn .form label.stack { display: block; }
+section.pn .form label.stack textarea { margin-top: 4px; }

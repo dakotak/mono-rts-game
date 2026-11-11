@@ -81,8 +81,9 @@ list of what isn't implemented.
 
 - [Deployment](operations/deployment.md): processes, ports, flags,
   hardening, limits.
-- [Administration](operations/administration.md): the admin client and
-  API, pause/step, world edits.
+- [Administration](operations/administration.md): the admin workspace
+  (dockable panels, player statistics, inspector, logs) and API,
+  pause/step, world edits.
 - [Running matches](operations/matches.md): presets, starting and
   resetting, bot matches, replays.
 - [Troubleshooting](operations/troubleshooting.md)

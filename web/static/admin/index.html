@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RTS Admin</title>
   <link rel="stylesheet" href="/shared/style.css">
+  <link rel="stylesheet" href="workspace.css">
 </head>
 <body class="admin">
   <section id="login" class="panel">
@@ -19,96 +20,156 @@
   </section>
 
   <section id="game" hidden>
-    <header>
+    <header class="ws-header">
       <span class="badge admin-badge">Admin</span>
-      <span>Tick <strong id="tick">–</strong></span>
-      <span id="sim-status" class="status">–</span>
-      <span id="conn" class="conn">connecting…</span>
-      <span>Entities <strong id="entity-count">0</strong></span>
-      <button id="pause-btn" type="button">Pause</button>
-      <span class="step">
-        <button id="step-btn" type="button" disabled>Step</button>
-        <input id="step-count" type="number" min="1" max="1000" value="1" aria-label="Ticks per step">
-      </span>
       <label class="viewas">View as <select id="view-as"><option value="">everyone (no fog)</option></select></label>
       <span class="spacer"></span>
+      <details id="panels-menu" class="ws-menu">
+        <summary>Panels</summary>
+        <div class="ws-menu-body" role="menu">
+          <div id="panels-list"></div>
+          <hr>
+          <button id="layout-reset" type="button">Restore default layout</button>
+        </div>
+      </details>
       <button id="rules-btn" type="button">Rules</button>
       <button id="logout-btn" type="button">Sign out</button>
     </header>
-    <main>
+    <div id="workspace" class="ws-root"></div>
+    <footer class="ws-status" aria-label="Status">
+      <span id="conn" class="conn">connecting…</span>
+      <span>Tick <strong id="tick" class="num">–</strong></span>
+      <span id="sim-status" class="status">–</span>
+      <span>Entities <strong id="entity-count" class="num">0</strong></span>
+    </footer>
+  </section>
+
+  <!-- Panel contents. The workspace moves each section into its dockable
+       panel once and keeps it: closing, moving or re-docking a panel never
+       rebuilds its contents. -->
+  <div id="panel-sources" hidden>
+    <section data-panel="board" data-title="Game board" class="pn pn-board">
+      <div class="pn-toolbar">
+        <button id="board-fit" type="button" title="Show the whole world (F)">Fit</button>
+        <span id="board-zoom" class="hint">100%</span>
+        <span id="board-filter" class="chip-note" hidden></span>
+        <span class="spacer"></span>
+        <span class="hint">Wheel: zoom · middle-drag or Alt+drag: pan · drag: box select · right-click: reposition</span>
+      </div>
       <div id="board"><canvas id="canvas"></canvas></div>
-      <aside>
-        <h2>Tool</h2>
-        <div class="tools" role="radiogroup">
-          <label><input type="radio" name="tool" value="select" checked> Select / inspect</label>
-          <label><input type="radio" name="tool" value="spawn"> Spawn unit for
-            <select id="spawn-owner"></select></label>
-          <label><input type="radio" name="tool" value="well"> Create well</label>
-          <label><input type="radio" name="tool" value="move"> Reposition selected</label>
-          <label><input type="radio" name="tool" value="wreck"> Create wreck with
-            <input id="nwreck-energy" type="number" min="1" value="50" aria-label="Wreck energy"> energy</label>
-        </div>
-        <fieldset id="well-defaults" class="form">
-          <legend>New well (blank = server default)</legend>
-          <label>Energy <input id="nw-energy" type="number" min="0"></label>
-          <label>Capacity <input id="nw-capacity" type="number" min="0"></label>
-          <label>Rate/tick <input id="nw-rate" type="number" min="0"></label>
-          <label><input id="nw-unlimited" type="checkbox"> Unlimited</label>
-        </fieldset>
+    </section>
 
-        <h2>Inspector</h2>
-        <div id="inspector" class="inspector"><p class="hint">Click an entity to inspect it.</p></div>
+    <section data-panel="controls" data-title="Simulation" class="pn pn-controls">
+      <div class="ctl-row">
+        <button id="pause-btn" type="button" title="Pause or resume the simulation clock (Space)">Pause</button>
+        <span class="step">
+          <button id="step-btn" type="button" disabled title="Advance a paused simulation">Step</button>
+          <input id="step-count" type="number" min="1" max="1000" value="1" aria-label="Ticks per step">
+        </span>
+        <span class="ctl-sep"></span>
+        <span>Match <strong id="match-state" class="badge">–</strong></span>
+        <button id="m-start" type="button">Start</button>
+        <button id="m-pause" type="button">Pause match</button>
+        <button id="m-resume" type="button">Resume match</button>
+        <button id="m-restart" type="button" class="danger" title="Start a new match with the current configuration">Restart match</button>
+        <span id="ctl-note" class="hint"></span>
+      </div>
+    </section>
 
-        <h2>Match</h2>
-        <div class="form match-admin">
-          <p id="match-summary" class="hint">–</p>
-          <div class="actions">
-            <button id="m-start" type="button">Start</button>
-            <button id="m-pause" type="button">Pause match</button>
-            <button id="m-resume" type="button">Resume match</button>
-          </div>
-          <table id="match-players" class="inspector"></table>
-          <label>End with winner <select id="m-winner"></select></label>
-          <label>Reason <input id="m-reason" placeholder="admin"></label>
-          <div class="actions"><button id="m-end" type="button" class="danger">End match</button></div>
-          <label>Eliminate <select id="m-elim-player"></select></label>
-          <label><span><input id="m-elim-units" type="checkbox" checked> remove their units</span></label>
-          <div class="actions"><button id="m-elim" type="button" class="danger">Eliminate</button></div>
+    <section data-panel="players" data-title="Players" class="pn pn-players">
+      <div id="players-panel"></div>
+    </section>
+
+    <section data-panel="inspector" data-title="Inspector" class="pn pn-inspector">
+      <div id="inspector" class="inspector"><p class="hint">Click an entity to inspect it.</p></div>
+    </section>
+
+    <section data-panel="logs" data-title="Logs" class="pn pn-logs">
+      <div class="pn-toolbar log-toolbar">
+        <span id="log-sev" class="log-sev" role="group" aria-label="Severity"></span>
+        <select id="log-cat" aria-label="Category"><option value="">all categories</option></select>
+        <select id="log-player" aria-label="Player"><option value="">all players</option></select>
+        <label class="hint"><input id="log-entity" type="checkbox"> selected entity</label>
+        <input id="log-search" type="search" placeholder="Search…" aria-label="Search logs">
+        <span class="spacer"></span>
+        <span id="log-count" class="hint"></span>
+        <button id="log-follow" type="button" aria-pressed="true" title="Follow new entries (pauses when you scroll up)">Following</button>
+        <button id="log-clear" type="button" title="Clear the entries shown in this browser (server state is unaffected)">Clear view</button>
+      </div>
+      <div id="log-scroll" class="log-scroll" tabindex="0" aria-label="Log entries">
+        <table id="log" class="log-table" aria-live="off"><tbody></tbody></table>
+      </div>
+    </section>
+
+    <section data-panel="tools" data-title="Tools" class="pn">
+      <div id="tool-group" class="tools" role="radiogroup" aria-label="Board tool">
+        <label><input type="radio" name="tool" value="select" checked> Select / inspect</label>
+        <label><input type="radio" name="tool" value="spawn"> Spawn unit for
+          <select id="spawn-owner"></select></label>
+        <label><input type="radio" name="tool" value="well"> Create well</label>
+        <label><input type="radio" name="tool" value="move"> Reposition selected</label>
+        <label><input type="radio" name="tool" value="wreck"> Create wreck with
+          <input id="nwreck-energy" type="number" min="1" value="50" aria-label="Wreck energy"> energy</label>
+      </div>
+      <fieldset id="well-defaults" class="form">
+        <legend>New well (blank = server default)</legend>
+        <label>Energy <input id="nw-energy" type="number" min="0"></label>
+        <label>Capacity <input id="nw-capacity" type="number" min="0"></label>
+        <label>Rate/tick <input id="nw-rate" type="number" min="0"></label>
+        <label><input id="nw-unlimited" type="checkbox"> Unlimited</label>
+      </fieldset>
+    </section>
+
+    <section data-panel="match" data-title="Match" class="pn">
+      <div class="form match-admin">
+        <p id="match-summary" class="hint">–</p>
+        <label>End with winner <select id="m-winner"></select></label>
+        <label>Reason <input id="m-reason" placeholder="admin"></label>
+        <div class="actions"><button id="m-end" type="button" class="danger">End match</button></div>
+        <label>Eliminate <select id="m-elim-player"></select></label>
+        <label><span><input id="m-elim-units" type="checkbox" checked> remove their units</span></label>
+        <div class="actions"><button id="m-elim" type="button" class="danger">Eliminate</button></div>
+      </div>
+    </section>
+
+    <section data-panel="newmatch" data-title="New match" class="pn">
+      <div class="form">
+        <label>Seed (blank: from configuration) <input id="m-seed" type="number" min="0"></label>
+        <label><span><input id="m-random" type="checkbox"> random seed</span></label>
+        <label class="stack">Configuration for the next match (blank: keep current; players and admin token cannot change)
+          <textarea id="m-config" rows="10" spellcheck="false" placeholder="worldgen, match, plugins…"></textarea></label>
+        <div class="actions">
+          <button id="m-load-config" type="button">Load current config</button>
+          <button id="m-reset" type="button" class="danger">Reset / new match</button>
         </div>
-        <h2>New match</h2>
-        <div class="form">
-          <label>Seed (blank: from configuration) <input id="m-seed" type="number" min="0"></label>
-          <label><span><input id="m-random" type="checkbox"> random seed</span></label>
-          <label>Configuration for the next match (blank: keep current; players and admin token cannot change)
-            <textarea id="m-config" rows="8" spellcheck="false" placeholder="worldgen, match, plugins…"></textarea></label>
-          <div class="actions">
-            <button id="m-load-config" type="button">Load current config</button>
-            <button id="m-reset" type="button" class="danger">Reset / new match</button>
-          </div>
-        </div>
-        <h2>Replays</h2>
-        <div class="form">
-          <label>Match <select id="m-history"></select></label>
-          <div class="actions"><button id="m-export" type="button">Export replay</button></div>
-          <label>Verify a replay file <input id="m-verify" type="file" accept="application/json,.json"></label>
-        </div>
-        <h2>Automation &amp; logistics</h2>
-        <div id="automation" class="inspector"></div>
-        <h2>Players</h2>
-        <ul id="legend" class="legend"></ul>
-        <h2>Log</h2>
-        <ol id="log" class="log" aria-live="polite"></ol>
-      </aside>
-    </main>
-  </section>
-  <section id="rules-panel" class="overlay" hidden>
-    <div class="overlay-body">
-      <header><strong>Rules &amp; formulas</strong><span class="spacer"></span><button id="rules-close" type="button">Close</button></header>
+      </div>
+    </section>
+
+    <section data-panel="replays" data-title="Replays" class="pn">
+      <div class="form">
+        <label>Match <select id="m-history"></select></label>
+        <div class="actions"><button id="m-export" type="button">Export replay</button></div>
+        <label>Verify a replay file <input id="m-verify" type="file" accept="application/json,.json"></label>
+      </div>
+    </section>
+
+    <section data-panel="automation" data-title="Automation &amp; logistics" class="pn">
+      <div id="automation" class="inspector"></div>
+    </section>
+
+    <section data-panel="rules" data-title="Rules" class="pn">
       <div id="rules-content"></div>
-    </div>
-  </section>
+    </section>
+  </div>
+
+  <script src="vendor/dockview/dockview.min.js"></script>
   <script src="/shared/board.js"></script>
+  <script src="logic.js"></script>
+  <script src="store.js"></script>
+  <script src="logs.js"></script>
   <script src="admin.js"></script>
+  <script src="players.js"></script>
   <script src="match.js"></script>
+  <script src="workspace.js"></script>
 </body>
 </html>

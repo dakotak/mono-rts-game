@@ -101,6 +101,15 @@ window.RTS = (() => {
     return Number(u.tick);
   }
 
+  // nextFrame runs fn on the next animation frame, or after 100 ms when
+  // frames are not being produced (hidden or throttled pages), once.
+  function nextFrame(fn) {
+    let done = false;
+    const run = () => { if (!done) { done = true; fn(); } };
+    requestAnimationFrame(run);
+    setTimeout(run, 100);
+  }
+
   // ---- board ----------------------------------------------------------------
 
   const DRAG_THRESHOLD = 4;
@@ -108,45 +117,127 @@ window.RTS = (() => {
   // Board renders a grid world on a canvas and turns pointer input into
   // tile-level callbacks:
   //   onClick(tile, {shift}), onBox(entitiesInBox, {shift}), onContext(tile)
+  //
+  // With handlers.zoom (the admin workspace) the canvas fills its container
+  // and the view can be zoomed (wheel, about the cursor), panned (middle
+  // button or Alt+drag) and centered (centerOn); fit() shows the whole world.
+  // Without it (player client) the whole world is always fitted, as before.
+  // The board follows its container's size (ResizeObserver), so it works in
+  // resizable panels; resizes are coalesced to one per animation frame.
   class Board {
     constructor(canvas, container, handlers) {
       this.canvas = canvas;
       this.container = container;
       this.ctx = canvas.getContext("2d");
       this.handlers = handlers;
+      this.zoomable = !!handlers.zoom;
       this.width = 1;
       this.height = 1;
       this.tile = 24;
+      this.base = 24; // tile size that fits the whole world
+      this.zoom = 1;
+      this.ox = 0; // view offset in world pixels (zoomable boards)
+      this.oy = 0;
       this.drag = null;
+      this.pan = null;
       this.hover = null;
       this.state = null;
       this._bind();
-      window.addEventListener("resize", () => this.resize());
+      this._resizeQueued = false;
+      const queue = () => {
+        if (this._resizeQueued) return;
+        this._resizeQueued = true;
+        nextFrame(() => { this._resizeQueued = false; this.resize(); });
+      };
+      this.queueResize = queue; // for layout managers that know of size changes
+      window.addEventListener("resize", queue);
+      if (typeof ResizeObserver !== "undefined") new ResizeObserver(queue).observe(container);
     }
 
     setWorld(width, height) {
+      const changed = width !== this.width || height !== this.height;
       this.width = width;
       this.height = height;
+      if (changed) { this.zoom = 1; this.ox = this.oy = 0; }
       this.resize();
     }
 
     resize() {
-      const availW = this.container.clientWidth - 24;
-      const availH = this.container.clientHeight - 24;
-      this.tile = Math.max(6, Math.floor(Math.min(availW / this.width, availH / this.height)));
+      const pad = this.zoomable ? 0 : 24;
+      const availW = Math.max(1, this.container.clientWidth - pad);
+      const availH = Math.max(1, this.container.clientHeight - pad);
+      if (availW <= 1 || availH <= 1) return; // hidden (e.g. an inactive tab)
       const dpr = window.devicePixelRatio || 1;
       const c = this.canvas;
-      c.style.width = this.width * this.tile + "px";
-      c.style.height = this.height * this.tile + "px";
-      c.width = this.width * this.tile * dpr;
-      c.height = this.height * this.tile * dpr;
-      this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (this.zoomable) {
+        this.base = Math.max(2, Math.min(availW / this.width, availH / this.height));
+        this.tile = this.base * this.zoom;
+        this.viewW = availW;
+        this.viewH = availH;
+        c.style.width = availW + "px";
+        c.style.height = availH + "px";
+        c.width = Math.round(availW * dpr);
+        c.height = Math.round(availH * dpr);
+        this._clamp();
+      } else {
+        this.tile = Math.max(6, Math.floor(Math.min(availW / this.width, availH / this.height)));
+        c.style.width = this.width * this.tile + "px";
+        c.style.height = this.height * this.tile + "px";
+        c.width = this.width * this.tile * dpr;
+        c.height = this.height * this.tile * dpr;
+      }
+      this.dpr = dpr;
       this.redraw();
     }
 
+    // _clamp keeps a zoomed view over the world (and centers a world smaller
+    // than the view).
+    _clamp() {
+      const W = this.width * this.tile, H = this.height * this.tile;
+      this.ox = W <= this.viewW ? -(this.viewW - W) / 2 : Math.max(0, Math.min(this.ox, W - this.viewW));
+      this.oy = H <= this.viewH ? -(this.viewH - H) / 2 : Math.max(0, Math.min(this.oy, H - this.viewH));
+    }
+
+    // setZoom zooms to z (1 = whole world) keeping the world point under
+    // the screen point (sx, sy) in place.
+    setZoom(z, sx = this.viewW / 2, sy = this.viewH / 2) {
+      if (!this.zoomable) return;
+      z = Math.max(1, Math.min(16, z));
+      const wx = (sx + this.ox) / this.tile, wy = (sy + this.oy) / this.tile;
+      this.zoom = z;
+      this.tile = this.base * z;
+      this.ox = wx * this.tile - sx;
+      this.oy = wy * this.tile - sy;
+      this._clamp();
+      this.redraw();
+      if (this.handlers.onView) this.handlers.onView(this.view());
+    }
+
+    // fit shows the whole world.
+    fit() { this.setZoom(1); }
+
+    // centerOn zooms to show the tile rectangle {x0,y0,x1,y1} (with a margin)
+    // and centers it.
+    centerOn(b, margin = 4) {
+      if (!this.zoomable || !b) return;
+      const w = b.x1 - b.x0 + 1 + 2 * margin, h = b.y1 - b.y0 + 1 + 2 * margin;
+      const z = Math.max(1, Math.min(16, Math.min(this.viewW / (w * this.base), this.viewH / (h * this.base))));
+      this.zoom = z;
+      this.tile = this.base * z;
+      this.ox = ((b.x0 + b.x1 + 1) / 2) * this.tile - this.viewW / 2;
+      this.oy = ((b.y0 + b.y1 + 1) / 2) * this.tile - this.viewH / 2;
+      this._clamp();
+      this.redraw();
+      if (this.handlers.onView) this.handlers.onView(this.view());
+    }
+
+    view() { return { zoom: this.zoom, x: this.ox / this.tile, y: this.oy / this.tile }; }
+
+    // point returns the pointer position in world pixels.
     point(ev) {
       const r = this.canvas.getBoundingClientRect();
-      return { x: ev.clientX - r.left, y: ev.clientY - r.top };
+      const x = ev.clientX - r.left, y = ev.clientY - r.top;
+      return this.zoomable ? { x: x + this.ox, y: y + this.oy, sx: x, sy: y } : { x, y };
     }
 
     toTile(p) {
@@ -157,12 +248,25 @@ window.RTS = (() => {
     _bind() {
       const c = this.canvas;
       c.addEventListener("pointerdown", (ev) => {
+        if (this.zoomable && (ev.button === 1 || (ev.button === 0 && ev.altKey))) {
+          ev.preventDefault();
+          this.pan = { x: ev.clientX, y: ev.clientY, ox: this.ox, oy: this.oy };
+          c.setPointerCapture(ev.pointerId);
+          return;
+        }
         if (ev.button !== 0) return;
         const p = this.point(ev);
         this.drag = { x0: p.x, y0: p.y, x1: p.x, y1: p.y, active: false, shift: ev.shiftKey };
         c.setPointerCapture(ev.pointerId);
       });
       c.addEventListener("pointermove", (ev) => {
+        if (this.pan) {
+          this.ox = this.pan.ox - (ev.clientX - this.pan.x);
+          this.oy = this.pan.oy - (ev.clientY - this.pan.y);
+          this._clamp();
+          this.redraw();
+          return;
+        }
         const p = this.point(ev);
         const t = this.toTile(p);
         if (this.handlers.onHover && (t ? `${t.x},${t.y}` : "") !== (this.hover ? `${this.hover.x},${this.hover.y}` : "")) {
@@ -182,6 +286,11 @@ window.RTS = (() => {
         this.redraw();
       });
       c.addEventListener("pointerup", (ev) => {
+        if (this.pan) {
+          this.pan = null;
+          if (this.handlers.onView) this.handlers.onView(this.view());
+          return;
+        }
         if (ev.button !== 0 || !this.drag) return;
         const d = this.drag;
         this.drag = null;
@@ -200,6 +309,14 @@ window.RTS = (() => {
         }
         this.redraw();
       });
+      if (this.zoomable) {
+        c.addEventListener("wheel", (ev) => {
+          ev.preventDefault();
+          const r = c.getBoundingClientRect();
+          this.setZoom(this.zoom * Math.exp(-ev.deltaY * 0.0015), ev.clientX - r.left, ev.clientY - r.top);
+        }, { passive: false });
+        c.addEventListener("auxclick", (ev) => { if (ev.button === 1) ev.preventDefault(); });
+      }
       c.addEventListener("contextmenu", (ev) => {
         ev.preventDefault();
         const t = this.toTile(this.point(ev));
@@ -236,6 +353,15 @@ window.RTS = (() => {
       const ctx = this.ctx, T = this.tile;
       const W = this.width * T, H = this.height * T;
       const css = getComputedStyle(document.documentElement);
+      const dpr = this.dpr || window.devicePixelRatio || 1;
+      if (this.zoomable) {
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.fillStyle = css.getPropertyValue("--bg");
+        ctx.fillRect(0, 0, this.viewW || 0, this.viewH || 0);
+        ctx.setTransform(dpr, 0, 0, dpr, -this.ox * dpr, -this.oy * dpr);
+      } else {
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
       ctx.fillStyle = css.getPropertyValue("--tile");
       ctx.fillRect(0, 0, W, H);
       ctx.strokeStyle = css.getPropertyValue("--grid");
@@ -353,6 +479,17 @@ window.RTS = (() => {
     // whose energy is visible get a small energy bar.
     _drawUnit(e, cx, cy, s) {
       const ctx = this.ctx, T = this.tile, r = T * 0.36;
+      // highlight(e): true = emphasized, false = dimmed, undefined = normal.
+      const hl = s.highlight ? s.highlight(e) : undefined;
+      ctx.save();
+      if (hl === false) ctx.globalAlpha = 0.25;
+      if (hl === true) {
+        ctx.strokeStyle = "rgba(255,255,255,0.85)";
+        ctx.lineWidth = Math.max(1.5, T * 0.08);
+        ctx.beginPath();
+        ctx.arc(cx, cy, r + Math.max(3, T * 0.18), 0, Math.PI * 2);
+        ctx.stroke();
+      }
       ctx.fillStyle = s.colorFor(e);
       ctx.beginPath();
       if (s.mine(e)) ctx.arc(cx, cy, r, 0, Math.PI * 2);
@@ -384,6 +521,7 @@ window.RTS = (() => {
       };
       ring(attrInt(e, "upgrades.done"), attrInt(e, "upgrades.duration"), "#4fd1e8");
       ring(attrInt(e, "cloning.done"), attrInt(e, "cloning.duration"), "#e06bd8", attrBool(e, "cloning.blocked"));
+      ctx.restore();
     }
 
     // Wells: a diamond whose fill shows remaining energy; unlimited wells
@@ -448,5 +586,5 @@ window.RTS = (() => {
     while (ol.children.length > 50) ol.lastChild.remove();
   }
 
-  return { attr, attrInt, attrBool, attrPos, isWell, isWreck, isUnit, tag, fmtPos, fmtValue, stream, applyMessage, Board, log };
+  return { attr, attrInt, attrBool, attrPos, isWell, isWreck, isUnit, tag, fmtPos, fmtValue, stream, applyMessage, Board, log, nextFrame };
 })();

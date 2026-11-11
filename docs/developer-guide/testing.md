@@ -25,7 +25,8 @@ before submitting changes.
 | Plugin unit tests | `internal/plugins/<name>/*_test.go` | Mostly [`internal/plugintest`](../../internal/plugintest/plugintest.go): the **real** plugin composition with test configuration. |
 | Game and integration | [`internal/game`](../../internal/game) | Determinism and replay, energy conservation, scale scenarios with fog, combat and evolution, and the protoreg guard (`TestEveryCommandTypeIsRegisteredForGateways`). |
 | Server and API | [`internal/server`](../../internal/server) | Full gRPC over `bufconn`: auth, ownership, fog leaks, snapshot + update consistency, admin RPCs. |
-| Gateway | [`internal/gateway`](../../internal/gateway) | HTTP/NDJSON translation. |
+| Gateway | [`internal/gateway`](../../internal/gateway) | HTTP/NDJSON translation, static file caching headers. |
+| Web clients | [`web/web_test.go`](../../web/web_test.go), [`web/admintest`](../../web/admintest) | The admin page's wiring (every script embedded, every element the scripts use present, every panel in both default layouts) and, when Node.js is installed, the admin workspace's pure logic (`node --test web/admintest/*.test.js`: log buffer and filters, player statistics, inspector sections, default and saved layout validation). Docking, resizing and the board are checked in a browser; the project has no browser test runner. |
 | Scale | [`internal/scale`](../../internal/scale) | Determinism of every scenario, allocation and timing regression bounds, `BenchmarkScale`. |
 | Examples | [`examples/plugins/regeneration`](../../examples/plugins/regeneration) | A plugin's tests outside `internal/`. |
 

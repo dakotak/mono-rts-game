@@ -115,8 +115,18 @@ func serveStatic(mux *http.ServeMux, static fs.FS, app string) {
 	if err != nil {
 		panic(err)
 	}
-	mux.Handle("GET /shared/", http.FileServerFS(static))
-	mux.Handle("GET /", http.FileServerFS(appFS))
+	mux.Handle("GET /shared/", revalidate(http.FileServerFS(static)))
+	mux.Handle("GET /", revalidate(http.FileServerFS(appFS)))
+}
+
+// revalidate makes browsers check static files with the server before
+// reusing them (a cheap 304 when unchanged), so an updated client never
+// mixes stale cached scripts with a new page.
+func revalidate(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		h.ServeHTTP(w, r)
+	})
 }
 
 // outgoing forwards the caller's Authorization header to the server.

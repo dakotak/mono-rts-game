@@ -33,7 +33,7 @@ all attributes (owner-only and admin-only included), every event.
 | `ObserveWorld` | Stream: snapshot, then one `TickUpdate` per tick with every change and event, plus admin command results | Same resync rule as `Observe` |
 | `GetStatus` | `SimulationStatus {tick, paused, tick_rate_hz}` | `tick` is the last executed tick. |
 | `GetPlayerView(player_id)` | `snapshot` exactly as that player would receive it, plus `detections[]` `{entity_id, level, observer_id, detection_score, identification_score}` | For debugging fog of war. `InvalidArgument` for an unknown player. |
-| `GetMatchDetails` | `match` (unfiltered `MatchInfo`), `config_json` (effective configuration, tokens redacted), `seed`, `players[]` `{player_id, name, slot, ready, eliminated, connections, stats}`, `history[]` | `connections` counts open Observe streams per player. |
+| `GetMatchDetails` | `match` (unfiltered `MatchInfo`), `config_json` (effective configuration, tokens redacted), `seed`, `players[]` `{player_id, name, slot, ready, eliminated, connections, stats}`, `history[]` | `connections` counts open Observe streams per player. `stats` is a `PlayerResult`: `score`, `energy_mined`, `kills`, `units_lost` and `investment_destroyed` are running match totals; `units`, `embodied` and `stored_energy` describe the end state and are filled in only once the match has finished (the admin client computes the live values from the observation stream instead). |
 
 `GetStatus` also returns the match (`status.match`). Its `paused` field is
 the tick **clock** (`SetPaused`), not a paused match.
