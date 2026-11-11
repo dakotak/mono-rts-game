@@ -25,15 +25,27 @@ func (b *Bot) planScouts() {
 	for _, t := range b.scouting {
 		taken[sectorOf(t)] = true
 	}
+	bank := b.bank()
 	for _, u := range b.unitsByRole(RoleScout) {
+		if _, ok := b.foraging[u.ID]; ok {
+			continue // filling up at a well (planForage)
+		}
 		e, capacity := energy(u)
-		// Head home while the energy still covers the trip (terrain can cost
-		// several steps per tile).
-		if step := b.K.Rules.EnergyPerStep; step > 0 && e < int64(state.Cheb(u.Pos, b.home))*step*3+step*10 && capacity > 0 {
+		step := b.K.Rules.EnergyPerStep
+		// The nearest place to refuel: home, or a known well on the way
+		// (scouts range far by hopping between wells).
+		well, wd := b.nearestWell(u.Pos)
+		back := state.Cheb(u.Pos, b.home)
+		// Head back while the energy still covers the trip (terrain can
+		// cost several steps per tile).
+		if step > 0 && capacity > 0 && e < int64(min(back, wd))*step*3+step*10 {
 			delete(b.scouting, u.ID)
-			if state.Cheb(u.Pos, b.home) > 2 {
+			switch {
+			case well != nil && wd < back && b.P.ExplorationAggression >= 300:
+				b.startForage(u, well)
+			case back > 2:
 				b.issue(Order{Key: fmt.Sprintf("move:%d", u.ID), Units: 1, Priority: PrioExplore, Essential: true, Desc: "scout refuel",
-					Payload: &movementv1.GroupMoveCommand{UnitIds: []uint64{u.ID}, Destination: pos(b.home)}})
+					Payload: &movementv1.GroupMoveCommand{UnitIds: []uint64{u.ID}, Destination: pos(b.freeNeighbor(b.home))}})
 			}
 			continue
 		}
@@ -44,11 +56,22 @@ func (b *Bot) planScouts() {
 			delete(b.scouting, u.ID)
 		}
 		reach := int32(1 << 20)
-		if step := b.K.Rules.EnergyPerStep; step > 0 {
+		if step > 0 {
 			reach = int32((e - step*10) / (step * 2)) // there and back with some terrain
 		}
 		t, ok := b.chooseSector(u.Pos, taken, reach)
 		if !ok {
+			// Nothing in reach on this tank: fill up (at the bank, or at a
+			// well when that is closer) and try again.
+			if step > 0 && e*4 < capacity*3 {
+				switch {
+				case well != nil && wd < back && wd > 0 && b.P.ExplorationAggression >= 300:
+					b.startForage(u, well)
+				case bank != nil && state.Cheb(u.Pos, bank.Pos) > 1:
+					b.issue(Order{Key: fmt.Sprintf("move:%d", u.ID), Units: 1, Priority: PrioExplore, Essential: true, Desc: "scout to bank for fuel",
+						Payload: &movementv1.GroupMoveCommand{UnitIds: []uint64{u.ID}, Destination: pos(b.freeNeighbor(bank.Pos))}})
+				}
+			}
 			continue
 		}
 		taken[sectorOf(t)] = true
@@ -94,7 +117,12 @@ func (b *Bot) chooseSector(from state.Pos, taken map[state.Pos]bool, reach int32
 			}
 			center := state.Pos{X: min(sx*sectorSize+sectorSize/2, b.K.Width-1), Y: min(sy*sectorSize+sectorSize/2, b.K.Height-1)}
 			d := int64(state.Cheb(center, from))
-			if state.Cheb(center, from)+state.Cheb(center, b.home) > reach {
+			// The way back may end at a known well instead of home.
+			ret := state.Cheb(center, b.home)
+			if _, wd := b.nearestWell(center); wd < ret && b.P.ExplorationAggression >= 300 {
+				ret = wd
+			}
+			if state.Cheb(center, from)+ret > reach {
 				continue
 			}
 			score := int64(un)*10 - d*int64(1100-b.P.ExplorationAggression)/100

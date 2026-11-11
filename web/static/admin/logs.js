@@ -132,6 +132,13 @@ const Logs = (() => {
       while (sel.options.length > 1) sel.remove(1);
       for (const p of Store.state.players) sel.append(new Option(p.name, p.id));
       sel.value = cur;
+      // A filter on a player who is not in this match (after a reset or a
+      // server restart) would hide every entry: drop it.
+      if (filter.playerId && !Store.state.players.some((p) => Number(p.id) === filter.playerId)) {
+        sel.value = "";
+        filter.playerId = 0;
+        refilter();
+      }
     });
   }
 

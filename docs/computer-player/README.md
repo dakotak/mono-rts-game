@@ -256,14 +256,16 @@ level=INFO msg="match finished" bot=red tick=6061 outcome=won reason=time_limit 
 ```
 
 - `status` lines come every strategic interval; strategy switches, bank
-  choice, campaigns, retreats and command failures are logged as they
-  happen.
+  choice, opponents found (`enemy found`, `enemy territory empty`),
+  campaigns (`probe=true` while searching), retargets, retreats,
+  abandoned musters and command failures are logged as they happen.
 - `--debug` adds per-cycle utility scores of every strategy with the
   features they were computed from, the bank's spending candidates with
   their scores, and every order submitted.
 - `--status-addr 127.0.0.1:8092` serves the live state as JSON at
   `/status`: strategy and its scores, role counts, bank energy, threats,
-  own vs estimated enemy strength, campaign, explored share, command
+  own vs estimated enemy strength, campaign (`target …`, `search …` or
+  `mustering`), explored share, command
   statistics (submitted, deduplicated, deferred, rejected, failed by code,
   by order kind), compute-budget exhaustion and decision latency.
 
@@ -273,13 +275,16 @@ level=INFO msg="match finished" bot=red tick=6061 outcome=won reason=time_limit 
   rules from the server, so it plays any configuration, but how well on
   very different rules (e.g. free movement, no fog, huge maps) is
   untested.
-- Two-player oriented: with more players it treats every other player as
-  one enemy and guesses a single enemy base.
+- Free-for-all play is simple: each opponent is tracked separately and the
+  bot fights the nearest (weaker when there is a choice), but it does not
+  reason about alliances of convenience or wait for two opponents to
+  weaken each other.
 - No pathfinding of its own: it relies on the server's movement and
   replans when a unit stops short.
 - Energy shown by estimates (fog) is taken at the midpoint of the range.
-- Combat is coarse compared to economy: few kills happen between bots of
-  similar level, so most matches end at the time limit on score.
+- Combat is coarse compared to economy: armies fight as one group with a
+  simple strength comparison, and most matches between bots of similar
+  level still end at the time limit on score.
 
 See [evaluation](evaluation.md#known-limitations) for what the measurements
 show.

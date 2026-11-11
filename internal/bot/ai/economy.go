@@ -360,7 +360,8 @@ func (b *Bot) planBank() {
 			c = nil
 		}
 	}
-	if c != nil && n < b.dir.Population && b.K.CommandTypes["rts.cloning.v1.CloneCommand"] {
+	// While the army musters for an attack, its fuel comes first.
+	if c != nil && n < b.dir.Population && b.K.CommandTypes["rts.cloning.v1.CloneCommand"] && !b.muster {
 		b.clonerID, b.clonerNeed = c.ID, need
 		// A new unit mines roughly one extraction per two ticks over the
 		// horizon (less travel), and adds score/strength.
@@ -536,7 +537,7 @@ func (b *Bot) planUpgrades() {
 	}
 	bankE, _ := energy(bank)
 	surplus := bankE - b.dir.Reserve
-	if b.clonerID != 0 && len(b.K.OwnUnits()) < b.dir.Population {
+	if b.clonerID != 0 && len(b.K.OwnUnits()) < b.dir.Population && !b.muster {
 		// Keep enough for the next clone unless the strategy favors tech.
 		surplus -= b.clonerNeed * int64(1000-b.dir.UpgradeShare) / 1000
 	}
@@ -550,9 +551,21 @@ func (b *Bot) planUpgrades() {
 		}
 		e, capacity := energy(u)
 		near := state.Cheb(u.Pos, bank.Pos) <= 1
+		// An army mustering for an attack, and scouts about to leave, fill
+		// up before anything else is funded.
+		if near && !funded && bankE > b.dir.Reserve+10 && b.wantsFuel(u) {
+			amt := min(capacity-e, bankE-b.dir.Reserve)
+			b.issue(Order{Key: "bank:xfer", Units: 1, Priority: PrioEconomy + 8, Desc: "fuel " + string(r) + " " + fmtID(u.ID), OneShot: true,
+				Payload: &energyv1.TransferCommand{FromUnitId: bank.ID, ToUnitId: u.ID, Amount: amt}})
+			funded = true
+			bankE -= amt
+			surplus -= amt
+			continue
+		}
 		// Early on, idle energy is worth more in the bank (clones) than in
-		// small upgrades: skilled bots pool it.
-		if growing && near && r != RoleMiner && u.ID != b.clonerID && e > step*20+10 && !funded {
+		// small upgrades: skilled bots pool it (never a scout's or a
+		// mustering army's: they need it to move).
+		if growing && near && r != RoleMiner && r != RoleScout && !(b.muster && r == RoleFighter) && u.ID != b.clonerID && e > step*20+10 && !funded {
 			if _, bc := energy(bank); bankE+e-step*20 <= bc {
 				b.issue(Order{Key: "bank:xfer", Units: 1, Priority: PrioEconomy, Desc: "pool energy in bank " + fmtID(u.ID),
 					OneShot: true,
@@ -582,8 +595,8 @@ func (b *Bot) planUpgrades() {
 			surplus -= amt
 			continue
 		}
-		if growing {
-			continue
+		if growing || (b.muster && r == RoleFighter) {
+			continue // a mustering army keeps its energy for the march
 		}
 		attr, to, cost, ok := b.nextUpgrade(u)
 		if !ok {
@@ -670,11 +683,28 @@ func (b *Bot) clearBank() {
 		if e*2 < capacity && b.bankSurplus() >= capacity/4 {
 			continue // about to be refueled
 		}
+		if b.wantsFuel(u) && b.bankSurplus() > 10 {
+			continue // waiting to fill up for a march or a scouting trip
+		}
 		if t, ok := b.freeTileToward(bank.Pos, 2, 3, b.campPos()); ok && b.spend(1) {
 			b.issue(Order{Key: fmt.Sprintf("move:%d", u.ID), Units: 1, Priority: PrioEconomy, Essential: true, Desc: "clear the bank",
 				Payload: &movementv1.GroupMoveCommand{UnitIds: []uint64{u.ID}, Destination: pos(t)}})
 		}
 	}
+}
+
+// wantsFuel reports whether a unit should fill up at the bank before
+// anything else is funded: fighters while the army musters for an attack,
+// and scouts that cannot reach unexplored ground.
+func (b *Bot) wantsFuel(u *state.Entity) bool {
+	e, capacity := energy(u)
+	switch b.Roles[u.ID] {
+	case RoleFighter:
+		return b.muster && e < min(b.musterFuel, capacity*9/10)
+	case RoleScout:
+		return e*4 < capacity*3
+	}
+	return false
 }
 
 // bankSurplus is what the bank can give beyond its reserve.
@@ -782,12 +812,30 @@ func (b *Bot) planForage() {
 		if best == nil {
 			continue // stranded: nothing in reach
 		}
-		b.foraging[u.ID] = best.ID
-		if state.Cheb(u.Pos, best.Pos) > 1 {
-			b.issue(Order{Key: fmt.Sprintf("move:%d", u.ID), Units: 1, Priority: PrioEconomy + 10, Essential: true, Desc: "forage at well",
-				Payload: &movementv1.GroupMoveCommand{UnitIds: []uint64{u.ID}, Destination: pos(b.freeNeighbor(best.Pos))}})
-		}
-		b.issue(Order{Key: fmt.Sprintf("forage:%d", u.ID), Units: 1, Priority: PrioEconomy + 10, Desc: "forage",
-			Payload: &energyv1.MineCommand{UnitIds: []uint64{u.ID}, WellId: best.ID}})
+		b.startForage(u, best)
 	}
+}
+
+// startForage sends a unit to fill up at a well (planForage continues it
+// until the unit is three quarters full).
+func (b *Bot) startForage(u *state.Entity, w *state.Well) {
+	b.foraging[u.ID] = w.ID
+	if state.Cheb(u.Pos, w.Pos) > 1 {
+		b.issue(Order{Key: fmt.Sprintf("move:%d", u.ID), Units: 1, Priority: PrioEconomy + 10, Essential: true, Desc: "forage at well",
+			Payload: &movementv1.GroupMoveCommand{UnitIds: []uint64{u.ID}, Destination: pos(b.freeNeighbor(w.Pos))}})
+	}
+	b.issue(Order{Key: fmt.Sprintf("forage:%d", u.ID), Units: 1, Priority: PrioEconomy + 10, Desc: "forage",
+		Payload: &energyv1.MineCommand{UnitIds: []uint64{u.ID}, WellId: w.ID}})
+}
+
+// nearestWell returns the closest usable known well to p.
+func (b *Bot) nearestWell(p state.Pos) (*state.Well, int32) {
+	var best *state.Well
+	d := int32(1 << 30)
+	for _, w := range b.K.UsableWells() {
+		if c := state.Cheb(p, w.Pos); c < d || (c == d && w.ID < best.ID) {
+			best, d = w, c
+		}
+	}
+	return best, d
 }

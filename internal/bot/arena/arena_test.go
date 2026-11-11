@@ -89,3 +89,46 @@ func TestDifficultySeparation(t *testing.T) {
 		t.Fatalf("level 10 won %d of %d against level 1", wins, len(seeds))
 	}
 }
+
+// TestThreeBotsFight: in a three-player match (configs/presets/trio.json,
+// as launched by `make watch-bots`) bots must find each other and fight,
+// not sit at home until the time limit. Opponents start out of sight, so
+// this exercises exploration, per-opponent targeting and mustering.
+func TestThreeBotsFight(t *testing.T) {
+	if testing.Short() {
+		t.Skip("full matches")
+	}
+	cfg, err := game.LoadConfig("../../../configs/presets/trio.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	seeds := []uint64{1, 2, 3}
+	res := make([]Result, len(seeds))
+	var wg sync.WaitGroup
+	for i, s := range seeds {
+		wg.Go(func() {
+			r, err := Play(context.Background(), Spec{Config: cfg, MapSeed: s, Bots: []BotSpec{
+				{Slot: 1, Difficulty: 8, Personality: "aggressive", Seed: 1},
+				{Slot: 2, Difficulty: 5, Personality: "balanced", Seed: 2},
+				{Slot: 3, Difficulty: 3, Personality: "economic", Seed: 3}}})
+			if err != nil {
+				t.Error(err)
+			}
+			res[i] = r
+		})
+	}
+	wg.Wait()
+	for _, r := range res {
+		fighters, kills := 0, int64(0)
+		for _, b := range r.Bots {
+			kills += b.Kills
+			if b.Kills > 0 {
+				fighters++
+			}
+		}
+		t.Logf("seed %d: %s after %d ticks, %d kills, %d bots with kills", r.MapSeed, r.Reason, r.Ticks, kills, fighters)
+		if fighters < 2 {
+			t.Errorf("seed %d: only %d bots made a kill (total %d): bots are not engaging each other", r.MapSeed, fighters, kills)
+		}
+	}
+}

@@ -215,16 +215,16 @@ func TestExplorationTargetsUnexploredReachableSectors(t *testing.T) {
 
 func TestFogKnowledgeOnlyFromObservations(t *testing.T) {
 	// A foreign unit outside the visible area is simply not in the
-	// snapshot; the bot cannot know it and its guess for the enemy base is
-	// the mirror of home, not the real position.
+	// snapshot; the bot cannot know it, and its guess for the enemy base is
+	// a search area in unexplored ground, not the real position.
 	k := observe(t, 100, homeBase(), &[4]int32{0, 0, 12, 12})
 	b := newBot(t, 10, k)
 	b.home = state.Pos{X: 5, Y: 5}
 	if len(k.Enemies()) != 0 {
 		t.Fatal("enemies known without observation")
 	}
-	if g := b.enemyBaseGuess(); g != (state.Pos{X: 42, Y: 26}) {
-		t.Fatalf("enemy base guess = %v, want the mirror of home", g)
+	if g := b.enemyBaseGuess(); k.IsExplored(g) || b.unexploredIn(sectorOf(g)) == 0 {
+		t.Fatalf("enemy base guess = %v, want unexplored ground", g)
 	}
 	// Seen once, then gone: remembered (not current), and it ages out.
 	k.BeginTick()

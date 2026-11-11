@@ -119,7 +119,8 @@ The planners are ordinary methods in `internal/bot/ai`:
   `clearBank`), logistics, guards, salvage.
 - `combat.go`: strength and threat models, target scoring (`engage`),
   campaigns and raids (`tactical`, `runCampaign`, `raidTarget`), retreat.
-- `exploration.go`: sector scoring.
+- `exploration.go`: sector scoring, scout refueling.
+- `intel.go`: per-opponent intelligence, target choice, search areas.
 
 Rules of the road: read only `b.K` (never anything server-side), go
 through `b.issue`, spend compute with `b.spend(n)` for loops over

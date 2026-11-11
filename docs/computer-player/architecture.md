@@ -56,8 +56,8 @@ decides:
   - *remembered*: foreign entities seen before and no longer detected,
     kept with the tick they were last seen, aged out after 600 ticks, and
     weighted down with age by threat models ≥ 1;
-  - *estimated*: what the bot infers — the enemy base (weighted average
-    of sightings, else the mirror of its own base), enemy damage per hit
+  - *estimated*: what the bot infers — where each opponent lives (see
+    *Opponents* below), enemy damage per hit
     (from damage events on its own units), whether a well regenerates
     (seen refilling after running dry);
   - *unknown*: everything else. Unexplored tiles are tracked so scouts can
@@ -170,10 +170,38 @@ Allocates units and energy:
 8. **Exploration.** Scouts take 8×8 sectors with unexplored tiles, scored
    by unexplored area, distance and (for aggressive explorers) direction
    toward the inferred enemy; only sectors within the scout's energy
-   reach; with nothing left to explore, adaptive bots re-scout the enemy
+   reach. The way back may end at a known well instead of home
+   (`exploration_aggression` ≥ 300), where the scout mines itself full,
+   so scouts range across the map by hopping between wells. A scout too
+   empty to reach anything fills up at the bank (or a closer well); the
+   bank refuels scouts before other spending and never pools their
+   energy. With nothing left to explore, adaptive bots re-scout the enemy
    base at most every 1200 ticks (constant walking cost more energy than
    the information was worth).
 9. **Extension objectives** run last (see [Extending](extending.md)).
+
+### Opponents
+
+Each opponent is tracked separately for the whole match (`intel.go`):
+where their units have been seen (smoothed, larger groups weigh more),
+when, and the most seen at once. Averaging every enemy together would
+point at the empty ground between two opponents.
+
+- **Whom to fight**: the opponent whose territory is closest to home,
+  discounted by the largest army they have shown.
+- **Sightings near home** (within 12 tiles) are raiders or scouts: they
+  reveal that a player exists, and the bot guesses their base further out
+  along that direction until it sees them away from its base.
+- **Nobody found yet**: the target is a *search area*, the unexplored
+  region (sector plus unexplored neighbors) furthest from home, kept for
+  600 ticks so the bot does not dither. Campaigns toward it are armed
+  reconnaissance: they turn into an attack on the first opponent found,
+  and move on to the next unexplored area while the army can still get
+  home.
+- **Empty territory**: an army that reaches an opponent's area and sees
+  none of their units forgets that estimate until they are seen again.
+- Only with the whole map explored and nobody seen does the bot fall back
+  to the mirror of its own base.
 
 ### Tactical layer
 
@@ -195,8 +223,16 @@ Reacts to the situation every few ticks:
   `AttackCommand` for the whole group; otherwise each unit attacks its
   nearest target.
 - **Campaigns** start when the fueled fighters (energy for the trip plus a
-  fight), which must be most of the army, exceed the enemy estimate by
-  the strategy's attack ratio. Coordinated bots first *raid*: the nearest
+  fight), at least three and a third of the army, exceed the enemy
+  estimate by the strategy's attack ratio; the rest stay home as a
+  reserve.
+- **Mustering**: when the whole army would be strong enough but too few
+  fighters are fueled, the bot musters. Fighters walk to the bank (four
+  at a time), the bank fuels them up to what the march needs before
+  clones or upgrades, and they stop spending their own energy on
+  upgrades or pooling it in the bank. A muster that has not launched
+  after 900 ticks (stranded fighters, a poor bank) is abandoned for 900
+  ticks so the economy is not starved. Coordinated bots first *raid*: the nearest
   known enemy position at a well away from home (miners at work), judged
   against what was seen there. Otherwise the target is the inferred enemy
   base and the estimate includes unseen units (at least half of the bot's

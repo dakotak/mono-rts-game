@@ -65,6 +65,11 @@ func (s *Status) update(b *Bot, sent int, took time.Duration) {
 	s.Campaign = ""
 	if b.campaign != nil {
 		s.Campaign = "target " + b.campaign.target.String()
+		if b.campaign.probe {
+			s.Campaign = "search " + b.campaign.target.String()
+		}
+	} else if b.muster {
+		s.Campaign = "mustering"
 	}
 	s.ExploredPm = b.K.Explored * 1000 / max(int(b.K.Width)*int(b.K.Height), 1)
 	if b.K.Tick%uint64(max(b.P.StrategicInterval, 1)) == 0 {

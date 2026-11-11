@@ -103,8 +103,19 @@ type Bot struct {
 	foraging map[uint64]uint64
 	seenAt   map[uint64]uint64 // enemy -> tick first seen (reaction delay)
 	campaign *campaign
-	readyAt  uint64
-	ops      int // compute operations left in the current cycle
+	// intel: long-term knowledge of each opponent (intel.go); probe: the
+	// unexplored area searched while no opponent has been found.
+	intel map[uint32]*enemyIntel
+	probe probeState
+	// muster: the army is strong enough to attack but not fueled; fighters
+	// fill up at the bank before anything else is funded.
+	muster bool
+	// musterFrom: when the current muster began; musterOff: no new muster
+	// before this tick (the last one failed).
+	musterFrom, musterOff uint64
+	musterFuel            int64 // energy each fighter needs for the march
+	readyAt               uint64
+	ops                   int // compute operations left in the current cycle
 
 	Status Status
 }
@@ -129,6 +140,8 @@ func New(k *state.Knowledge, cfg Config) *Bot {
 func (b *Bot) resetMatch() {
 	b.Roles, b.mining, b.scouting, b.seenAt = map[uint64]Role{}, map[uint64]uint64{}, map[uint64]state.Pos{}, map[uint64]uint64{}
 	b.foraging = map[uint64]uint64{}
+	b.intel, b.probe, b.muster = map[uint32]*enemyIntel{}, probeState{}, false
+	b.musterFrom, b.musterOff, b.musterFuel = 0, 0, 0
 	b.byRoleDirty = true
 	b.bankID, b.campaign, b.readyAt, b.monitorAt = 0, nil, 0, 0
 	b.strategy = strategyState{}

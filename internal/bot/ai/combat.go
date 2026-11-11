@@ -15,6 +15,9 @@ type campaign struct {
 	target  state.Pos
 	started uint64
 	march   bool
+	// probe: no opponent has been found yet, so the army searches
+	// unexplored ground (armed reconnaissance) and retargets on contact.
+	probe   bool
 	members map[uint64]bool // fighters fueled for the trip when it started
 }
 
@@ -144,22 +147,19 @@ func (b *Bot) inferEnemyHit() {
 	}
 }
 
-// enemyBaseGuess infers where the enemy is: the recency-weighted centroid
-// of sightings, or (nothing seen) the mirror of our own base, a common map
-// symmetry. Inference from observation and geometry only.
+// enemyBaseGuess infers where to look for the enemy, from observation and
+// geometry only:
+//   - an opponent already found: the territory of the one to fight
+//     (targetOpponent; each opponent is tracked separately);
+//   - none found: the most promising unexplored area (probeTarget);
+//   - the whole map explored and nobody seen: the mirror of our own base, a
+//     common map symmetry.
 func (b *Bot) enemyBaseGuess() state.Pos {
-	var sx, sy, sw int64
-	for _, e := range b.K.Enemies() {
-		sx, sy, sw = sx+int64(e.Pos.X)*4, sy+int64(e.Pos.Y)*4, sw+4
+	if in, ok := b.targetOpponent(); ok {
+		return in.base
 	}
-	if b.P.ThreatModel >= 1 {
-		for _, m := range b.K.RememberedEnemies() {
-			w := max(1, int64(state.MemoryTicks)-int64(b.K.Tick-m.LastSeen)) / 100
-			sx, sy, sw = sx+int64(m.Entity.Pos.X)*w, sy+int64(m.Entity.Pos.Y)*w, sw+w
-		}
-	}
-	if sw > 0 {
-		return state.Pos{X: int32(sx / sw), Y: int32(sy / sw)}
+	if p, ok := b.probeTarget(); ok {
+		return p
 	}
 	return state.Pos{X: b.K.Width - 1 - b.home.X, Y: b.K.Height - 1 - b.home.Y}
 }
@@ -168,6 +168,8 @@ func (b *Bot) enemyBaseGuess() state.Pos {
 func (b *Bot) tactical() {
 	k := b.K
 	b.inferEnemyHit()
+	b.updateIntel()
+	b.muster = false
 	enemies := k.Enemies()
 	live := map[uint64]bool{}
 	for _, e := range enemies {
@@ -241,14 +243,16 @@ func (b *Bot) tactical() {
 	// Coordinated bots raid enemy miners at wells first: weak, valuable
 	// targets (kills, destroyed investment) away from the enemy army.
 	target, raid := b.enemyBaseGuess(), false
+	probe := len(b.intel) == 0
 	if b.P.Coordination >= 500 {
 		if t, ok := b.raidTarget(); ok {
-			target, raid = t, true
+			target, raid, probe = t, true, false
 		}
 	}
-	own := int64(0)
+	own, total := int64(0), int64(0)
 	var ready []*state.Entity
 	for _, u := range fighters {
+		total += b.strength(u, true)
 		if e, _ := energy(u); b.K.Rules.EnergyPerStep == 0 || e >= b.tripCost(u.Pos, target)+15 {
 			ready = append(ready, u)
 			own += b.strength(u, true)
@@ -269,19 +273,44 @@ func (b *Bot) tactical() {
 		// half our unit count at our base strength (symmetric starts).
 		est = max(est, int64(len(b.K.OwnUnits())/2)*b.baseStrength())
 	}
-	// Most of the army must be fueled: a campaign with a fraction of it
-	// is defeated in detail.
-	minArmy := max(3, len(fighters)*6/10)
-	if b.dir.AttackRatio > 0 && len(ready) >= minArmy && own*1000 >= est*int64(b.dir.AttackRatio)*int64(1350-b.P.RiskTolerance)/1000 {
-		b.campaign = &campaign{target: target, started: k.Tick, march: b.P.Coordination < 300, members: map[uint64]bool{}}
+	// Enough of the army must be fueled to win (the strength test below)
+	// and at least a third of it: a handful is defeated in detail. The rest
+	// stays home as a reserve while it refuels.
+	minArmy := max(3, len(fighters)*3/10)
+	need := est * int64(b.dir.AttackRatio) * int64(1350-b.P.RiskTolerance) / 1000
+	if b.dir.AttackRatio > 0 && len(ready) >= minArmy && own*1000 >= need {
+		b.campaign = &campaign{target: target, started: k.Tick, march: b.P.Coordination < 300, probe: probe, members: map[uint64]bool{}}
 		for _, u := range ready {
 			b.campaign.members[u.ID] = true
 		}
-		b.log.Info("campaign", "tick", k.Tick, "target", fmt.Sprint(b.campaign.target), "raid", raid, "army", len(ready), "own", own, "enemy_estimate", est)
+		b.log.Info("campaign", "tick", k.Tick, "target", fmt.Sprint(b.campaign.target), "raid", raid, "probe", probe, "army", len(ready), "own", own, "enemy_estimate", est)
 		return
+	}
+	// Strong enough but not fueled for the march: fill the army up at the
+	// bank before the economy spends on anything else.
+	// A muster that cannot complete (fighters stranded, the bank short)
+	// gives up for a while so the economy is not starved.
+	want := b.dir.AttackRatio > 0 && len(fighters) >= minArmy && total*1000 >= need && k.Tick >= b.musterOff
+	switch {
+	case !want:
+		b.musterFrom = 0
+	case b.musterFrom == 0:
+		b.musterFrom = k.Tick
+	case k.Tick > b.musterFrom+MusterLimit:
+		b.log.Info("muster abandoned", "tick", k.Tick, "fueled", len(ready), "army", len(fighters), "bank", b.bankSurplus(), "need", b.musterFuel)
+		b.musterFrom, b.musterOff, want = 0, k.Tick+MusterLimit, false
+	}
+	b.muster = want
+	b.musterFuel = 0
+	if want {
+		b.musterFuel = b.tripCost(b.home, target) + 25
 	}
 	b.camp(fighters)
 }
+
+// MusterLimit is how long an army may muster (fill up for an attack)
+// before giving up, and how long it then waits before trying again.
+const MusterLimit = 900
 
 // lowForCamp: an idle fighter worth a refueling trip (a quarter full).
 func (b *Bot) lowForCamp(u *state.Entity) bool {
@@ -307,10 +336,14 @@ func (b *Bot) camp(fighters []*state.Entity) {
 	c := b.campPos()
 	var far []uint64
 	bank := b.bank()
-	refuel := 0
+	refuel, maxRefuel := 0, 2
+	if b.muster && bank != nil {
+		maxRefuel = 4
+	}
 	for _, u := range fighters {
-		// Half-empty fighters top up at the bank (a few at a time).
-		if refuel < 2 && bank != nil && b.attackLikely() && b.lowForCamp(u) && b.bankSurplus() >= 25 && !u.Has("movement.destination") {
+		short := (b.lowForCamp(u) && b.attackLikely() && b.bankSurplus() >= 25) || b.wantsFuel(u)
+		// Fighters short of energy top up at the bank (a few at a time).
+		if refuel < maxRefuel && bank != nil && short && !u.Has("movement.destination") {
 			refuel++
 			if state.Cheb(u.Pos, bank.Pos) > 1 {
 				b.issue(Order{Key: fmt.Sprintf("move:%d", u.ID), Units: 1, Priority: PrioTactical - 10, Essential: true, Desc: "to bank for fuel",
@@ -387,12 +420,38 @@ func (b *Bot) runCampaign(fighters, enemies []*state.Entity) {
 			return
 		}
 	}
+	// A search that found someone (by this army or anyone else) turns into
+	// an attack on them.
+	if c.probe {
+		if in, ok := b.targetOpponent(); ok {
+			c.probe, c.target = false, in.base
+			b.log.Info("campaign retarget", "tick", b.K.Tick, "target", fmt.Sprint(c.target), "reason", "enemy found", "player", in.owner)
+		}
+	}
 	if state.Cheb(mid, c.target) <= 3 {
+		if !c.probe {
+			b.clearOpponentAt(c.target)
+		}
 		// Objective reached and clear: the next freshest sighting, else done.
 		for _, m := range b.K.RememberedEnemies() {
 			if state.Cheb(m.Entity.Pos, mid) > 6 {
 				c.target = m.Entity.Pos
 				b.log.Info("campaign retarget", "tick", b.K.Tick, "target", fmt.Sprint(c.target))
+				return
+			}
+		}
+		// Then another known opponent, or (searching) more unexplored
+		// ground while the army still has the energy to get back.
+		if in, ok := b.targetOpponent(); ok && state.Cheb(in.base, mid) > 6 {
+			c.probe, c.target = false, in.base
+			b.log.Info("campaign retarget", "tick", b.K.Tick, "target", fmt.Sprint(c.target), "player", in.owner)
+			return
+		}
+		if c.probe {
+			b.probe.valid = false
+			if t, ok := b.probeTarget(); ok && b.armyCanReach(fighters, t) {
+				c.target = t
+				b.log.Info("campaign retarget", "tick", b.K.Tick, "target", fmt.Sprint(c.target), "reason", "keep searching")
 				return
 			}
 		}
@@ -402,6 +461,21 @@ func (b *Bot) runCampaign(fighters, enemies []*state.Entity) {
 	}
 	b.issue(Order{Key: "grp:army", Units: len(fighters), Priority: PrioTactical, Desc: "march",
 		Payload: &movementv1.GroupMoveCommand{UnitIds: ids(fighters), Destination: pos(c.target)}})
+}
+
+// armyCanReach reports whether most of the army can walk to t and then
+// home again.
+func (b *Bot) armyCanReach(fighters []*state.Entity, t state.Pos) bool {
+	if b.K.Rules.EnergyPerStep == 0 {
+		return true
+	}
+	ok := 0
+	for _, u := range fighters {
+		if e, _ := energy(u); e >= b.tripCost(u.Pos, t)+b.tripCost(t, b.home)+10 {
+			ok++
+		}
+	}
+	return ok*10 >= len(fighters)*6
 }
 
 // shouldRetreat compares local strengths with the bot's risk tolerance.

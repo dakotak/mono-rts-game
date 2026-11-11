@@ -119,8 +119,21 @@ const PlayersPanel = (() => {
   }
 
   const box = $("players-panel");
-  box.addEventListener("pointerdown", () => { holding = true; });
-  window.addEventListener("pointerup", () => { if (holding) { holding = false; schedule(); } });
+  // The hold ends with the pointer release, or anything that can swallow
+  // it (a cancelled drag, switching windows); a hold never outlasts two
+  // seconds, so a lost release cannot freeze the panel.
+  let holdTimer = 0;
+  const release = () => {
+    clearTimeout(holdTimer);
+    if (holding) { holding = false; schedule(); }
+  };
+  box.addEventListener("pointerdown", () => {
+    holding = true;
+    clearTimeout(holdTimer);
+    holdTimer = setTimeout(release, 2000);
+  });
+  for (const ev of ["pointerup", "pointercancel", "blur"]) window.addEventListener(ev, release);
+  document.addEventListener("visibilitychange", release);
 
   Store.on("tick", schedule);
   Store.on("match", schedule);
