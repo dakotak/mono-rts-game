@@ -167,3 +167,5 @@ ul.blocked { margin: 0.25rem 0; padding-left: 1rem; font-size: 0.85em; }
 .results { padding: 12px 16px; }
 .results table { width: 100%; }
 textarea { width: 100%; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--bg, #111); color: inherit; border: 1px solid var(--border); border-radius: 4px; }
+.bot-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 4px 0; }
+.bot-row span { flex: 1 1 100%; }

@@ -4,6 +4,12 @@ A bot is just a player. It uses the same `GameService` as the browser
 client, sees exactly what a player in its slot would see, and is bound by
 the same rules and command budget. This guide builds one end to end.
 
+For a complete, ready-to-run opponent with ten difficulty levels, see
+the [computer player](../computer-player/README.md) (`mono-bot`); its
+packages (`internal/bot/state`, `internal/bot/client`) are a fuller
+reference implementation of what this guide builds, and it can be
+[extended](../computer-player/extending.md) without forking.
+
 Working code in the repository:
 
 | File | What |

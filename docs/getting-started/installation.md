@@ -40,6 +40,9 @@ GOTOOLCHAIN=local go build -o bin/ ./cmd/rts-server
 | `rts-sim` | [`cmd/rts-sim`](../../cmd/rts-sim/main.go) | Headless harness: many units, random orders, no network. Prints throughput and the final state hash. |
 | `rts-bench` | [`cmd/rts-bench`](../../cmd/rts-bench/main.go) | Scale scenarios (1k–25k units × 7 workloads) and the tick-time report. |
 | `rts-replay` | [`cmd/rts-replay`](../../cmd/rts-replay/main.go) | `info` / `verify` for exported match replays. |
+| `mono-bot` | [`cmd/mono-bot`](../../cmd/mono-bot/main.go) | The computer player: joins with a join token and plays ([guide](../computer-player/README.md)). |
+| `mono-bothost` | [`cmd/mono-bothost`](../../cmd/mono-bothost/main.go) | Starts/stops computer players in configured slots over HTTP, for the web client's "Add computer opponent" panel (`rts-gateway -bothost`). |
+| `mono-arena` | [`cmd/mono-arena`](../../cmd/mono-arena/main.go) | Bot-vs-bot evaluation in lockstep ([evaluation](../computer-player/evaluation.md)). |
 
 ### `rts-server` flags
 
@@ -99,3 +102,9 @@ make run-gateway     # go run ./cmd/rts-gateway -web web/static
 
 Production-style deployment (separate hosts, hardening) is covered in
 [operations/deployment.md](../operations/deployment.md).
+
+### `rts-gateway -bothost`
+
+`-bothost URL` exposes a computer-player host (`mono-bothost`) at
+`/api/bots` on the player listener, which turns on the player client's
+"Computer opponents" panel. See [the computer player](../computer-player/README.md#adding-a-computer-opponent-from-the-web-client).

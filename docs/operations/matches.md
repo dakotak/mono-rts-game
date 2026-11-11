@@ -10,6 +10,7 @@ configuration format: edit them freely.
 |---|---|---|
 | [`sandbox.json`](../../configs/presets/sandbox.json) | Experimenting, debugging, testing mechanics | 40×28 arena, 2 players × 8 units with 100 energy, unlimited rich wells, free movement, **no fog, no victory conditions, no command budget**, starts immediately. |
 | [`standard.json`](../../configs/presets/standard.json) | A reasonable competitive game | 64×40 procedural map (rock clusters, marsh), **random seed per match**, 2 players × 6 units with 40 energy, scarce finite wells (2 near each spawn plus 6 elsewhere, no regeneration), **fog of war**, budget 500, starts when both players are ready, **last player standing**, 30-minute time limit (18,000 ticks at 10 Hz) scored by units, investment, energy and kills. |
+| [`duel.json`](../../configs/presets/duel.json) | Human vs computer, computer vs computer | 48×32 procedural map (fixed seed), 2 players × 6 units in opposite corners, 2 regenerating wells near each spawn plus 4 elsewhere, fog of war, starts when both are ready, last player standing, 10-minute limit (6000 ticks) scored by units, investment, energy and kills. Join tokens `duel-red` / `duel-blue`. The computer player is tuned on it. |
 | [`bot-arena.json`](../../configs/presets/bot-arena.json) | Autonomous clients, reproducible evaluation | 48×48 procedural map with a **fixed seed and ID key** (same map and IDs every match), 4 players in a ring × 5 units, wells regenerate 1/tick, fog of war, **20 Hz**, budget 200, starts when all 4 bots are ready, last player standing, 10-minute limit (12,000 ticks), **scores public during the match**. |
 
 All three share the attribute, combat, cloning and automation rules of
@@ -72,13 +73,27 @@ Reset semantics:
 - **History is kept.** The previous match's result and replay stay
   available for the last 16 matches.
 
+## Playing against the computer
+
+```bash
+make vs-bot                       # server (duel) + bot host + gateway
+BOT_LEVEL=7 make vs-bot           # ... and a level 7 computer joins right away
+```
+
+Join http://127.0.0.1:8080 as `duel-red` and add (or remove) the computer
+opponent from the *Computer opponents* panel. Any slot of any preset can be
+given to `mono-bot` instead (`--token <slot token>`); see the
+[computer player guide](../computer-player/README.md). For bot-vs-bot
+evaluation without a server process, use `mono-arena`
+([evaluation](../computer-player/evaluation.md)).
+
 ## Running automated bot matches
 
 ```bash
 CONFIG=configs/presets/bot-arena.json make dev          # terminal 1
 for t in red blue green gold; do                          # terminal 2
-  go run ./examples/bot -token bot-$t -ticks 3000 &
-done
+  go run ./examples/bot -token bot-$t -ticks 3000 &       # the minimal example bot, or:
+done                                                      # go run ./cmd/mono-bot --token bot-$t --difficulty 6
 ```
 
 What happens:

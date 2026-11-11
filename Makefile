@@ -3,7 +3,7 @@
 export GOTOOLCHAIN := local
 TOOL := go tool -modfile=tools/go.mod
 
-.PHONY: all generate build test race lint fmt bench scale sim run-server run-gateway dev
+.PHONY: all generate build test race lint fmt bench scale sim run-server run-gateway dev vs-bot bot-arena bot-ladder bot-bench
 
 all: lint test build
 
@@ -46,3 +46,15 @@ run-gateway:
 
 dev: ## Server + gateway together; open http://127.0.0.1:8080 in two tabs
 	./scripts/dev.sh
+
+vs-bot: ## Play against the computer: server (duel) + bot host + gateway; BOT_LEVEL=7 adds one at once
+	./scripts/vs-bot.sh
+
+bot-arena: ## Bot-vs-bot evaluation: A vs B over map seeds (A=10 B=1 SEEDS=1-20)
+	go run ./cmd/mono-arena -a $(or $(A),10) -b $(or $(B),1) -seeds $(or $(SEEDS),1-20)
+
+bot-ladder: ## Every adjacent difficulty pair plus 10 vs 1 (SEEDS=1-20)
+	go run ./cmd/mono-arena -ladder -seeds $(or $(SEEDS),1-20)
+
+bot-bench: ## Computer player decision benchmarks at 100/1k/5k/10k units
+	go test -run '^$$' -bench BenchmarkDecide -benchmem ./internal/bot/ai

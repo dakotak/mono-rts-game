@@ -146,7 +146,7 @@
       "progress_event_interval": 10
     },
     "cloning": {
-      "base_cost": 60,
+      "base_cost": 40,
       "cost": "base + embodied + mass",
       "duration": "30 + embodied / 10",
       "offspring_energy": 20,

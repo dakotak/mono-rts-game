@@ -30,12 +30,13 @@ the project name.)*
 
 ## Status
 
-Milestones 1–7 are implemented: kernel and movement, administration and
+Milestones 1–8 are implemented: kernel and movement, administration and
 the energy economy, unit evolution (attributes, upgrades, cloning,
 metadata), combat and salvage, fog of war and sensors, pathfinding,
-automation, logistics and scale benchmarks, and complete matches. The last
-covers procedural world generation, a lobby, victory conditions, scoring,
-results, resets and verifiable replays. Everything is in memory. There is
+automation, logistics and scale benchmarks, complete matches (procedural
+world generation, a lobby, victory conditions, scoring, results, resets and
+verifiable replays), and an autonomous computer player with ten difficulty
+levels that plays through the public API. Everything is in memory. There is
 no persistence, no account system and no runtime plugin loading. See
 [what's implemented and what isn't](docs/developer-guide/design-notes.md#not-implemented).
 
@@ -45,6 +46,7 @@ no persistence, no account system and no runtime plugin loading. See
 | Movement and pathfinding, energy, upgrades, cloning, metadata and batches, combat, salvage, fog of war, automation, logistics | Implemented, tested |
 | gRPC `GameService` / `AdminService`, browser gateway, player and admin web clients | Implemented, tested |
 | Match lifecycle (lobby, start, pause, finish, reset), world generation, victory conditions, scoring, results, presets, replay export and verification | Implemented, tested |
+| Computer player (`mono-bot`): 10 difficulty levels, 5 personalities, bot host for the web client, bot-vs-bot arena | Implemented, tested, measured ([computer player](docs/computer-player/README.md)) |
 | Scale: 10k units within a 10 Hz tick budget; 25k with fog of war is over budget | Measured ([performance](docs/developer-guide/design-notes.md#performance-milestone-6)) |
 | Persistence (save/load), TLS, accounts, matchmaking, CI, containers | Not implemented |
 
@@ -82,6 +84,16 @@ CONFIG=configs/presets/bot-arena.json make dev   # 4 bots, reproducible seed: go
 
 See [running matches](docs/operations/matches.md).
 
+**Play against the computer.** `make vs-bot` starts the duel preset with a
+bot host; join as `duel-red` and add a computer opponent (difficulty 1–10)
+from the "Computer opponents" panel. Or run bots directly:
+
+```bash
+go run ./cmd/mono-bot --token duel-blue --difficulty 7 --personality aggressive
+```
+
+See the [computer player guide](docs/computer-player/README.md).
+
 ## Architecture at a glance
 
 ```mermaid
@@ -115,7 +127,8 @@ Start at the **[documentation index](docs/README.md)**.
 |---|---|
 | Play | [User guide](docs/user-guide/concepts.md) |
 | Run a server | [Installation](docs/getting-started/installation.md), [configuration](docs/getting-started/configuration.md), [operations](docs/operations/deployment.md) |
-| Write a bot or client | [API overview](docs/api/overview.md), [bot development](docs/api/bot-development.md) |
+| Play against or run computer players | [Computer player](docs/computer-player/README.md), [evaluation](docs/computer-player/evaluation.md) |
+| Write a bot or client | [API overview](docs/api/overview.md), [bot development](docs/api/bot-development.md), [extending the computer player](docs/computer-player/extending.md) |
 | Understand the engine | [Architecture](docs/developer-guide/architecture.md), [simulation](docs/developer-guide/simulation.md), [mechanics rules](docs/developer-guide/mechanics.md) |
 | Add a mechanic | [Plugin guide](docs/developer-guide/plugins/overview.md), [plugin tutorial](docs/developer-guide/plugins/getting-started.md), [map generators](docs/developer-guide/plugins/worldgen.md), [victory conditions and scoring](docs/developer-guide/plugins/match-extensions.md) |
 | Run matches and replays | [Running matches](docs/operations/matches.md), [replay format](docs/developer-guide/replay.md) |

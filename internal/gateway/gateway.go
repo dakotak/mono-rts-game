@@ -17,6 +17,7 @@
 //	GET  /api/snapshot                        -> GetSnapshotResponse
 //	GET  /api/observe                         -> ObserveResponse stream
 //	GET  /api/match                           -> GetMatchResponse
+//	/api/bots...                              -> mono-bothost (only with WithBotHost)
 //
 // Admin API (NewAdmin):
 //
@@ -43,10 +44,13 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/fs"
 	"log"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -231,4 +235,21 @@ func writeGRPCError(w http.ResponseWriter, err error) {
 		httpStatus = http.StatusServiceUnavailable
 	}
 	writeError(w, httpStatus, st.Code().String(), st.Message())
+}
+
+// WithBotHost routes /api/bots (and /api/bots/...) on a player handler to a
+// computer-player host (mono-bothost), which starts bots in configured slots
+// with those slots' join tokens. The gateway adds no privileges: the host
+// holds no admin credentials and only fills the slots it was given.
+func WithBotHost(player http.Handler, botHost string) (http.Handler, error) {
+	target, err := url.Parse(botHost)
+	if err != nil || target.Scheme == "" || target.Host == "" {
+		return nil, fmt.Errorf("bot host %q: want a URL like http://127.0.0.1:8090", botHost)
+	}
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	mux := http.NewServeMux()
+	mux.Handle("/api/bots", proxy)
+	mux.Handle("/api/bots/", proxy)
+	mux.Handle("/", player)
+	return mux, nil
 }

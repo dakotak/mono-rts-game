@@ -88,6 +88,34 @@ These are frequently assumed but do **not** exist in the current code:
 - CI configuration, container images and deployment manifests are not part
   of the repository.
 
+## Milestone 8: computer player
+
+Decisions and tradeoffs:
+
+- **A client, not a subsystem.** The computer player is a separate program
+  using `GameService` only; nothing in the server knows bots exist. It
+  learns the game from `rules_json` and reaches its goals with the same
+  commands and automation as humans. `TestImportBoundary` keeps it that
+  way.
+- **Server automation over micromanagement.** Miners, guards and
+  salvagers run the server's typed behaviors; the bot steers with a
+  handful of commands per tick (a few hundred to a few thousand per match)
+  instead of driving every unit every tick.
+- **Difficulty is data** (`levels.json`) and only changes decision
+  quality: frequency, horizon, candidates, compute, deliberate mistakes,
+  and which techniques it knows.
+- **Lockstep arena for evaluation.** Live matches are timing-dependent;
+  the arena steps an in-process server only after every bot answered, and
+  derives the server's ID key from the map seed, so evaluations are
+  reproducible and run as fast as the bots decide.
+- **One configuration fix.** In every shipped preset a default unit could
+  not afford to clone (price 81 + 20 offspring energy > 100 capacity, and
+  capacity upgrades raised the price faster than the capacity). The
+  presets' `cloning.base_cost` went from 60 to 40. No server code changed.
+
+Limitations: see [the computer player](../computer-player/README.md#limitations)
+and [evaluation](../computer-player/evaluation.md#known-limitations).
+
 ## Milestone 7 limitations
 
 - **Resets need a new world.** A match can't be "rewound" or restarted
@@ -209,7 +237,7 @@ a single slab per tick for all changed views raised heap and tick time.
 - **Entity lookups:** `World.Entity` is a hash-map lookup. It is about
   13% of the fog pass.
 
-## Recommended scope for Milestone 8
+## Recommendations made after Milestone 7
 
 1. **Persistence and operations.** Save and restore a world snapshot plus
    its command log, write replays to disk automatically at match end, and

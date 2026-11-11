@@ -27,6 +27,7 @@ func main() {
 	serverAddr := flag.String("server", "127.0.0.1:50051", "rts-server gRPC address")
 	addr := flag.String("addr", "127.0.0.1:8080", "player HTTP listen address")
 	adminAddr := flag.String("admin-addr", "127.0.0.1:8081", "admin HTTP listen address (empty disables the admin gateway)")
+	botHost := flag.String("bothost", "", "computer-player host (mono-bothost) URL to expose at /api/bots for the player client's \"Add computer opponent\" panel")
 	webDir := flag.String("web", "", "serve the client from this directory instead of the embedded copy (for live editing)")
 	flag.Parse()
 
@@ -45,7 +46,14 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	servers := []*http.Server{{Addr: *addr, Handler: gateway.New(conn, static), ReadHeaderTimeout: 5 * time.Second}}
+	player := gateway.New(conn, static)
+	if *botHost != "" {
+		if player, err = gateway.WithBotHost(player, *botHost); err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("computer players via %s at /api/bots", *botHost)
+	}
+	servers := []*http.Server{{Addr: *addr, Handler: player, ReadHeaderTimeout: 5 * time.Second}}
 	log.Printf("player gateway on http://%s -> gRPC %s", *addr, *serverAddr)
 	if *adminAddr != "" {
 		servers = append(servers, &http.Server{Addr: *adminAddr, Handler: gateway.NewAdmin(conn, static), ReadHeaderTimeout: 5 * time.Second})

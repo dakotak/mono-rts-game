@@ -1,7 +1,7 @@
 # Mono documentation
 
 Everything here describes the code as it is in this repository (through
-Milestone 7). Where something is planned but not built, the page says so.
+Milestone 8). Where something is planned but not built, the page says so.
 [Design notes](developer-guide/design-notes.md#not-implemented) keeps the
 list of what isn't implemented.
 
@@ -36,6 +36,17 @@ list of what isn't implemented.
 - [Authentication](api/authentication.md) · [Streaming and synchronization](api/streaming.md)
 - [Bot development](api/bot-development.md): a working Go bot and a Python
   client.
+
+## Computer player
+
+- [Computer player](computer-player/README.md): running `mono-bot`,
+  configuration, difficulty levels, personalities, diagnostics, adding a
+  computer opponent from the web client.
+- [Decision architecture](computer-player/architecture.md): world model,
+  strategic / operational / tactical layers, command management.
+- [Bot-vs-bot evaluation and performance](computer-player/evaluation.md)
+- [Extending the AI](computer-player/extending.md): heuristics,
+  objectives, personalities, new difficulty parameters, testing.
 
 ## Developer guide
 
