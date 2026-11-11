@@ -10,7 +10,7 @@ const L = require("../static/admin/logic.js");
 const iv = (v) => ({ intValue: String(v) });
 const sv = (v) => ({ stringValue: v });
 const unit = (id, owner, attrs = {}, pos = { x: 1, y: 1 }) => ({ id, kind: "ENTITY_KIND_UNIT", ownerId: owner, position: pos, attributes: attrs });
-const PANELS = ["board", "controls", "players", "inspector", "logs", "tools", "match", "newmatch", "replays", "automation", "rules"];
+const PANELS = ["board", "controls", "players", "inspector", "logs", "tools", "match", "newmatch", "replays", "automation", "rules", "heatmap"];
 
 test("log buffer keeps the newest entries within its capacity", () => {
   const b = new L.LogBuffer(3);

@@ -59,6 +59,43 @@
       <div id="board"><canvas id="canvas"></canvas></div>
     </section>
 
+    <section data-panel="heatmap" data-title="Energy heat map" class="pn pn-heat">
+      <div class="pn-toolbar heat-toolbar">
+        <span id="heat-presets" class="heat-presets" role="group" aria-label="Presets">
+          <button type="button" data-preset="everything" title="Every source, every player and unowned resources">Everything</button>
+          <button type="button" data-preset="players" title="Energy held by players' units (stored and in upgrades)">Players' units</button>
+          <button type="button" data-preset="resources" title="Wells and wrecks only">Resources</button>
+        </span>
+        <details id="heat-options" class="ws-menu heat-options">
+          <summary>Options</summary>
+          <div class="ws-menu-body heat-menu">
+            <fieldset><legend>Energy</legend><div id="heat-sources" class="heat-checks"></div></fieldset>
+            <fieldset><legend>Whose</legend><div id="heat-owners" class="heat-checks"></div></fieldset>
+            <fieldset><legend>Display</legend>
+              <div class="heat-checks">
+                <label>Cell <select id="heat-cell" aria-label="Cell size">
+                  <option value="1">1 tile</option><option value="2">2×2</option><option value="4">4×4</option><option value="8">8×8</option></select></label>
+                <label title="Blur each cell's energy over its neighbors (the total is kept)">Spread <select id="heat-spread" aria-label="Spread radius">
+                  <option value="0">none</option><option value="1">1 cell</option><option value="2">2 cells</option><option value="3">3 cells</option></select></label>
+                <label title="How values map to color">Scale <select id="heat-scale" aria-label="Color scale">
+                  <option value="sqrt">square root</option><option value="linear">linear</option><option value="log">logarithmic</option></select></label>
+                <label class="chk"><input id="heat-terrain" type="checkbox"> terrain</label>
+                <label class="chk"><input id="heat-units" type="checkbox"> units</label>
+                <label class="chk"><input id="heat-smooth" type="checkbox"> smooth</label>
+              </div>
+            </fieldset>
+          </div>
+        </details>
+        <span id="heat-summary" class="hint heat-summary"></span>
+      </div>
+      <div class="heat-legend">
+        <span class="hint">0</span><span class="heat-bar" aria-hidden="true"></span><span><strong id="heat-max">0</strong> <span id="heat-unit" class="hint"></span></span>
+        <span id="heat-totals" class="hint heat-totals"></span>
+      </div>
+      <div class="heat-view"><canvas id="heat-canvas" aria-label="Energy heat map"></canvas></div>
+      <p id="heat-hover" class="hint heat-hover" aria-live="polite"></p>
+    </section>
+
     <section data-panel="controls" data-title="Simulation" class="pn pn-controls">
       <div class="ctl-row">
         <button id="pause-btn" type="button" title="Pause or resume the simulation clock (Space)">Pause</button>
@@ -170,6 +207,7 @@
   <script src="admin.js"></script>
   <script src="players.js"></script>
   <script src="match.js"></script>
+  <script src="heatmap.js"></script>
   <script src="workspace.js"></script>
 </body>
 </html>

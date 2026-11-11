@@ -32,6 +32,7 @@ close, reopen and maximize.
 |---|---|
 | **Game board** | The world. Wheel zooms about the cursor, middle-drag or Alt+drag pans, **Fit** (or F) shows everything. Click or drag to select; right-click repositions the selected entity. |
 | **Simulation** | Simulation clock (Pause/Resume, Step N) and match lifecycle (Start, Pause match, Resume match, Restart match). |
+| **Energy heat map** | Where energy sits on the map, filtered by source and player ([below](#energy-heat-map)). |
 | **Players** | Per-player statistics; select a player to highlight, center on or filter by them ([below](#players-panel)). |
 | **Inspector** | The selected entity, entities or tile ([below](#inspector)). |
 | **Logs** | Every admin action, command result and simulation event, filterable ([below](#logs)). |
@@ -59,7 +60,8 @@ the × on its tab; reopen it from **Panels** (checked = open), which also
 has **Restore default layout**.
 
 **Default layout.** Simulation across the top, Players (with Tools) on
-the left, the board in the middle, Inspector (with Match, Automation,
+the left, the board in the middle (with the Energy heat map as a tab
+beside it), Inspector (with Match, Automation,
 New match and Replays) on the right, Logs across the bottom. On windows
 narrower than 1100 px the default stacks everything except the Simulation
 bar as tabs beside the board. The arrangement is the constant
@@ -116,6 +118,43 @@ counters from `GetMatchDetails`:
 
 Energy *consumption* (movement, attacks, upgrades, clones) is not
 tracked by the server, so it is not shown.
+
+### Energy heat map
+
+Shows where energy is on the map, binned into cells and colored from dark
+purple (little) to pale yellow (most); empty cells are transparent over
+the map background. Everything comes from the authoritative world state
+the admin stream delivers: no fog, no estimates.
+
+| Source | Counts | Attribute |
+|---|---|---|
+| Stored in units | energy units carry | `energy.stored` |
+| Locked in upgrades | energy spent on units' current upgrades | `attributes.embodied` |
+| Wells | energy left in wells (an unlimited well counts its current value) | `wells.energy` |
+| Wrecks | salvageable energy | `salvage.energy` |
+
+- **Presets**: *Everything* (every source, player and unowned resource),
+  *Players' units* (stored and upgrades, no resources), *Resources* (wells
+  and wrecks).
+- **Options** (dropdown): which sources count; whose entities — all
+  players, any subset of players, and/or *Unowned* (wells and wrecks);
+  **cell** size (1, 2×2, 4×4 or 8×8 tiles); **spread**, a blur over 0–3
+  neighboring cells that keeps the total (shows the area energy
+  influences); **scale** — square root (default: small amounts stay
+  visible next to big wells), linear or logarithmic; overlays: terrain,
+  units (in player colors) and smoothing.
+- The line under the toolbar says what is shown, the legend gives the
+  top cell value, and the totals give the shown energy by source and the
+  number of entities counted.
+- **Hover** a cell for its breakdown by source and owner (from the raw,
+  unspread values). **Click** it to center the game board there.
+- Options are kept for the session, not saved. The map redraws up to four
+  times a second while it is visible, and not at all while its tab is
+  hidden.
+
+The grid, filters, spread and colormap are pure functions in `logic.js`
+(`energyGrid`, `energyIncluded`, `spread`, `heatScale`, `heatColor`),
+unit-tested in `web/admintest/heatmap.test.js`.
 
 ### Inspector
 
@@ -185,7 +224,8 @@ unmodified in `web/static/admin/vendor/dockview` (no build step, no CDN);
 see its `README.md` for upgrading. The client is plain JavaScript:
 `store.js` (central state and change topics), `logic.js` (pure logic,
 unit-tested with Node), `logs.js`, `players.js`, `admin.js` (session,
-stream, board, inspector, controls), `match.js`, `workspace.js`. The
+stream, board, inspector, controls), `match.js`, `heatmap.js`,
+`workspace.js`. The
 gateway serves client files with `Cache-Control: no-cache`, so browsers
 revalidate them and never mix an updated page with stale cached scripts.
 

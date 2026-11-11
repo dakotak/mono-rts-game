@@ -66,6 +66,7 @@ remembered) that shows the whole world with no fog. You can:
 
 - pause and single-step the simulation, and start, pause or restart the match
 - follow each player's live statistics and highlight their units
+- see where energy is on the map (Energy heat map, by source and player)
 - spawn units and wells
 - inspect any entity
 - filter and search every event in the Logs panel

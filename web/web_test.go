@@ -50,7 +50,7 @@ func TestAdminPage(t *testing.T) {
 		ids[m[1]] = true
 	}
 	scripts, _ := fs.Glob(static, "admin/*.js")
-	lookup := regexp.MustCompile(`(?:\$|\$l|Store\.el|getElementById)\("([A-Za-z0-9_-]+)"\)`)
+	lookup := regexp.MustCompile(`(?:\$|\$l|\$h|Store\.el|getElementById)\("([A-Za-z0-9_-]+)"\)`)
 	for _, f := range scripts {
 		for _, m := range lookup.FindAllStringSubmatch(read(t, static, f), -1) {
 			id := m[1]
