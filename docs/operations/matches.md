@@ -11,6 +11,7 @@ configuration format: edit them freely.
 | [`sandbox.json`](../../configs/presets/sandbox.json) | Experimenting, debugging, testing mechanics | 40×28 arena, 2 players × 8 units with 100 energy, unlimited rich wells, free movement, **no fog, no victory conditions, no command budget**, starts immediately. |
 | [`standard.json`](../../configs/presets/standard.json) | A reasonable competitive game | 64×40 procedural map (rock clusters, marsh), **random seed per match**, 2 players × 6 units with 40 energy, scarce finite wells (2 near each spawn plus 6 elsewhere, no regeneration), **fog of war**, budget 500, starts when both players are ready, **last player standing**, 30-minute time limit (18,000 ticks at 10 Hz) scored by units, investment, energy and kills. |
 | [`duel.json`](../../configs/presets/duel.json) | Human vs computer, computer vs computer | 48×32 procedural map (fixed seed), 2 players × 6 units in opposite corners, 2 regenerating wells near each spawn plus 4 elsewhere, fog of war, starts when both are ready, last player standing, 10-minute limit (6000 ticks) scored by units, investment, energy and kills. Join tokens `duel-red` / `duel-blue`. The computer player is tuned on it. |
+| [`trio.json`](../../configs/presets/trio.json) | Watching three computer players (`make watch-bots`) | Like bot-arena with 3 players in a ring on 48×48, 10 Hz, 6000-tick limit, scores public during the match. Tokens `trio-red`/`trio-blue`/`trio-green`, admin `trio-admin`. |
 | [`bot-arena.json`](../../configs/presets/bot-arena.json) | Autonomous clients, reproducible evaluation | 48×48 procedural map with a **fixed seed and ID key** (same map and IDs every match), 4 players in a ring × 5 units, wells regenerate 1/tick, fog of war, **20 Hz**, budget 200, starts when all 4 bots are ready, last player standing, 10-minute limit (12,000 ticks), **scores public during the match**. |
 
 All three share the attribute, combat, cloning and automation rules of
@@ -86,6 +87,26 @@ given to `mono-bot` instead (`--token <slot token>`); see the
 [computer player guide](../computer-player/README.md). For bot-vs-bot
 evaluation without a server process, use `mono-arena`
 ([evaluation](../computer-player/evaluation.md)).
+
+## Watching computer players
+
+```bash
+make watch-bots                                          # 3 bots: level 8 aggressive, 5 balanced, 3 economic
+BOTS="9:aggressive 6:economic 3:defensive" make watch-bots
+BOT_LOG=info OPEN=0 make watch-bots                      # bot logs on the console; do not open a browser
+```
+
+This starts the server with the 3-player [`trio.json`](../../configs/presets/trio.json)
+preset (48×48, fog of war, 10 Hz, last player standing or a 6000-tick
+limit), the gateway and one `mono-bot` per entry in `BOTS`
+(`difficulty[:personality]`, slots Red, Blue, Green in order), then opens
+the admin console already signed in (`http://127.0.0.1:8081/#token=…`; the
+token is in the URL fragment, which is not sent to the server, and is
+removed from the address bar). Scores are public during the match and
+show in the admin *Match* panel; **View as** shows a bot's fog of war.
+Ctrl-C stops everything. Other configurations work too
+(`CONFIG=configs/presets/bot-arena.json BOTS="..."`), as long as every slot
+the match waits for gets a bot.
 
 ## Running automated bot matches
 

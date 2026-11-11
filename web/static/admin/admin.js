@@ -620,7 +620,15 @@ window.addEventListener("keydown", (ev) => {
   if (ev.key === " ") { ev.preventDefault(); $("pause-btn").click(); }
 });
 
-try {
-  const saved = sessionStorage.getItem("rts.admin");
-  if (saved) login(saved);
-} catch (_) {}
+// Sign in from a launcher link (http://host/#token=...): the fragment never
+// reaches the server, and it is removed from the address bar at once.
+const hashToken = new URLSearchParams(location.hash.slice(1)).get("token");
+if (hashToken) {
+  history.replaceState(null, "", location.pathname + location.search);
+  login(hashToken);
+} else {
+  try {
+    const saved = sessionStorage.getItem("rts.admin");
+    if (saved) login(saved);
+  } catch (_) {}
+}

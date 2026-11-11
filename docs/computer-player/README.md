@@ -57,7 +57,9 @@ browser and give `duel-blue` to a bot — either by running `mono-bot` as
 above or from the web client (next section).
 
 `make vs-bot` runs a server, a gateway and a bot host together for exactly
-that (see the Makefile for the variables).
+that (see the Makefile for the variables). To just watch, `make
+watch-bots` starts three bots on the 3-player `trio` preset and opens the
+admin console signed in ([details](../operations/matches.md#watching-computer-players)).
 
 ## Adding a computer opponent from the web client
 

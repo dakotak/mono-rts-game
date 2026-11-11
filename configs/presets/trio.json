@@ -1,0 +1,356 @@
+{
+  "world": {
+    "width": 48,
+    "height": 48,
+    "seed": 31,
+    "tick_rate_hz": 10,
+    "unit_command_budget": 200
+  },
+  "players": [
+    {
+      "slot": 1,
+      "name": "Red",
+      "join_token": "trio-red"
+    },
+    {
+      "slot": 2,
+      "name": "Blue",
+      "join_token": "trio-blue"
+    },
+    {
+      "slot": 3,
+      "name": "Green",
+      "join_token": "trio-green"
+    }
+  ],
+  "admin_token": "trio-admin",
+  "units": [],
+  "plugins": {
+    "attributes": {
+      "base_mass": 10,
+      "attributes": {
+        "armor": {
+          "default": 0,
+          "min": 0,
+          "max": 20,
+          "mass": "v * 3",
+          "cost": "v * v * 5 + v * 10",
+          "duration": "v * 8",
+          "description": "Mitigates damage: dmg = attack * 10 / (10 + armor). Heavy."
+        },
+        "propulsion": {
+          "default": 1,
+          "min": 1,
+          "max": 10,
+          "mass": "v",
+          "cost": "(v - 1) * (v - 1) * 20 + (v - 1) * 10",
+          "duration": "(v - 1) * 10",
+          "description": "Drive power: divides mass to give pace."
+        },
+        "energy_capacity": {
+          "default": 100,
+          "min": 100,
+          "max": 400,
+          "mass": "v / 50",
+          "cost": "(v - 100) * (v - 100) / 40 + (v - 100)",
+          "duration": "(v - 100) / 5",
+          "description": "Energy storage."
+        },
+        "mining_efficiency": {
+          "default": 2,
+          "min": 1,
+          "max": 10,
+          "mass": "v",
+          "cost": "pow(v, 3) * 2",
+          "duration": "v * 10",
+          "description": "Energy extracted per tick from an adjacent well."
+        },
+        "attack": {
+          "default": 1,
+          "min": 0,
+          "max": 40,
+          "mass": "v",
+          "cost": "v * v * 3",
+          "duration": "v * 4",
+          "description": "Damage per hit before armor."
+        },
+        "attack_range": {
+          "default": 1,
+          "min": 1,
+          "max": 6,
+          "mass": "v * 2",
+          "cost": "(v - 1) * (v - 1) * 40",
+          "duration": "(v - 1) * 15",
+          "description": "Reach in tiles (Chebyshev)."
+        },
+        "structure": {
+          "default": 50,
+          "min": 50,
+          "max": 400,
+          "mass": "v / 25",
+          "cost": "(v - 50) * (v - 50) / 50 + (v - 50)",
+          "duration": "(v - 50) / 5",
+          "description": "Structural integrity (max health)."
+        },
+        "vision": {
+          "default": 4,
+          "min": 1,
+          "max": 10,
+          "cost": "(v - 1) * (v - 1) * 12",
+          "duration": "(v - 1) * 6",
+          "description": "Vision range in tiles."
+        },
+        "sensor": {
+          "default": 4,
+          "min": 0,
+          "max": 16,
+          "cost": "v * v * 6",
+          "duration": "v * 3",
+          "description": "Detection strength against stealth."
+        },
+        "stealth": {
+          "default": 0,
+          "min": 0,
+          "max": 12,
+          "cost": "v * v * 10",
+          "duration": "v * 5",
+          "description": "Signature reduction: harder to detect."
+        },
+        "optics": {
+          "default": 1,
+          "min": 0,
+          "max": 8,
+          "cost": "v * v * 15",
+          "duration": "v * 5",
+          "description": "Identification strength: how much is learned about detected units."
+        },
+        "transfer_range": {
+          "default": 1,
+          "min": 1,
+          "max": 6,
+          "mass": "v",
+          "cost": "v * v * 15",
+          "duration": "v * 6",
+          "description": "Supply link range (logistics)."
+        }
+      },
+      "derived": {
+        "ticks_per_move": "clamp(mass / (propulsion * 8), 1, 20)",
+        "attack_cooldown": "clamp(mass / 6, 2, 20)"
+      }
+    },
+    "energy": {
+      "unit_capacity": 100,
+      "initial_energy": 30,
+      "extraction_rate": 2,
+      "transfer_rate": 5,
+      "capacity_attribute": "energy_capacity",
+      "extraction_attribute": "mining_efficiency"
+    },
+    "upgrades": {
+      "progress_event_interval": 10
+    },
+    "cloning": {
+      "base_cost": 40,
+      "cost": "base + embodied + mass",
+      "duration": "30 + embodied / 10",
+      "offspring_energy": 20,
+      "progress_event_interval": 10
+    },
+    "metadata": {
+      "max_entries": 8,
+      "max_key_length": 32,
+      "max_value_length": 64,
+      "max_batch_units": 4096
+    },
+    "movement": {
+      "ticks_per_move": 2,
+      "max_blocked_ticks": 30,
+      "contention_backoff_ticks": 2,
+      "energy_per_step": 1,
+      "pace_attribute": "ticks_per_move"
+    },
+    "combat": {
+      "max_health": {
+        "property": "structure",
+        "default": 50
+      },
+      "attack": {
+        "property": "attack",
+        "default": 1
+      },
+      "range": {
+        "property": "attack_range",
+        "default": 1
+      },
+      "cooldown": {
+        "property": "attack_cooldown",
+        "default": 3
+      },
+      "damage": "max(1, attacker_attack * 10 / (10 + target_armor))",
+      "energy_cost": "1 + attacker_attack / 4"
+    },
+    "salvage": {
+      "embodied_recovery_permille": 500,
+      "stored_recovery_permille": 500,
+      "salvage_rate": {
+        "property": "mining_efficiency",
+        "default": 2
+      }
+    },
+    "automation": {
+      "eval_interval": 5,
+      "max_evaluations_per_tick": 2000
+    },
+    "logistics": {
+      "range": {
+        "property": "transfer_range",
+        "default": 1
+      }
+    },
+    "terrain": {
+      "types": {
+        "rock": {
+          "passable": false
+        },
+        "marsh": {
+          "passable": true,
+          "cost": 3
+        }
+      }
+    },
+    "wells": {
+      "defaults": {
+        "energy": 800,
+        "capacity": 800,
+        "extraction_rate": 4,
+        "unlimited": false
+      }
+    },
+    "visibility": {
+      "enabled": true,
+      "vision": {
+        "property": "vision",
+        "default": 4
+      },
+      "sensor": {
+        "property": "sensor",
+        "default": 4
+      },
+      "signature": {
+        "property": "stealth",
+        "default": 0
+      },
+      "identification": {
+        "property": "optics",
+        "default": 1
+      },
+      "resource_signature": 0,
+      "detection_formula": "observer_sensor * 2 - target_signature * 3 - distance",
+      "detection_threshold": 0,
+      "identification_formula": "observer_identification * 2 - distance",
+      "estimated_threshold": 0,
+      "detailed_threshold": 4,
+      "distance_metric": "chebyshev",
+      "occlusion": "none",
+      "disclosure": [
+        {
+          "key": "combat.health",
+          "basic": 25,
+          "estimated": 10,
+          "detailed": 1
+        },
+        {
+          "key": "combat.max_health",
+          "estimated": 10,
+          "detailed": 1
+        },
+        {
+          "key": "energy.stored",
+          "estimated": 50,
+          "detailed": 1
+        },
+        {
+          "key": "energy.capacity",
+          "detailed": 1
+        },
+        {
+          "key": "wells.energy",
+          "basic": 500,
+          "estimated": 100,
+          "detailed": 1
+        },
+        {
+          "key": "wells.capacity",
+          "estimated": 100,
+          "detailed": 1
+        },
+        {
+          "key": "wells.extraction_rate",
+          "detailed": 1
+        },
+        {
+          "key": "wells.unlimited",
+          "basic": 1
+        },
+        {
+          "key": "salvage.energy",
+          "estimated": 10,
+          "detailed": 1
+        },
+        {
+          "key": "salvage.initial",
+          "detailed": 1
+        },
+        {
+          "key": "attributes.*",
+          "detailed": 1
+        }
+      ]
+    },
+    "worldgen": {
+      "generator": "procedural",
+      "params": {
+        "obstacle_percent": 8,
+        "cluster_size": 6,
+        "clear_radius": 5
+      },
+      "spawns": {
+        "layout": "ring",
+        "min_distance": 20,
+        "margin": 5
+      },
+      "wells": {
+        "per_spawn": 2,
+        "near_distance": 6,
+        "extra": 4,
+        "well": {
+          "regeneration": 1
+        }
+      },
+      "start": {
+        "units": 5,
+        "energy": 50,
+        "min_free_tiles": 60
+      },
+      "max_attempts": 30
+    },
+    "match": {
+      "start": "all_ready",
+      "victory": {
+        "elimination": true,
+        "time_limit_ticks": 6000
+      },
+      "scoring": {
+        "public_during_match": true,
+        "interval_ticks": 100,
+        "weights": {
+          "units": 100,
+          "embodied": 1,
+          "energy_mined": 1,
+          "kills": 50
+        }
+      }
+    }
+  }
+}
