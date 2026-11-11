@@ -218,7 +218,7 @@ const Workspace = (() => {
     // The board also follows its container with a ResizeObserver; layout
     // events cover environments where observers are delayed.
     for (const ev of ["onDidLayoutChange", "onDidMaximizedGroupChange", "onDidActivePanelChange"]) {
-      api[ev](() => board.queueResize());
+      api[ev](() => { board.queueResize(); if (typeof HeatMap !== "undefined") HeatMap.refresh(); });
     }
     document.getElementById("layout-reset").addEventListener("click", () => {
       buildDefault();

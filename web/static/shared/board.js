@@ -179,6 +179,11 @@ window.RTS = (() => {
         c.width = Math.round(availW * dpr);
         c.height = Math.round(availH * dpr);
         this._clamp();
+        if (this._pendingCenter) {
+          this.dpr = dpr;
+          this.centerOn(...this._pendingCenter); // redraws
+          return;
+        }
       } else {
         this.tile = Math.max(6, Math.floor(Math.min(availW / this.width, availH / this.height)));
         c.style.width = this.width * this.tile + "px";
@@ -220,6 +225,13 @@ window.RTS = (() => {
     // and centers it.
     centerOn(b, margin = 4) {
       if (!this.zoomable || !b) return;
+      // Not laid out yet (its panel has been hidden since load): center
+      // once it is shown.
+      if (!(this.viewW > 0 && this.viewH > 0 && this.base > 0)) {
+        this._pendingCenter = [b, margin];
+        return;
+      }
+      this._pendingCenter = null;
       const w = b.x1 - b.x0 + 1 + 2 * margin, h = b.y1 - b.y0 + 1 + 2 * margin;
       const z = Math.max(1, Math.min(16, Math.min(this.viewW / (w * this.base), this.viewH / (h * this.base))));
       this.zoom = z;

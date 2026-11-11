@@ -126,3 +126,26 @@ section.pn-logs { display: flex; flex-direction: column; padding: 0 8px 4px; ove
 /* Forms inside panels */
 section.pn .form label.stack { display: block; }
 section.pn .form label.stack textarea { margin-top: 4px; }
+
+/* Energy heat map */
+section.pn-heat { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+section.pn-heat .pn-toolbar { padding: 3px 8px; border-bottom: 1px solid var(--border); }
+.heat-toolbar { flex-wrap: nowrap; gap: 8px; min-width: 0; }
+.heat-toolbar button, .heat-toolbar select { padding: 2px 6px; }
+.heat-presets { display: inline-flex; gap: 4px; flex: 0 0 auto; }
+.heat-options { position: relative; flex: 0 0 auto; }
+.heat-menu { min-width: 260px; max-height: 70vh; overflow: auto; }
+.heat-menu fieldset { border: 1px solid var(--border); border-radius: 4px; margin: 0 0 6px; padding: 4px 8px 6px; }
+.heat-menu legend { color: var(--muted); font-size: 11px; padding: 0 4px; }
+.heat-checks { display: flex; flex-direction: column; gap: 4px; }
+.heat-checks label { display: flex; gap: 6px; align-items: center; white-space: nowrap; }
+.heat-checks select { padding: 1px 4px; }
+.heat-summary { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.heat-legend { display: flex; gap: 8px; align-items: center; padding: 2px 8px; font-size: 12px; white-space: nowrap; min-width: 0; }
+.heat-totals { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.heat-bar { display: inline-block; flex: 0 0 110px; height: 10px; border-radius: 2px;
+  background: linear-gradient(90deg, rgb(40,11,84), rgb(101,21,110), rgb(188,55,84), rgb(249,142,9), rgb(252,255,164)); }
+.heat-view { flex: 1 1 auto; min-height: 100px; position: relative; overflow: hidden; }
+.heat-view canvas { position: absolute; inset: 0; cursor: crosshair; }
+.heat-hover { margin: 0; padding: 3px 8px; min-height: 1.6em; font-size: 12px; border-top: 1px solid var(--border);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -201,6 +201,131 @@
     return b;
   }
 
+  // ---- energy heat map ------------------------------------------------------------
+
+  // ENERGY_SOURCES are where energy sits in the world, as reported by the
+  // authoritative admin stream: [key, label, attribute, description].
+  const ENERGY_SOURCES = [
+    ["stored", "Stored in units", "energy.stored", "Energy units carry (energy.stored)"],
+    ["embodied", "Locked in upgrades", "attributes.embodied", "Energy spent on units' current upgrades (attributes.embodied)"],
+    ["wells", "Wells", "wells.energy", "Energy left in wells (wells.energy; unlimited wells count their current value)"],
+    ["wrecks", "Wrecks", "salvage.energy", "Salvageable energy in wrecks (salvage.energy)"],
+  ];
+
+  // energyOf returns an entity's energy by source (only the sources it has).
+  function energyOf(e) {
+    const out = {};
+    for (const [key, , a] of ENERGY_SOURCES) {
+      const v = int(e, a);
+      if (v) out[key] = v;
+    }
+    return out;
+  }
+
+  // energyIncluded returns the energy of e counted under the heat-map
+  // options, by source, or null when e is filtered out. Options:
+  //   sources: Set of source keys to count
+  //   owners:  Set of player ids to include, or null for every player
+  //   neutral: include unowned entities (wells, wrecks)
+  function energyIncluded(e, opts) {
+    const owner = Number(e.ownerId || 0);
+    if (owner === 0 ? !opts.neutral : opts.owners && !opts.owners.has(owner)) return null;
+    const all = energyOf(e);
+    let out = null;
+    for (const k in all) {
+      if (!opts.sources.has(k)) continue;
+      (out || (out = {}))[k] = all[k];
+    }
+    return out;
+  }
+
+  // energyGrid bins the included energy into cells of `cell` x `cell`
+  // tiles. The result keeps the totals per source so the view can say
+  // what it shows.
+  function energyGrid(entities, opts) {
+    const cell = Math.max(1, opts.cell || 1);
+    const cols = Math.ceil(opts.width / cell), rows = Math.ceil(opts.height / cell);
+    const values = new Float64Array(cols * rows);
+    const totals = {};
+    for (const [k] of ENERGY_SOURCES) totals[k] = 0;
+    let total = 0, counted = 0;
+    for (const e of entities.values ? entities.values() : entities) {
+      const inc = energyIncluded(e, opts);
+      if (!inc) continue;
+      const x = Math.floor((e.position && e.position.x || 0) / cell), y = Math.floor((e.position && e.position.y || 0) / cell);
+      if (x < 0 || y < 0 || x >= cols || y >= rows) continue;
+      let sum = 0;
+      for (const k in inc) { sum += inc[k]; totals[k] += inc[k]; }
+      values[y * cols + x] += sum;
+      total += sum;
+      counted++;
+    }
+    let max = 0;
+    for (const v of values) if (v > max) max = v;
+    return { cols, rows, cell, values, max, total, totals, counted };
+  }
+
+  // spread blurs a grid with a box kernel of the given radius (in cells),
+  // keeping the total: energy is shown as the area it influences rather
+  // than single cells. Returns a new grid.
+  function spread(grid, radius) {
+    if (!radius) return grid;
+    const { cols, rows } = grid;
+    const pass = (src, dx, dy) => {
+      const out = new Float64Array(src.length);
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          const v = src[y * cols + x];
+          if (!v) continue;
+          // Clip the kernel at the edges and share v over the cells left.
+          let n = 0;
+          for (let i = -radius; i <= radius; i++) {
+            const xx = x + i * dx, yy = y + i * dy;
+            if (xx >= 0 && yy >= 0 && xx < cols && yy < rows) n++;
+          }
+          for (let i = -radius; i <= radius; i++) {
+            const xx = x + i * dx, yy = y + i * dy;
+            if (xx >= 0 && yy >= 0 && xx < cols && yy < rows) out[yy * cols + xx] += v / n;
+          }
+        }
+      }
+      return out;
+    };
+    const values = pass(pass(grid.values, 1, 0), 0, 1);
+    let max = 0;
+    for (const v of values) if (v > max) max = v;
+    return { ...grid, values, max };
+  }
+
+  // heatScale maps a value to 0..1 for coloring: linear, square root
+  // (default: shows small amounts next to big wells) or logarithmic.
+  function heatScale(v, max, mode) {
+    if (!(v > 0) || !(max > 0)) return 0;
+    switch (mode) {
+      case "linear": return Math.min(1, v / max);
+      case "log": return Math.min(1, Math.log1p(v) / Math.log1p(max));
+      default: return Math.min(1, Math.sqrt(v / max));
+    }
+  }
+
+  // HEAT_STOPS is the colormap (dark purple -> red -> yellow -> white),
+  // readable on the dark board; zero is fully transparent.
+  const HEAT_STOPS = [
+    [0, [40, 11, 84]], [0.25, [101, 21, 110]], [0.5, [188, 55, 84]],
+    [0.75, [249, 142, 9]], [1, [252, 255, 164]],
+  ];
+  function heatColor(t) {
+    if (!(t > 0)) return [0, 0, 0, 0];
+    t = Math.min(1, t);
+    let i = 1;
+    while (i < HEAT_STOPS.length - 1 && HEAT_STOPS[i][0] < t) i++;
+    const [t0, c0] = HEAT_STOPS[i - 1], [t1, c1] = HEAT_STOPS[i];
+    const f = (t - t0) / (t1 - t0);
+    const c = c0.map((v, j) => Math.round(v + (c1[j] - v) * f));
+    // Faint amounts are also more transparent, so the map stays readable.
+    return [c[0], c[1], c[2], Math.round(110 + 145 * Math.min(1, t * 1.5))];
+  }
+
   // ---- inspector ------------------------------------------------------------------
 
   // SECTIONS maps attribute prefixes to inspector sections, in display order.
@@ -285,6 +410,7 @@
   const DEFAULT_LAYOUT = {
     wide: [
       { id: "board" },
+      { id: "heatmap", position: { referencePanel: "board", direction: "within" } },
       { id: "players", position: { referencePanel: "board", direction: "left" }, size: { width: 330 } },
       { id: "tools", position: { referencePanel: "players", direction: "within" } },
       { id: "inspector", position: { referencePanel: "board", direction: "right" }, size: { width: 360 } },
@@ -299,6 +425,7 @@
     // Narrow screens: everything secondary is a tab next to the board.
     compact: [
       { id: "board" },
+      { id: "heatmap", position: { referencePanel: "board", direction: "within" } },
       { id: "players", position: { referencePanel: "board", direction: "within" } },
       { id: "inspector", position: { referencePanel: "board", direction: "within" } },
       { id: "logs", position: { referencePanel: "board", direction: "within" } },
@@ -337,6 +464,7 @@
     SEVERITIES, LogBuffer, matchLog, filterLogs, classifyEvent,
     CURRENT, CUMULATIVE, playerStats, playerRows, unitBounds,
     SECTIONS, inspectorSections, entityKind,
+    ENERGY_SOURCES, energyOf, energyIncluded, energyGrid, spread, heatScale, heatColor,
     validateLayout, newPanels,
   };
 });
